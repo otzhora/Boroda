@@ -1,0 +1,23 @@
+{
+  "name": "boroda",
+  "private": true,
+  "version": "0.1.0",
+  "devDependencies": {
+    "drizzle-kit": "^0.30.4"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "sh -c 'npm run dev:server & npm run dev:web & wait'",
+    "dev:web": "npm run dev -w @boroda/web",
+    "dev:server": "npm run dev -w @boroda/server",
+    "test": "npm run test -w @boroda/server",
+    "build": "npm run build -w @boroda/web && npm run build -w @boroda/server",
+    "typecheck": "npm run typecheck -w @boroda/web && npm run typecheck -w @boroda/server",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "npm run migrate -w @boroda/server",
+    "db:seed": "npm run seed -w @boroda/server"
+  }
+}

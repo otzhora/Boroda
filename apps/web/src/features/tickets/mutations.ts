@@ -1,0 +1,179 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "../../lib/api-client";
+import type { BoardResponse, Ticket, TicketStatus } from "../../lib/types";
+import { boardQueryKey, type BoardFilters } from "../board/queries";
+import { ticketQueryKey } from "./queries";
+import { createEmptyTicketForm, toTicketForm, type TicketFormState } from "./form";
+
+interface TicketPayload {
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  type: string;
+  dueAt: string | null;
+  projectLinks: Array<{
+    projectId: number;
+    relationship: string;
+  }>;
+}
+
+interface MoveTicketStatusContext {
+  previousBoard?: BoardResponse;
+}
+
+export function useCreateTicketMutation(options: {
+  boardFilters: BoardFilters;
+  onCreated: (ticket: Ticket) => void;
+  onReset: () => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: TicketPayload) =>
+      apiClient<Ticket>("/api/tickets", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      }),
+    onSuccess: (ticket) => {
+      options.onReset();
+      options.onCreated(ticket);
+      void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
+      void queryClient.invalidateQueries({ queryKey: ticketQueryKey(ticket.id) });
+    }
+  });
+}
+
+export function useUpdateTicketMutation(options: {
+  ticketId: number | null;
+  boardFilters: BoardFilters;
+  onUpdated: (ticket: TicketFormState) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: TicketPayload) => {
+      if (options.ticketId === null) {
+        throw new Error("No ticket selected");
+      }
+
+      return apiClient<Ticket>(`/api/tickets/${options.ticketId}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload)
+      });
+    },
+    onSuccess: (ticket) => {
+      options.onUpdated(toTicketForm(ticket));
+      void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
+      void queryClient.invalidateQueries({ queryKey: ticketQueryKey(ticket.id) });
+    }
+  });
+}
+
+export function useDeleteTicketMutation(options: {
+  ticketId: number | null;
+  boardFilters: BoardFilters;
+  onDeleted: () => void;
+  onReset: (form: TicketFormState) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => {
+      if (options.ticketId === null) {
+        throw new Error("No ticket selected");
+      }
+
+      return apiClient<{ ok: true }>(`/api/tickets/${options.ticketId}`, {
+        method: "DELETE"
+      });
+    },
+    onSuccess: () => {
+      const deletedTicketId = options.ticketId;
+      options.onDeleted();
+      options.onReset(createEmptyTicketForm());
+      void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
+
+      if (deletedTicketId !== null) {
+        void queryClient.removeQueries({ queryKey: ticketQueryKey(deletedTicketId) });
+      }
+    }
+  });
+}
+
+export function useMoveTicketStatusMutation(options: {
+  boardFilters: BoardFilters;
+  onMoved?: (ticketId: number, status: TicketStatus) => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    Ticket,
+    Error,
+    { ticketId: number; status: TicketStatus },
+    MoveTicketStatusContext
+  >({
+    mutationFn: ({ ticketId, status }) =>
+      apiClient<Ticket>(`/api/tickets/${ticketId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status })
+      }),
+    onMutate: async ({ ticketId, status }) => {
+      const queryKey = boardQueryKey(options.boardFilters);
+
+      await queryClient.cancelQueries({ queryKey });
+      const previousBoard = queryClient.getQueryData<BoardResponse>(queryKey);
+
+      queryClient.setQueryData<BoardResponse>(queryKey, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        const draggedTicket = current.columns.flatMap((column) => column.tickets).find((ticket) => ticket.id === ticketId);
+
+        if (!draggedTicket || draggedTicket.status === status) {
+          return current;
+        }
+
+        const updatedTicket = {
+          ...draggedTicket,
+          status,
+          updatedAt: new Date().toISOString()
+        };
+
+        return {
+          columns: current.columns.map((column) => {
+            if (column.status === status) {
+              return {
+                ...column,
+                tickets: [updatedTicket, ...column.tickets.filter((ticket) => ticket.id !== ticketId)]
+              };
+            }
+
+            return {
+              ...column,
+              tickets: column.tickets.filter((ticket) => ticket.id !== ticketId)
+            };
+          })
+        };
+      });
+
+      options.onMoved?.(ticketId, status);
+
+      return { previousBoard };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousBoard) {
+        queryClient.setQueryData(boardQueryKey(options.boardFilters), context.previousBoard);
+      }
+    },
+    onSuccess: (ticket) => {
+      void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
+      void queryClient.invalidateQueries({ queryKey: ticketQueryKey(ticket.id) });
+    }
+  });
+}
