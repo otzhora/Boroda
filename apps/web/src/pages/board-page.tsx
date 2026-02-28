@@ -26,6 +26,23 @@ import { apiClient, apiClientBlob } from "../lib/api-client";
 import { TICKET_PRIORITIES } from "../lib/constants";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
+const panelClassName =
+  "grid gap-5 rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl";
+const softPanelClassName =
+  "grid gap-3 rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl";
+const headingRowClassName = "flex flex-col items-start justify-between gap-4 md:flex-row md:items-center";
+const eyebrowClassName = "m-0 text-[0.72rem] uppercase tracking-[0.16em] text-accent-500";
+const sectionTitleClassName = "m-0 text-2xl font-semibold tracking-tight text-ink-50";
+const subheadingClassName = "m-0 text-xl font-semibold tracking-tight text-ink-50";
+const fieldClassName = "grid gap-2";
+const searchFieldClassName = "grid gap-2 md:col-span-2";
+const labelClassName = "m-0 text-sm font-medium text-ink-50";
+const inputClassName =
+  "min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65";
+const secondaryButtonClassName =
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-ink-50 transition-colors hover:border-white/20 hover:bg-white/10 disabled:cursor-progress disabled:opacity-70";
+const primaryButtonClassName =
+  "inline-flex min-h-11 items-center justify-center rounded-full bg-accent-700 px-4 py-2.5 text-sm font-medium text-canvas-950 transition-opacity disabled:cursor-progress disabled:opacity-70";
 
 function hasBoardFilters(filters: BoardFilters) {
   return Boolean(filters.projectId || filters.priority || filters.q?.trim());
@@ -237,13 +254,13 @@ export function BoardPage() {
   }, [handleKeyboardShortcuts]);
 
   return (
-    <section className="page-grid">
-      <div className="section-heading">
+    <section className="grid gap-4">
+      <div className={headingRowClassName}>
         <div>
-          <p className="eyebrow">Board overview</p>
-          <h2>Current work</h2>
+          <p className={eyebrowClassName}>Board overview</p>
+          <h2 className={sectionTitleClassName}>Current work</h2>
         </div>
-        <div className="section-heading-actions">
+        <div className="flex flex-wrap items-center gap-3">
           <input
             ref={importInputRef}
             className="sr-only"
@@ -259,7 +276,7 @@ export function BoardPage() {
           />
           <button
             type="button"
-            className="ghost-button"
+            className={secondaryButtonClassName}
             onClick={() => {
               importInputRef.current?.click();
             }}
@@ -267,36 +284,44 @@ export function BoardPage() {
           >
             {isImporting ? "Importing…" : "Import backup…"}
           </button>
-          <button type="button" className="ghost-button" onClick={() => void exportBoardData()} disabled={isExporting}>
+          <button
+            type="button"
+            className={secondaryButtonClassName}
+            onClick={() => void exportBoardData()}
+            disabled={isExporting}
+          >
             {isExporting ? "Exporting…" : "Export backup"}
           </button>
         </div>
       </div>
 
       {actionError ? (
-        <p className="panel error-panel" role="alert">
+        <p className={`${softPanelClassName} m-0 text-sm text-danger-400`} role="alert">
           {actionError}
         </p>
       ) : null}
       {statusMessage ? (
-        <p className="panel" role="status">
+        <p className={`${softPanelClassName} m-0 text-sm text-ink-50`} role="status">
           {statusMessage}
         </p>
       ) : null}
 
-      <section className="panel board-toolbar">
-        <div className="section-heading">
+      <section className={panelClassName}>
+        <div className={headingRowClassName}>
           <div>
-            <p className="eyebrow">Filters</p>
-            <h3>Focus the board</h3>
+            <p className={eyebrowClassName}>Filters</p>
+            <h3 className={subheadingClassName}>Focus the board</h3>
           </div>
-          <p className="shortcut-hint">Shortcuts: `/` search, `C` quick create, `Esc` close ticket</p>
+          <p className="m-0 text-sm text-accent-500">
+            Shortcuts: `/` search, `C` quick create, `Esc` close ticket
+          </p>
         </div>
-        <div className="board-toolbar-grid">
-          <label className="field board-search-field">
-            <span>Search</span>
+        <div className="grid gap-4 md:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+          <label className={searchFieldClassName}>
+            <span className={labelClassName}>Search</span>
             <input
               ref={searchInputRef}
+              className={inputClassName}
               placeholder="Search title or description…"
               value={boardFilters.q ?? ""}
               onChange={(event) => {
@@ -308,9 +333,10 @@ export function BoardPage() {
               }}
             />
           </label>
-          <label className="field">
-            <span>Project</span>
+          <label className={fieldClassName}>
+            <span className={labelClassName}>Project</span>
             <select
+              className={inputClassName}
               value={boardFilters.projectId ? String(boardFilters.projectId) : ""}
               onChange={(event) => {
                 const value = event.target.value;
@@ -328,9 +354,10 @@ export function BoardPage() {
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>Priority</span>
+          <label className={fieldClassName}>
+            <span className={labelClassName}>Priority</span>
             <select
+              className={inputClassName}
               value={boardFilters.priority ?? ""}
               onChange={(event) => {
                 const value = event.target.value;
@@ -348,10 +375,10 @@ export function BoardPage() {
               ))}
             </select>
           </label>
-          <div className="form-actions board-filter-actions">
+          <div className="flex flex-wrap items-end justify-end gap-3">
             <button
               type="button"
-              className="ghost-button"
+              className={secondaryButtonClassName}
               onClick={() => {
                 setBoardFilters(EMPTY_BOARD_FILTERS);
               }}
@@ -362,12 +389,12 @@ export function BoardPage() {
         </div>
       </section>
 
-      <div className="ticket-workspace">
-        <section className="panel form-card">
-          <div className="section-heading">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
+        <section className={panelClassName}>
+          <div className={headingRowClassName}>
             <div>
-              <p className="eyebrow">Quick create</p>
-              <h3>Add a ticket without leaving the board</h3>
+              <p className={eyebrowClassName}>Quick create</p>
+              <h3 className={subheadingClassName}>Add a ticket without leaving the board</h3>
             </div>
           </div>
           <QuickTicketForm
@@ -408,31 +435,35 @@ export function BoardPage() {
         />
       </div>
 
-      {boardQuery.isLoading ? <p className="panel">Loading board…</p> : null}
+      {boardQuery.isLoading ? <p className={`${softPanelClassName} m-0 text-sm text-ink-50`}>Loading board…</p> : null}
       {boardQuery.isError ? (
-        <section className="panel board-empty-state" aria-live="polite">
-          <h3>Board request failed</h3>
-          <p>The board could not be loaded. Retry the request or export the local database before troubleshooting.</p>
-          <div className="form-actions">
-            <button type="button" onClick={() => void boardQuery.refetch()}>
+        <section className={panelClassName} aria-live="polite">
+          <h3 className="m-0 text-xl font-semibold text-ink-50">Board request failed</h3>
+          <p className="m-0 text-sm text-ink-200">
+            The board could not be loaded. Retry the request or export the local database before troubleshooting.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button className={primaryButtonClassName} type="button" onClick={() => void boardQuery.refetch()}>
               Retry board
             </button>
           </div>
         </section>
       ) : null}
       {!boardQuery.isLoading && !boardQuery.isError && totalTickets === 0 ? (
-        <section className="panel board-empty-state" aria-live="polite">
-          <h3>{boardHasFilters ? "No tickets match these filters" : "No tickets on the board yet"}</h3>
-          <p>
+        <section className={panelClassName} aria-live="polite">
+          <h3 className="m-0 text-xl font-semibold text-ink-50">
+            {boardHasFilters ? "No tickets match these filters" : "No tickets on the board yet"}
+          </h3>
+          <p className="m-0 text-sm text-ink-200">
             {boardHasFilters
               ? "Clear the current filters or create a ticket that matches them."
               : "Create a ticket from quick create or load the sample seed data for local testing."}
           </p>
-          <div className="form-actions">
+          <div className="flex flex-wrap gap-3">
             {boardHasFilters ? (
               <button
                 type="button"
-                className="ghost-button"
+                className={secondaryButtonClassName}
                 onClick={() => {
                   setBoardFilters(EMPTY_BOARD_FILTERS);
                 }}
@@ -441,6 +472,7 @@ export function BoardPage() {
               </button>
             ) : null}
             <button
+              className={primaryButtonClassName}
               type="button"
               onClick={() => {
                 quickCreateTitleRef.current?.focus();

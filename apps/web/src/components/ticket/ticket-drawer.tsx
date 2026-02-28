@@ -35,94 +35,111 @@ export function TicketDrawer(props: TicketDrawerProps) {
   } = props;
 
   return (
-    <section className="panel ticket-detail-panel">
-      <div className="section-heading">
+    <section className="grid gap-5 rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_20px_70px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+      <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <p className="eyebrow">Ticket editor</p>
-          <h3>{ticket ? `${ticket.key} ${ticket.title}` : "Select a ticket"}</h3>
+          <p className="m-0 text-[0.72rem] uppercase tracking-[0.16em] text-accent-500">Ticket editor</p>
+          <h3 className="m-0 text-xl font-semibold tracking-tight text-ink-50">
+            {ticket ? `${ticket.key} ${ticket.title}` : "Select a ticket"}
+          </h3>
         </div>
         {ticketId !== null ? (
-          <button type="button" className="ghost-button" onClick={onClose}>
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-ink-50 transition-colors hover:border-white/20 hover:bg-white/10"
+            onClick={onClose}
+          >
             Close
           </button>
         ) : null}
       </div>
 
       {ticketId === null ? (
-        <p className="empty-state">Pick a board card to edit ticket details, work contexts, and linked projects.</p>
+        <p className="m-0 text-sm text-ink-200">
+          Pick a board card to edit ticket details, work contexts, and linked projects.
+        </p>
       ) : isLoading ? (
-        <p className="empty-state">Loading ticket…</p>
+        <p className="m-0 text-sm text-ink-200">Loading ticket…</p>
       ) : isError || !ticket ? (
-        <p className="empty-state">Ticket details could not be loaded. Select it again or refresh the board.</p>
+        <p className="m-0 text-sm text-ink-200">
+          Ticket details could not be loaded. Select it again or refresh the board.
+        </p>
       ) : (
-        <div className="stack">
+        <div className="grid gap-4">
           <TicketForm
             form={form}
             projects={projects}
             submitLabel="Save ticket"
-            submittingLabel="Saving..."
+            submittingLabel="Saving…"
             isSubmitting={isSaving}
             onChange={onChange}
             onSubmit={onSave}
             secondaryAction={{
               label: "Delete ticket",
-              pendingLabel: "Deleting...",
+              pendingLabel: "Deleting…",
               isPending: isDeleting,
               onClick: onDelete,
-              className: "danger-button"
+              variant: "danger"
             }}
           />
 
-          <div className="ticket-sidebar-grid">
+          <div className="grid gap-4 xl:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
             <WorkContextEditor ticketId={ticket.id} contexts={ticket.workContexts} />
 
-            <section className="subform">
-              <div className="folders-header">
-                <h4>Linked project folders</h4>
+            <section className="grid gap-4 rounded-[20px] border border-white/8 bg-black/15 px-4 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <h4 className="m-0 text-base font-semibold text-ink-50">Linked project folders</h4>
               </div>
               {ticket.projectLinks.length ? (
                 ticket.projectLinks.map((link) => (
-                  <div className="folder-card" key={link.id}>
-                    <div className="folder-card-body">
+                  <div className="flex min-w-0 flex-col gap-4 rounded-[18px] bg-black/20 px-4 py-4 md:flex-row md:items-start md:justify-between" key={link.id}>
+                    <div className="min-w-0">
                       <div>
-                        <p className="folder-title">
-                          {link.project.name} <span>{link.relationship}</span>
+                        <p className="m-0 text-sm font-medium text-ink-50">
+                          {link.project.name}{" "}
+                          <span className="ml-2 text-[0.82rem] text-accent-500">{link.relationship}</span>
                         </p>
-                        <p>{link.project.description || "No project description."}</p>
+                        <p className="m-0 mt-1 text-sm text-ink-200">
+                          {link.project.description || "No project description."}
+                        </p>
                       </div>
                     </div>
-                    <div className="stack">
+                    <div className="grid gap-3">
                       {link.project.folders.length ? (
                         link.project.folders.map((folder) => (
                           <div key={folder.id}>
-                            <strong>{folder.label}</strong>
-                            <p className="folder-path">{folder.path}</p>
+                            <strong className="text-sm font-semibold text-ink-50">{folder.label}</strong>
+                            <p className="m-0 mt-1 break-words font-mono text-[0.88rem] text-ink-200">
+                              {folder.path}
+                            </p>
                           </div>
                         ))
                       ) : (
-                        <p className="empty-state">No folders attached to this project.</p>
+                        <p className="m-0 text-sm text-ink-200">No folders attached to this project.</p>
                       )}
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="empty-state">No projects linked to this ticket.</p>
+                <p className="m-0 text-sm text-ink-200">No projects linked to this ticket.</p>
               )}
             </section>
 
-            <section className="subform">
-              <div className="folders-header">
-                <h4>Activity</h4>
+            <section className="grid gap-4 rounded-[20px] border border-white/8 bg-black/15 px-4 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <h4 className="m-0 text-base font-semibold text-ink-50">Activity</h4>
               </div>
               {ticket.activities.length ? (
                 ticket.activities.map((activity) => (
-                  <div className="activity-item" key={activity.id}>
-                    <p>{activity.message}</p>
-                    <span>{new Date(activity.createdAt).toLocaleString()}</span>
+                  <div className="flex flex-col gap-2 rounded-2xl bg-black/20 px-4 py-3" key={activity.id}>
+                    <p className="m-0 text-sm text-ink-50">{activity.message}</p>
+                    <span className="text-[0.8rem] text-accent-500">
+                      {new Date(activity.createdAt).toLocaleString()}
+                    </span>
                   </div>
                 ))
               ) : (
-                <p className="empty-state">No activity yet.</p>
+                <p className="m-0 text-sm text-ink-200">No activity yet.</p>
               )}
             </section>
           </div>

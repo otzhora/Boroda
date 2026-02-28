@@ -45,13 +45,19 @@ function ColumnSection({
   return (
     <section
       ref={setNodeRef}
-      className={`panel column${isOver ? " column-drop-target" : ""}`}
+      className={`grid min-h-80 gap-4 rounded-[24px] border px-4 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-colors ${
+        isOver
+          ? "border-accent-300/40 bg-accent-700/12"
+          : "border-white/10 bg-white/5"
+      }`}
     >
-      <header className="column-header">
-        <h3>{statusLabelMap[status]}</h3>
-        <span>{column?.tickets.length ?? 0}</span>
+      <header className="flex items-center justify-between gap-4">
+        <h3 className="m-0 text-base font-semibold text-ink-50">{statusLabelMap[status]}</h3>
+        <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-sm text-accent-300">
+          {column?.tickets.length ?? 0}
+        </span>
       </header>
-      <div className="column-body">
+      <div className="grid gap-4">
         {column?.tickets.length ? (
           column.tickets.map((ticket) => (
             <TicketCard
@@ -63,7 +69,9 @@ function ColumnSection({
             />
           ))
         ) : (
-          <p className="empty-state">No tickets in {statusLabelMap[status].toLowerCase()}.</p>
+          <p className="m-0 text-sm text-ink-200">
+            No tickets in {statusLabelMap[status].toLowerCase()}.
+          </p>
         )}
       </div>
     </section>
@@ -110,7 +118,7 @@ export function BoardView({
       onDragEnd={handleDragEnd}
       onDragCancel={clearDragState}
     >
-      <div className="board-grid">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
         {BOARD_STATUS_ORDER.map((status) => (
           <ColumnSection
             key={status}

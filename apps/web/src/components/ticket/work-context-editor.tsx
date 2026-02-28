@@ -67,7 +67,12 @@ function getValuePlaceholder(type: WorkContextType) {
 function SubmitLabel(props: { pending: boolean; idle: string; pendingText: string }) {
   return (
     <>
-      {props.pending ? <span className="button-spinner" aria-hidden="true" /> : null}
+      {props.pending ? (
+        <span
+          className="h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+      ) : null}
       {props.pending ? props.pendingText : props.idle}
     </>
   );
@@ -92,22 +97,22 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
     deleteMutation.error?.message;
 
   return (
-    <section className="subform work-contexts-panel">
-      <div className="folders-header">
-        <h4>Work contexts</h4>
+    <section className="grid gap-4 rounded-[20px] border border-white/8 bg-black/15 px-4 py-4 xl:col-span-full">
+      <div className="flex items-center justify-between gap-4">
+        <h4 className="m-0 text-base font-semibold text-ink-50">Work contexts</h4>
       </div>
 
-      <p className="empty-state">
+      <p className="m-0 text-sm text-ink-200">
         Keep pull requests, AI sessions, and manual UI references attached to the ticket.
       </p>
 
       {actionMessage ? (
-        <p className="form-message error-text" aria-live="polite">
+        <p className="m-0 text-sm text-danger-400" aria-live="polite">
           {actionMessage}
         </p>
       ) : null}
 
-      <div className="stack">
+      <div className="grid gap-4">
         {contexts.length ? (
           contexts.map((context) => {
             const draft = drafts[context.id] ?? toDraft(context);
@@ -117,7 +122,7 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
             return (
               <form
                 key={context.id}
-                className="context-card"
+                className="grid gap-4 rounded-[18px] bg-black/20 px-4 py-4"
                 onSubmit={(event) => {
                   event.preventDefault();
                   updateMutation.mutate({
@@ -128,10 +133,11 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
                   });
                 }}
               >
-                <div className="context-card-grid">
-                  <label className="field">
-                    <span>Type</span>
+                <div className="flex flex-col gap-4 md:flex-row md:items-end">
+                  <label className="grid min-w-0 flex-1 gap-2">
+                    <span className="m-0 text-sm font-medium text-ink-50">Type</span>
                     <select
+                      className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50"
                       value={draft.type}
                       onChange={(event) => {
                         const type = event.target.value as WorkContextType;
@@ -151,9 +157,10 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
                       ))}
                     </select>
                   </label>
-                  <label className="field">
-                    <span>Label</span>
+                  <label className="grid min-w-0 flex-1 gap-2">
+                    <span className="m-0 text-sm font-medium text-ink-50">Label</span>
                     <input
+                      className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65"
                       name={`context-label-${context.id}`}
                       placeholder="Short reference label…"
                       value={draft.label}
@@ -171,10 +178,11 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
                   </label>
                 </div>
 
-                <label className="field">
-                  <span>{getValueLabel(draft.type)}</span>
+                <label className="grid gap-2">
+                  <span className="m-0 text-sm font-medium text-ink-50">{getValueLabel(draft.type)}</span>
                   {draft.type === "NOTE" || draft.type === "MANUAL_UI" ? (
                     <textarea
+                      className="rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65"
                       name={`context-value-${context.id}`}
                       rows={3}
                       placeholder={getValuePlaceholder(draft.type)}
@@ -192,6 +200,7 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
                     />
                   ) : (
                     <input
+                      className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65"
                       name={`context-value-${context.id}`}
                       placeholder={getValuePlaceholder(draft.type)}
                       value={draft.value}
@@ -209,13 +218,17 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
                   )}
                 </label>
 
-                <div className="form-actions">
-                  <button type="submit" disabled={isSaving}>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent-700 px-4 py-2.5 text-sm font-medium text-canvas-950 transition-opacity disabled:cursor-progress disabled:opacity-70"
+                    type="submit"
+                    disabled={isSaving}
+                  >
                     <SubmitLabel pending={isSaving} idle="Save changes" pendingText="Saving changes" />
                   </button>
                   <button
                     type="button"
-                    className="danger-button"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-red-500/20 bg-red-700/20 px-4 py-2.5 text-sm font-medium text-red-100 transition-colors hover:border-red-400/35 hover:bg-red-700/30 disabled:cursor-progress disabled:opacity-70"
                     disabled={isDeleting}
                     onClick={() => {
                       deleteMutation.mutate(context.id);
@@ -228,11 +241,11 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
             );
           })
         ) : (
-          <p className="empty-state">No work contexts attached yet.</p>
+          <p className="m-0 text-sm text-ink-200">No work contexts attached yet.</p>
         )}
 
         <form
-          className="context-card"
+          className="grid gap-4 rounded-[18px] bg-black/20 px-4 py-4"
           onSubmit={(event) => {
             event.preventDefault();
             createMutation.mutate({
@@ -242,13 +255,14 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
             });
           }}
         >
-          <div className="folders-header">
-            <h4>Add context</h4>
+          <div className="flex items-center justify-between gap-4">
+            <h4 className="m-0 text-base font-semibold text-ink-50">Add context</h4>
           </div>
-          <div className="context-card-grid">
-            <label className="field">
-              <span>Type</span>
+          <div className="flex flex-col gap-4 md:flex-row md:items-end">
+            <label className="grid min-w-0 flex-1 gap-2">
+              <span className="m-0 text-sm font-medium text-ink-50">Type</span>
               <select
+                className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50"
                 value={newContext.type}
                 onChange={(event) => {
                   setNewContext((current) => ({
@@ -264,9 +278,10 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
                 ))}
               </select>
             </label>
-            <label className="field">
-              <span>Label</span>
+            <label className="grid min-w-0 flex-1 gap-2">
+              <span className="m-0 text-sm font-medium text-ink-50">Label</span>
               <input
+                className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65"
                 placeholder="Short reference label…"
                 value={newContext.label}
                 onChange={(event) => {
@@ -279,10 +294,11 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
             </label>
           </div>
 
-          <label className="field">
-            <span>{getValueLabel(newContext.type)}</span>
+          <label className="grid gap-2">
+            <span className="m-0 text-sm font-medium text-ink-50">{getValueLabel(newContext.type)}</span>
             {newContext.type === "NOTE" || newContext.type === "MANUAL_UI" ? (
               <textarea
+                className="rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65"
                 rows={3}
                 placeholder={getValuePlaceholder(newContext.type)}
                 value={newContext.value}
@@ -295,6 +311,7 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
               />
             ) : (
               <input
+                className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65"
                 placeholder={getValuePlaceholder(newContext.type)}
                 value={newContext.value}
                 onChange={(event) => {
@@ -307,8 +324,12 @@ export function WorkContextEditor({ ticketId, contexts }: WorkContextEditorProps
             )}
           </label>
 
-          <div className="form-actions">
-            <button type="submit" disabled={createMutation.isPending}>
+          <div className="flex flex-wrap gap-3">
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent-700 px-4 py-2.5 text-sm font-medium text-canvas-950 transition-opacity disabled:cursor-progress disabled:opacity-70"
+              type="submit"
+              disabled={createMutation.isPending}
+            >
               <SubmitLabel pending={createMutation.isPending} idle="Add context" pendingText="Adding context" />
             </button>
           </div>

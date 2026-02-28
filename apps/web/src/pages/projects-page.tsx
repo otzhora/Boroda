@@ -30,6 +30,29 @@ interface MutationContext {
 }
 
 const PROJECTS_QUERY_KEY = ["projects"] as const;
+const panelClassName =
+  "grid gap-5 rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl";
+const insetPanelClassName = "grid gap-4 rounded-[20px] border border-white/8 bg-black/15 px-4 py-4";
+const cardClassName = "rounded-[18px] bg-black/20 px-4 py-4";
+const headingRowClassName = "flex flex-col items-start justify-between gap-4 md:flex-row md:items-center";
+const eyebrowClassName = "m-0 text-[0.72rem] uppercase tracking-[0.16em] text-accent-500";
+const pageTitleClassName = "m-0 text-2xl font-semibold tracking-tight text-ink-50";
+const sectionTitleClassName = "m-0 text-base font-semibold text-ink-50";
+const fieldClassName = "grid gap-2";
+const fieldWideClassName = "grid gap-2 md:col-span-full";
+const labelClassName = "m-0 text-sm font-medium text-ink-50";
+const inputClassName =
+  "min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65";
+const textareaClassName =
+  "rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65";
+const primaryButtonClassName =
+  "inline-flex min-h-11 items-center justify-center rounded-full bg-accent-700 px-4 py-2.5 text-sm font-medium text-canvas-950 transition-opacity disabled:cursor-progress disabled:opacity-70";
+const secondaryButtonClassName =
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-ink-50 transition-colors hover:border-white/20 hover:bg-white/10 disabled:cursor-progress disabled:opacity-70";
+const dangerButtonClassName =
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-red-500/20 bg-red-700/20 px-4 py-2.5 text-sm font-medium text-red-100 transition-colors hover:border-red-400/35 hover:bg-red-700/30 disabled:cursor-progress disabled:opacity-70";
+const checkboxLabelClassName =
+  "flex min-h-11 items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3.5 py-3 text-sm text-ink-50";
 
 function slugifyProjectName(value: string) {
   return value
@@ -683,27 +706,29 @@ export function ProjectsPage() {
   }
 
   return (
-    <section className="page-grid">
-      <div className="section-heading">
+    <section className="grid gap-4">
+      <div className={headingRowClassName}>
         <div>
-          <p className="eyebrow">Projects</p>
-          <h2>Workspace map</h2>
+          <p className={eyebrowClassName}>Projects</p>
+          <h2 className={pageTitleClassName}>Workspace map</h2>
         </div>
       </div>
-      <form className="panel form-card" onSubmit={handleCreateProject}>
-        <div className="form-grid">
-          <label className="field">
-            <span>Name</span>
+      <form className={panelClassName} onSubmit={handleCreateProject}>
+        <div className="grid gap-4 md:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+          <label className={fieldClassName}>
+            <span className={labelClassName}>Name</span>
             <input
+              className={inputClassName}
               value={projectForm.name}
               onChange={(event) => updateProjectField("name", event.target.value)}
               placeholder="payments-backend"
               required
             />
           </label>
-          <label className="field">
-            <span>Slug</span>
+          <label className={fieldClassName}>
+            <span className={labelClassName}>Slug</span>
             <input
+              className={inputClassName}
               value={projectForm.slug}
               onChange={(event) => {
                 setSlugTouched(true);
@@ -713,34 +738,36 @@ export function ProjectsPage() {
               required
             />
           </label>
-          <label className="field field-wide">
-            <span>Description</span>
+          <label className={fieldWideClassName}>
+            <span className={labelClassName}>Description</span>
             <textarea
+              className={textareaClassName}
               value={projectForm.description}
               onChange={(event) => updateProjectField("description", event.target.value)}
               placeholder="Main backend system"
               rows={3}
             />
           </label>
-          <label className="field">
-            <span>Color</span>
+          <label className={fieldClassName}>
+            <span className={labelClassName}>Color</span>
             <input
+              className={inputClassName}
               value={projectForm.color}
               onChange={(event) => updateProjectField("color", event.target.value)}
               placeholder="#355c7d"
             />
           </label>
         </div>
-        <div className="form-actions">
-          <button type="submit" disabled={createProjectMutation.isPending}>
-            {createProjectMutation.isPending ? "Creating..." : "Create project"}
+        <div className="flex flex-wrap items-center gap-3">
+          <button className={primaryButtonClassName} type="submit" disabled={createProjectMutation.isPending}>
+            {createProjectMutation.isPending ? "Creating…" : "Create project"}
           </button>
-          {projectError ? <p className="form-message error-text">{projectError}</p> : null}
+          {projectError ? <p className="m-0 text-sm text-danger-400">{projectError}</p> : null}
         </div>
       </form>
-      {projectsQuery.isLoading ? <p className="panel">Loading projects...</p> : null}
-      {projectsQuery.isError ? <p className="panel">Projects request failed.</p> : null}
-      <div className="stack">
+      {projectsQuery.isLoading ? <p className={`${panelClassName} m-0 text-sm text-ink-50`}>Loading projects…</p> : null}
+      {projectsQuery.isError ? <p className={`${panelClassName} m-0 text-sm text-danger-400`}>Projects request failed.</p> : null}
+      <div className="grid gap-4">
         {sortedProjects.map((project) => {
           const isEditingProject = editingProjectId === project.id;
           const projectEditForm =
@@ -750,23 +777,23 @@ export function ProjectsPage() {
           const projectValidation = pathValidation[`project-${project.id}`];
 
           return (
-            <article className="panel project-panel" key={project.id}>
-              <div className="project-card">
-                <div className="project-summary">
-                  <div className="swatch" style={{ backgroundColor: project.color || "#445" }} />
+            <article className={panelClassName} key={project.id}>
+              <div className="flex flex-col items-start justify-between gap-4 xl:flex-row">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-4 shrink-0 rounded-full" style={{ backgroundColor: project.color || "#445" }} />
                   <div>
-                    <h3>{project.name}</h3>
-                    <p className="project-meta">
+                    <h3 className="m-0 text-xl font-semibold text-ink-50">{project.name}</h3>
+                    <p className="m-0 mt-1 flex flex-wrap gap-3 text-[0.82rem] text-accent-500">
                       <span>{project.slug}</span>
                       <span>{project.folders.length} folders</span>
                     </p>
-                    <p>{project.description || "No description yet."}</p>
+                    <p className="m-0 mt-2 text-sm text-ink-200">{project.description || "No description yet."}</p>
                   </div>
                 </div>
-                <div className="button-row">
+                <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
-                    className="ghost-button"
+                    className={secondaryButtonClassName}
                     onClick={() =>
                       isEditingProject ? cancelProjectEdit(project.id) : beginProjectEdit(project)
                     }
@@ -775,7 +802,7 @@ export function ProjectsPage() {
                   </button>
                   <button
                     type="button"
-                    className="ghost-button danger-button"
+                    className={dangerButtonClassName}
                     disabled={deleteProjectMutation.isPending}
                     onClick={() => deleteProjectMutation.mutate(project.id)}
                   >
@@ -785,11 +812,12 @@ export function ProjectsPage() {
               </div>
 
               {isEditingProject ? (
-                <form className="subform" onSubmit={(event) => void handleUpdateProject(event, project.id)}>
-                  <div className="subform-grid">
-                    <label className="field">
-                      <span>Name</span>
+                <form className={insetPanelClassName} onSubmit={(event) => void handleUpdateProject(event, project.id)}>
+                  <div className="grid gap-4 md:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+                    <label className={fieldClassName}>
+                      <span className={labelClassName}>Name</span>
                       <input
+                        className={inputClassName}
                         value={projectEditForm.name}
                         onChange={(event) =>
                           updateProjectEditForm(project.id, { name: event.target.value })
@@ -797,9 +825,10 @@ export function ProjectsPage() {
                         required
                       />
                     </label>
-                    <label className="field">
-                      <span>Slug</span>
+                    <label className={fieldClassName}>
+                      <span className={labelClassName}>Slug</span>
                       <input
+                        className={inputClassName}
                         value={projectEditForm.slug}
                         onChange={(event) =>
                           updateProjectEditForm(project.id, { slug: event.target.value })
@@ -807,9 +836,10 @@ export function ProjectsPage() {
                         required
                       />
                     </label>
-                    <label className="field field-wide">
-                      <span>Description</span>
+                    <label className={fieldWideClassName}>
+                      <span className={labelClassName}>Description</span>
                       <textarea
+                        className={textareaClassName}
                         value={projectEditForm.description}
                         onChange={(event) =>
                           updateProjectEditForm(project.id, { description: event.target.value })
@@ -817,9 +847,10 @@ export function ProjectsPage() {
                         rows={3}
                       />
                     </label>
-                    <label className="field">
-                      <span>Color</span>
+                    <label className={fieldClassName}>
+                      <span className={labelClassName}>Color</span>
                       <input
+                        className={inputClassName}
                         value={projectEditForm.color}
                         onChange={(event) =>
                           updateProjectEditForm(project.id, { color: event.target.value })
@@ -827,13 +858,13 @@ export function ProjectsPage() {
                       />
                     </label>
                   </div>
-                  <div className="form-actions">
-                    <button type="submit" disabled={updateProjectMutation.isPending}>
-                      {updateProjectMutation.isPending ? "Saving..." : "Save project"}
+                  <div className="flex flex-wrap gap-3">
+                    <button className={primaryButtonClassName} type="submit" disabled={updateProjectMutation.isPending}>
+                      {updateProjectMutation.isPending ? "Saving…" : "Save project"}
                     </button>
                     <button
                       type="button"
-                      className="ghost-button"
+                      className={secondaryButtonClassName}
                       onClick={() => cancelProjectEdit(project.id)}
                     >
                       Cancel
@@ -842,12 +873,12 @@ export function ProjectsPage() {
                 </form>
               ) : null}
 
-              <div className="folders-block">
-                <div className="folders-header">
-                  <h4>Attached folders</h4>
+              <div className="grid gap-4">
+                <div className="flex items-center justify-between gap-4">
+                  <h4 className={sectionTitleClassName}>Attached folders</h4>
                 </div>
                 {project.folders.length ? (
-                  <div className="stack folder-list">
+                  <div className="grid gap-4">
                     {sortFolders(project.folders).map((folder) => {
                       const isEditingFolder = editingFolderIds[folder.id] ?? false;
                       const folderEditForm =
@@ -855,22 +886,24 @@ export function ProjectsPage() {
                       const folderValidation = pathValidation[`folder-${folder.id}`];
 
                       return (
-                        <div className="folder-card" key={folder.id}>
-                          <div className="folder-card-body">
+                        <div className={`${cardClassName} grid gap-4`} key={folder.id}>
+                          <div className="flex min-w-0 flex-col items-start justify-between gap-4 xl:flex-row">
                             <div>
-                              <p className="folder-title">
-                                {folder.label} <span>{folder.kind}</span>
+                              <p className="m-0 text-sm font-medium text-ink-50">
+                                {folder.label} <span className="ml-2 text-[0.82rem] text-accent-500">{folder.kind}</span>
                               </p>
-                              <p className="folder-path">{folder.path}</p>
-                              <p className="project-meta">
+                              <p className="m-0 mt-1 break-words font-mono text-[0.88rem] text-ink-200">
+                                {folder.path}
+                              </p>
+                              <p className="m-0 mt-2 flex flex-wrap gap-3 text-[0.82rem] text-accent-500">
                                 <span>{folder.isPrimary ? "Primary" : "Secondary"}</span>
                                 <span>{folder.existsOnDisk ? "On disk" : "Missing"}</span>
                               </p>
                             </div>
-                            <div className="button-row">
+                            <div className="flex flex-wrap gap-3">
                               <button
                                 type="button"
-                                className="ghost-button"
+                                className={secondaryButtonClassName}
                                 onClick={() =>
                                   isEditingFolder ? cancelFolderEdit(folder.id) : beginFolderEdit(folder)
                                 }
@@ -879,7 +912,7 @@ export function ProjectsPage() {
                               </button>
                               <button
                                 type="button"
-                                className="ghost-button"
+                                className={secondaryButtonClassName}
                                 disabled={deleteFolderMutation.isPending}
                                 onClick={() =>
                                   deleteFolderMutation.mutate({
@@ -895,13 +928,14 @@ export function ProjectsPage() {
 
                           {isEditingFolder ? (
                             <form
-                              className="subform"
+                              className={insetPanelClassName}
                               onSubmit={(event) => void handleUpdateFolder(event, project.id, folder.id)}
                             >
-                              <div className="subform-grid">
-                                <label className="field">
-                                  <span>Label</span>
+                              <div className="grid gap-4 md:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+                                <label className={fieldClassName}>
+                                  <span className={labelClassName}>Label</span>
                                   <input
+                                    className={inputClassName}
                                     value={folderEditForm.label}
                                     onChange={(event) =>
                                       updateFolderEditForm(folder, { label: event.target.value })
@@ -909,9 +943,10 @@ export function ProjectsPage() {
                                     required
                                   />
                                 </label>
-                                <label className="field">
-                                  <span>Kind</span>
+                                <label className={fieldClassName}>
+                                  <span className={labelClassName}>Kind</span>
                                   <select
+                                    className={inputClassName}
                                     value={folderEditForm.kind}
                                     onChange={(event) =>
                                       updateFolderEditForm(folder, {
@@ -926,9 +961,10 @@ export function ProjectsPage() {
                                     ))}
                                   </select>
                                 </label>
-                                <label className="field field-wide">
-                                  <span>WSL path</span>
+                                <label className={fieldWideClassName}>
+                                  <span className={labelClassName}>WSL path</span>
                                   <input
+                                    className={inputClassName}
                                     value={folderEditForm.path}
                                     onChange={(event) =>
                                       updateFolderEditForm(folder, { path: event.target.value })
@@ -936,8 +972,9 @@ export function ProjectsPage() {
                                     required
                                   />
                                 </label>
-                                <label className="checkbox-field">
+                                <label className={checkboxLabelClassName}>
                                   <input
+                                    className="h-4 w-4 shrink-0 accent-accent-700"
                                     type="checkbox"
                                     checked={folderEditForm.isPrimary}
                                     onChange={(event) =>
@@ -946,13 +983,13 @@ export function ProjectsPage() {
                                       })
                                     }
                                   />
-                                  <span>Primary folder</span>
+                                  <span className="m-0">Primary folder</span>
                                 </label>
                               </div>
-                              <div className="form-actions">
+                              <div className="flex flex-wrap gap-3">
                                 <button
                                   type="button"
-                                  className="ghost-button"
+                                  className={secondaryButtonClassName}
                                   disabled={validatePathMutation.isPending}
                                   onClick={() =>
                                     void handleValidatePath(
@@ -962,21 +999,21 @@ export function ProjectsPage() {
                                     )
                                   }
                                 >
-                                  {validatePathMutation.isPending ? "Validating..." : "Validate path"}
+                                  {validatePathMutation.isPending ? "Validating…" : "Validate path"}
                                 </button>
-                                <button type="submit" disabled={updateFolderMutation.isPending}>
-                                  {updateFolderMutation.isPending ? "Saving..." : "Save folder"}
+                                <button className={primaryButtonClassName} type="submit" disabled={updateFolderMutation.isPending}>
+                                  {updateFolderMutation.isPending ? "Saving…" : "Save folder"}
                                 </button>
                                 <button
                                   type="button"
-                                  className="ghost-button"
+                                  className={secondaryButtonClassName}
                                   onClick={() => cancelFolderEdit(folder.id)}
                                 >
                                   Cancel
                                 </button>
                               </div>
                               {folderValidation ? (
-                                <p className="form-message">
+                                <p className="m-0 text-sm text-accent-500">
                                   {folderValidation.exists
                                     ? folderValidation.isDirectory
                                       ? `Valid directory: ${folderValidation.resolvedPath}`
@@ -991,15 +1028,16 @@ export function ProjectsPage() {
                     })}
                   </div>
                 ) : (
-                  <p className="empty-state">No folders attached yet.</p>
+                  <p className="m-0 text-sm text-ink-200">No folders attached yet.</p>
                 )}
               </div>
 
-              <form className="subform" onSubmit={(event) => void handleCreateFolder(event, project.id)}>
-                <div className="subform-grid">
-                  <label className="field">
-                    <span>Label</span>
+              <form className={insetPanelClassName} onSubmit={(event) => void handleCreateFolder(event, project.id)}>
+                <div className="grid gap-4 md:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+                  <label className={fieldClassName}>
+                    <span className={labelClassName}>Label</span>
                     <input
+                      className={inputClassName}
                       value={folderCreateForm.label}
                       onChange={(event) =>
                         updateFolderCreateForm(project.id, { label: event.target.value })
@@ -1008,9 +1046,10 @@ export function ProjectsPage() {
                       required
                     />
                   </label>
-                  <label className="field">
-                    <span>Kind</span>
+                  <label className={fieldClassName}>
+                    <span className={labelClassName}>Kind</span>
                     <select
+                      className={inputClassName}
                       value={folderCreateForm.kind}
                       onChange={(event) =>
                         updateFolderCreateForm(project.id, {
@@ -1025,9 +1064,10 @@ export function ProjectsPage() {
                       ))}
                     </select>
                   </label>
-                  <label className="field field-wide">
-                    <span>WSL path</span>
+                  <label className={fieldWideClassName}>
+                    <span className={labelClassName}>WSL path</span>
                     <input
+                      className={inputClassName}
                       value={folderCreateForm.path}
                       onChange={(event) =>
                         updateFolderCreateForm(project.id, { path: event.target.value })
@@ -1036,8 +1076,9 @@ export function ProjectsPage() {
                       required
                     />
                   </label>
-                  <label className="checkbox-field">
+                  <label className={checkboxLabelClassName}>
                     <input
+                      className="h-4 w-4 shrink-0 accent-accent-700"
                       type="checkbox"
                       checked={folderCreateForm.isPrimary}
                       onChange={(event) =>
@@ -1046,26 +1087,26 @@ export function ProjectsPage() {
                         })
                       }
                     />
-                    <span>Primary folder</span>
+                    <span className="m-0">Primary folder</span>
                   </label>
                 </div>
-                <div className="form-actions">
+                <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
-                    className="ghost-button"
+                    className={secondaryButtonClassName}
                     disabled={validatePathMutation.isPending}
                     onClick={() =>
                       void handleValidatePath(`project-${project.id}`, folderCreateForm.path)
                     }
                   >
-                    {validatePathMutation.isPending ? "Validating..." : "Validate path"}
+                    {validatePathMutation.isPending ? "Validating…" : "Validate path"}
                   </button>
-                  <button type="submit" disabled={createFolderMutation.isPending}>
-                    {createFolderMutation.isPending ? "Adding..." : "Add folder"}
+                  <button className={primaryButtonClassName} type="submit" disabled={createFolderMutation.isPending}>
+                    {createFolderMutation.isPending ? "Adding…" : "Add folder"}
                   </button>
                 </div>
                 {projectValidation ? (
-                  <p className="form-message">
+                  <p className="m-0 text-sm text-accent-500">
                     {projectValidation.exists
                       ? projectValidation.isDirectory
                         ? `Valid directory: ${projectValidation.resolvedPath}`
@@ -1078,10 +1119,12 @@ export function ProjectsPage() {
           );
         })}
         {folderError || validateError || deleteError ? (
-          <p className="panel error-text">{folderError ?? validateError ?? deleteError}</p>
+          <p className={`${panelClassName} m-0 text-sm text-danger-400`}>
+            {folderError ?? validateError ?? deleteError}
+          </p>
         ) : null}
         {!sortedProjects.length && !projectsQuery.isLoading ? (
-          <p className="panel">No projects yet.</p>
+          <p className={`${panelClassName} m-0 text-sm text-ink-50`}>No projects yet.</p>
         ) : null}
       </div>
     </section>

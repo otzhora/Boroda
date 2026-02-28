@@ -21,9 +21,23 @@ interface TicketFormProps {
     pendingLabel: string;
     isPending: boolean;
     onClick: () => void;
-    className?: string;
+    variant?: "default" | "danger";
   };
 }
+
+const fieldClassName = "grid gap-2";
+const fieldWideClassName = "md:col-span-full grid gap-2";
+const labelClassName = "m-0 text-sm font-medium text-ink-50";
+const inputClassName =
+  "min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65";
+const textareaClassName =
+  "rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65";
+const primaryButtonClassName =
+  "inline-flex min-h-11 items-center justify-center rounded-full bg-accent-700 px-4 py-2.5 text-sm font-medium text-canvas-950 transition-opacity disabled:cursor-progress disabled:opacity-70";
+const secondaryButtonClassName =
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-ink-50 transition-colors disabled:cursor-progress disabled:opacity-70 hover:border-white/20 hover:bg-white/10";
+const dangerButtonClassName =
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-red-500/20 bg-red-700/20 px-4 py-2.5 text-sm font-medium text-red-100 transition-colors disabled:cursor-progress disabled:opacity-70 hover:border-red-400/35 hover:bg-red-700/30";
 
 export function TicketForm(props: TicketFormProps) {
   const {
@@ -39,15 +53,16 @@ export function TicketForm(props: TicketFormProps) {
 
   return (
     <form
-      className="form-grid"
+      className="grid gap-4 md:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
       }}
     >
-      <label className="field field-wide">
-        <span>Title</span>
+      <label className={fieldWideClassName}>
+        <span className={labelClassName}>Title</span>
         <input
+          className={inputClassName}
           value={form.title}
           onChange={(event) =>
             onChange((current) => ({
@@ -58,9 +73,10 @@ export function TicketForm(props: TicketFormProps) {
           required
         />
       </label>
-      <label className="field field-wide">
-        <span>Description</span>
+      <label className={fieldWideClassName}>
+        <span className={labelClassName}>Description</span>
         <textarea
+          className={textareaClassName}
           rows={5}
           value={form.description}
           onChange={(event) =>
@@ -71,9 +87,10 @@ export function TicketForm(props: TicketFormProps) {
           }
         />
       </label>
-      <label className="field">
-        <span>Status</span>
+      <label className={fieldClassName}>
+        <span className={labelClassName}>Status</span>
         <select
+          className={inputClassName}
           value={form.status}
           onChange={(event) =>
             onChange((current) => ({
@@ -89,9 +106,10 @@ export function TicketForm(props: TicketFormProps) {
           ))}
         </select>
       </label>
-      <label className="field">
-        <span>Priority</span>
+      <label className={fieldClassName}>
+        <span className={labelClassName}>Priority</span>
         <select
+          className={inputClassName}
           value={form.priority}
           onChange={(event) =>
             onChange((current) => ({
@@ -107,9 +125,10 @@ export function TicketForm(props: TicketFormProps) {
           ))}
         </select>
       </label>
-      <label className="field">
-        <span>Type</span>
+      <label className={fieldClassName}>
+        <span className={labelClassName}>Type</span>
         <select
+          className={inputClassName}
           value={form.type}
           onChange={(event) =>
             onChange((current) => ({
@@ -125,9 +144,10 @@ export function TicketForm(props: TicketFormProps) {
           ))}
         </select>
       </label>
-      <label className="field">
-        <span>Due at</span>
+      <label className={fieldClassName}>
+        <span className={labelClassName}>Due at</span>
         <input
+          className={inputClassName}
           type="datetime-local"
           value={form.dueAt}
           onChange={(event) =>
@@ -150,14 +170,14 @@ export function TicketForm(props: TicketFormProps) {
         }
       />
 
-      <div className="form-actions field-wide">
-        <button type="submit" disabled={isSubmitting}>
+      <div className="flex flex-wrap gap-3 md:col-span-full">
+        <button className={primaryButtonClassName} type="submit" disabled={isSubmitting}>
           {isSubmitting ? submittingLabel : submitLabel}
         </button>
         {secondaryAction ? (
           <button
             type="button"
-            className={secondaryAction.className}
+            className={secondaryAction.variant === "danger" ? dangerButtonClassName : secondaryButtonClassName}
             onClick={secondaryAction.onClick}
             disabled={secondaryAction.isPending}
           >
