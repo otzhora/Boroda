@@ -22,9 +22,11 @@ interface TicketDrawerProps {
   isSaving: boolean;
   saveSuccessCount: number;
   isDeleting: boolean;
+  isOpeningInTerminal: boolean;
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
   onSave: () => void;
   onDelete: () => void;
+  onOpenInTerminal: () => void;
   onClose: () => void;
 }
 
@@ -65,6 +67,42 @@ function MetaRow(props: { label: string; value: string }) {
   );
 }
 
+function getPreferredProjectFolder(ticket: Ticket | undefined) {
+  if (!ticket) {
+    return null;
+  }
+
+  const sortedLinks = [...ticket.projectLinks].sort((left, right) => {
+    if (left.relationship === right.relationship) {
+      return left.projectId - right.projectId;
+    }
+
+    if (left.relationship === "PRIMARY") {
+      return -1;
+    }
+
+    if (right.relationship === "PRIMARY") {
+      return 1;
+    }
+
+    return left.projectId - right.projectId;
+  });
+
+  for (const link of sortedLinks) {
+    const primaryFolder = link.project.folders.find((folder) => folder.isPrimary);
+    if (primaryFolder?.existsOnDisk) {
+      return primaryFolder;
+    }
+
+    const firstExistingFolder = link.project.folders.find((folder) => folder.existsOnDisk);
+    if (firstExistingFolder) {
+      return firstExistingFolder;
+    }
+  }
+
+  return null;
+}
+
 export function TicketDrawer(props: TicketDrawerProps) {
   const {
     ticketId,
@@ -76,9 +114,11 @@ export function TicketDrawer(props: TicketDrawerProps) {
     isSaving,
     saveSuccessCount,
     isDeleting,
+    isOpeningInTerminal,
     onChange,
     onSave,
     onDelete,
+    onOpenInTerminal,
     onClose
   } = props;
   const [isEditing, setIsEditing] = useState(false);
@@ -86,6 +126,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const detailTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const detailTabsId = useId();
+  const preferredProjectFolder = getPreferredProjectFolder(ticket);
 
   useEffect(() => {
     setIsEditing(false);
@@ -395,6 +436,23 @@ export function TicketDrawer(props: TicketDrawerProps) {
                 <section className={railSectionClassName}>
                   <h4 className="m-0 text-base font-semibold text-ink-50">Actions</h4>
                   <div className="grid min-w-0 gap-2.5">
+                    {preferredProjectFolder ? (
+                      <button
+                        type="button"
+                        className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.10] px-3 py-1.5 text-sm font-medium text-ink-50 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
+                        onClick={onOpenInTerminal}
+                        disabled={isOpeningInTerminal}
+                        aria-label={isOpeningInTerminal ? "Opening terminal" : "Open in Terminal"}
+                      >
+                        {isOpeningInTerminal ? (
+                          <span
+                            className="mr-2 inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                        Open in Terminal
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.10] px-3 py-1.5 text-sm font-medium text-ink-50 transition-colors hover:bg-white/[0.14]"

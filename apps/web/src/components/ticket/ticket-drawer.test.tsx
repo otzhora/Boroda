@@ -55,9 +55,11 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
+        isOpeningInTerminal={false}
         onChange={handleChange}
         onSave={handleSave}
         onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
         onClose={vi.fn()}
       />
     );
@@ -79,9 +81,11 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={1}
         isDeleting={false}
+        isOpeningInTerminal={false}
         onChange={handleChange}
         onSave={handleSave}
         onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
         onClose={vi.fn()}
       />
     );
@@ -106,9 +110,11 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
+        isOpeningInTerminal={false}
         onChange={vi.fn()}
         onSave={handleSave}
         onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
         onClose={handleClose}
       />
     );
@@ -121,5 +127,56 @@ describe("TicketDrawer", () => {
     expect(handleSave).toHaveBeenCalledTimes(1);
     expect(handleClose).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Save ticket" })).toBeInTheDocument();
+  });
+
+  it("shows the terminal action when a linked project has an available folder", () => {
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "workspace",
+                    path: "/home/otzhora/projects/payments",
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Open in Terminal" })).toBeInTheDocument();
   });
 });

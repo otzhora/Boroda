@@ -23,6 +23,7 @@ import {
   useCreateTicketMutation,
   useDeleteTicketMutation,
   useMoveTicketStatusMutation,
+  useOpenTicketInWindowsTerminalMutation,
   useUpdateTicketMutation
 } from "../features/tickets/mutations";
 import { useTicketQuery } from "../features/tickets/queries";
@@ -151,12 +152,14 @@ export function BoardPage() {
       }
     }
   });
+  const openTicketInWindowsTerminalMutation = useOpenTicketInWindowsTerminalMutation(selectedTicketId);
 
   const actionError =
     exportError ??
     createTicketMutation.error?.message ??
     updateTicketMutation.error?.message ??
     deleteTicketMutation.error?.message ??
+    openTicketInWindowsTerminalMutation.error?.message ??
     moveTicketStatusMutation.error?.message;
 
   const columns = boardQuery.data?.columns ?? [];
@@ -510,6 +513,7 @@ export function BoardPage() {
         isSaving={updateTicketMutation.isPending}
         saveSuccessCount={ticketSaveSuccessCount}
         isDeleting={deleteTicketMutation.isPending}
+        isOpeningInTerminal={openTicketInWindowsTerminalMutation.isPending}
         onChange={(updater) => {
           setEditForm((current) => updater(current));
         }}
@@ -518,6 +522,9 @@ export function BoardPage() {
         }}
         onDelete={() => {
           deleteTicketMutation.mutate();
+        }}
+        onOpenInTerminal={() => {
+          openTicketInWindowsTerminalMutation.mutate();
         }}
         onClose={() => {
           setSelectedTicketId(null);

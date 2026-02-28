@@ -9,6 +9,8 @@ export function getConfig() {
     port: Number(process.env.PORT ?? 3000),
     databasePath: process.env.BORODA_DB_PATH ?? path.resolve(repoRoot, "data/boroda.sqlite"),
     webDistPath: path.resolve(repoRoot, "apps/web/dist"),
-    migrationsPath: path.resolve(repoRoot, "drizzle/migrations")
+    migrationsPath: path.resolve(repoRoot, "drizzle/migrations"),
+    windowsTerminalBinary: process.env.BORODA_WINDOWS_TERMINAL_BIN ?? "wt.exe",
+    windowsTerminalSettingsPath: process.env.BORODA_WINDOWS_TERMINAL_SETTINGS_PATH ?? null
   };
 }

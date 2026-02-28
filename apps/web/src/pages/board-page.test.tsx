@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   createMutate: vi.fn(),
   updateMutate: vi.fn(),
   deleteMutate: vi.fn(),
-  moveMutate: vi.fn()
+  moveMutate: vi.fn(),
+  openTerminalMutate: vi.fn()
 }));
 
 vi.mock("../features/board/queries", () => ({
@@ -44,6 +45,11 @@ vi.mock("../features/tickets/mutations", () => ({
   })),
   useMoveTicketStatusMutation: vi.fn(() => ({
     mutate: mocks.moveMutate,
+    isPending: false,
+    error: null
+  })),
+  useOpenTicketInWindowsTerminalMutation: vi.fn(() => ({
+    mutate: mocks.openTerminalMutate,
     isPending: false,
     error: null
   }))
@@ -83,6 +89,7 @@ describe("BoardPage", () => {
     mocks.updateMutate.mockReset();
     mocks.deleteMutate.mockReset();
     mocks.moveMutate.mockReset();
+    mocks.openTerminalMutate.mockReset();
 
     mocks.useBoardQuery.mockReturnValue({
       data: { columns: [] },
