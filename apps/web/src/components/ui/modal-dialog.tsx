@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 
 interface ModalDialogProps {
   open: boolean;
@@ -10,6 +10,7 @@ interface ModalDialogProps {
   onEscapeKeyDown?: (event: KeyboardEvent) => boolean | void;
   initialFocusRef?: RefObject<HTMLElement | null>;
   size?: "default" | "wide";
+  showCloseButton?: boolean;
 }
 
 const focusableSelector = [
@@ -36,14 +37,35 @@ export function ModalDialog({
   onClose,
   onEscapeKeyDown,
   initialFocusRef,
-  size = "default"
+  size = "default",
+  showCloseButton = true
 }: ModalDialogProps) {
   const titleId = useId();
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const onEscapeKeyDownRef = useRef(onEscapeKeyDown);
+  const [hasBodyOverflow, setHasBodyOverflow] = useState(false);
+  const headerLayoutClass =
+    size === "wide" && showCloseButton
+      ? "grid items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1.7fr)_minmax(17rem,20rem)] xl:gap-8"
+      : showCloseButton
+        ? "flex items-start justify-between gap-3"
+        : "grid gap-3";
+  const bodyClassName =
+    size === "wide" && hasBodyOverflow
+      ? "min-h-0 overflow-x-hidden overflow-y-auto pr-2"
+      : "min-h-0 overflow-x-hidden overflow-y-auto";
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    onEscapeKeyDownRef.current = onEscapeKeyDown;
+  }, [onClose, onEscapeKeyDown]);
 
   useEffect(() => {
     if (!open) {
+      setHasBodyOverflow(false);
       return;
     }
 
@@ -74,11 +96,11 @@ export function ModalDialog({
       if (event.key === "Escape") {
         event.preventDefault();
 
-        if (onEscapeKeyDown?.(event) === false) {
+        if (onEscapeKeyDownRef.current?.(event) === false) {
           return;
         }
 
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -119,7 +141,56 @@ export function ModalDialog({
       document.body.style.overflow = previousOverflow;
       previousActiveElement?.focus();
     };
-  }, [initialFocusRef, onClose, onEscapeKeyDown, open]);
+  }, [initialFocusRef, open]);
+
+  useEffect(() => {
+    if (!open || size !== "wide") {
+      setHasBodyOverflow(false);
+      return;
+    }
+
+    const body = bodyRef.current;
+    if (!body) {
+      return;
+    }
+
+    let frameId = 0;
+
+    const updateOverflow = () => {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(() => {
+        const nextHasOverflow = body.scrollHeight > body.clientHeight + 1;
+        setHasBodyOverflow((current) => (current === nextHasOverflow ? current : nextHasOverflow));
+      });
+    };
+
+    updateOverflow();
+
+    const handleResize = () => {
+      updateOverflow();
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        updateOverflow();
+      });
+      resizeObserver.observe(body);
+
+      const content = body.firstElementChild;
+      if (content) {
+        resizeObserver.observe(content);
+      }
+    }
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", handleResize);
+      resizeObserver?.disconnect();
+    };
+  }, [open, size, children]);
 
   if (!open) {
     return null;
@@ -136,7 +207,7 @@ export function ModalDialog({
     >
       <div
         ref={panelRef}
-        className={`grid max-h-[96vh] w-full min-w-0 gap-4 overflow-hidden rounded-[22px] border border-white/8 bg-canvas-900 px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.44)] sm:px-5 sm:py-5 ${
+        className={`grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden rounded-[22px] border border-white/8 bg-canvas-900 px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.44)] sm:px-6 sm:py-6 ${
           size === "wide" ? "max-w-6xl" : "max-w-2xl"
         }`}
         role="dialog"
@@ -145,40 +216,41 @@ export function ModalDialog({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            {header ? (
-              <>
-                <h2 id={titleId} className="sr-only">
+        <div className="w-full">
+          <div className={headerLayoutClass}>
+            <div className="min-w-0">
+              {header ? (
+                <>
+                  <h2 id={titleId} className="sr-only">
+                    {title}
+                  </h2>
+                  {header}
+                </>
+              ) : (
+                <h2 id={titleId} className="m-0 text-[1.65rem] font-semibold tracking-[-0.03em] text-ink-50">
                   {title}
                 </h2>
-                {header}
-              </>
-            ) : (
-              <h2 id={titleId} className="m-0 text-[1.65rem] font-semibold tracking-[-0.03em] text-ink-50">
-                {title}
-              </h2>
-            )}
-            {description ? (
-              <p id={descriptionId} className="m-0 mt-1 text-sm text-ink-300">
-                {description}
-              </p>
+              )}
+              {description ? (
+                <p id={descriptionId} className="m-0 mt-1 text-sm text-ink-300">
+                  {description}
+                </p>
+              ) : null}
+            </div>
+            {showCloseButton ? (
+              <button
+                type="button"
+                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] xl:justify-self-start"
+                onClick={onClose}
+                aria-label="Close dialog"
+              >
+                Close
+              </button>
             ) : null}
           </div>
-          <button
-            type="button"
-            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06]"
-            onClick={onClose}
-            aria-label="Close dialog"
-          >
-            Close
-          </button>
         </div>
-        <div
-          className="min-h-0 overflow-x-hidden overflow-y-auto pr-2"
-          style={{ scrollbarGutter: "stable" }}
-        >
-          {children}
+        <div ref={bodyRef} className={bodyClassName}>
+          <div className="min-h-0 w-full">{children}</div>
         </div>
       </div>
     </div>

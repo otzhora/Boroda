@@ -82,6 +82,18 @@
       box-shadow 140ms ease;
   }
 
+  select {
+    color-scheme: dark;
+    background-color: var(--color-canvas-900);
+    color: var(--color-ink-50);
+  }
+
+  option,
+  optgroup {
+    background-color: var(--color-canvas-900);
+    color: var(--color-ink-50);
+  }
+
   textarea {
     resize: vertical;
   }

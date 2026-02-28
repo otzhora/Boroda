@@ -179,4 +179,106 @@ describe("TicketDrawer", () => {
 
     expect(screen.getByRole("button", { name: "Open in Terminal" })).toBeInTheDocument();
   });
+
+  it("keeps focus in the description field while typing", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={ticket}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        onChange={handleChange}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit ticket" }));
+
+    const descriptionField = screen.getByLabelText("Description");
+    await user.click(descriptionField);
+    await user.keyboard("a");
+
+    expect(descriptionField).toHaveFocus();
+    expect(handleChange).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  it("renders long read-only descriptions in the shared drawer scroll flow", () => {
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          description: Array.from({ length: 120 }, (_, index) => `Line ${index + 1}`).join("\n")
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm({
+          ...ticket,
+          description: Array.from({ length: 120 }, (_, index) => `Line ${index + 1}`).join("\n")
+        })}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("region", { name: "Ticket description" })).not.toHaveAttribute("tabindex");
+  });
+
+  it("keeps long activity lists in a bounded tab panel", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          activities: Array.from({ length: 80 }, (_, index) => ({
+            id: index + 1,
+            ticketId: ticket.id,
+            type: "ticket.status.changed",
+            message: `Status changed to step ${index + 1}`,
+            metaJson: "{}",
+            createdAt: "2026-02-28T20:13:00.000Z"
+          }))
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Activity" }));
+
+    expect(screen.getByRole("tabpanel")).toHaveAttribute("tabindex", "0");
+  });
 });

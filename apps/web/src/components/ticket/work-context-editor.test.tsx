@@ -90,10 +90,12 @@ describe("WorkContextEditor", () => {
       }
     ]);
 
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    await user.dblClick(screen.getByText("Session"));
+
     const existingContextForm = screen.getByRole("button", { name: "Save changes" }).closest("form");
     expect(existingContextForm).not.toBeNull();
-    const typeFields = screen.getAllByLabelText("Type");
-    await user.selectOptions(typeFields[0], "MANUAL_UI");
+    await user.selectOptions(within(existingContextForm!).getByLabelText("Type"), "MANUAL_UI");
     await user.clear(within(existingContextForm!).getByLabelText("Label"));
     await user.type(within(existingContextForm!).getByLabelText("Label"), "Manual QA pass");
     await user.clear(within(existingContextForm!).getByLabelText("Flow, environment, or notes"));
@@ -109,5 +111,34 @@ describe("WorkContextEditor", () => {
       label: "Manual QA pass",
       value: "Windows browser smoke test"
     });
+  });
+
+  it("exits edit mode with escape and restores the view state", async () => {
+    const user = userEvent.setup();
+
+    renderEditor([
+      {
+        id: 9,
+        ticketId: 7,
+        type: "LINK",
+        label: "Release notes",
+        value: "https://example.test/release",
+        metaJson: "{}",
+        createdAt: "",
+        updatedAt: ""
+      }
+    ]);
+
+    await user.dblClick(screen.getByText("Release notes"));
+    const existingContextForm = screen.getByRole("button", { name: "Save changes" }).closest("form");
+    expect(existingContextForm).not.toBeNull();
+
+    await user.clear(within(existingContextForm!).getByLabelText("Label"));
+    await user.type(within(existingContextForm!).getByLabelText("Label"), "Changed");
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    expect(screen.getByText("Release notes")).toBeInTheDocument();
+    expect(mocks.updateMutate).not.toHaveBeenCalled();
   });
 });

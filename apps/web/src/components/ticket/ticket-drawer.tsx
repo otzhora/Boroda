@@ -236,6 +236,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
       }}
       onClose={onClose}
       size="wide"
+      showCloseButton={false}
       initialFocusRef={isEditing ? titleInputRef : undefined}
     >
       {isLoading ? (
@@ -245,8 +246,8 @@ export function TicketDrawer(props: TicketDrawerProps) {
           Ticket details could not be loaded. Select it again or refresh the board.
         </p>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.85fr)_280px]">
-          <div className="grid min-w-0 gap-4">
+        <div className="grid w-full gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(17rem,20rem)] xl:gap-8">
+          <div className="grid min-w-0 gap-6">
             <section
               className={sectionClassName}
               onDoubleClick={() => {
@@ -270,9 +271,15 @@ export function TicketDrawer(props: TicketDrawerProps) {
                     <h4 className="m-0 text-base font-semibold text-ink-50">Description</h4>
                   </div>
                   {form.description ? (
-                    <p className="m-0 whitespace-pre-wrap break-words text-sm leading-6 text-ink-100">
-                      {form.description}
-                    </p>
+                    <div
+                      className="min-w-0 rounded-xl border border-white/8 bg-black/10 p-3"
+                      role="region"
+                      aria-label="Ticket description"
+                    >
+                      <p className="m-0 whitespace-pre-wrap break-words text-sm leading-6 text-ink-100">
+                        {form.description}
+                      </p>
+                    </div>
                   ) : (
                     <p className="m-0 text-sm text-ink-300">No description yet. Double-click to add one.</p>
                   )}
@@ -280,7 +287,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
               )}
             </section>
 
-            <section className="grid gap-3">
+            <section className="grid gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 pb-3">
                 <h4 className="m-0 text-base font-semibold text-ink-50">Additional details</h4>
                 <div
@@ -326,7 +333,8 @@ export function TicketDrawer(props: TicketDrawerProps) {
                 id={`${detailTabsId}-${activeDetailTab}-panel`}
                 role="tabpanel"
                 aria-labelledby={`${detailTabsId}-${activeDetailTab}-tab`}
-                className="min-w-0"
+                className="min-w-0 rounded-xl border border-white/8 bg-black/10 p-3 pb-4"
+                tabIndex={0}
               >
                 {activeDetailTab === "contexts" ? (
                   <WorkContextEditor ticketId={ticket.id} contexts={ticket.workContexts} embedded />
@@ -347,7 +355,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
           </div>
 
           <aside className="grid min-w-0 content-start">
-            <div className="grid min-w-0 gap-4 border-l border-white/8 pl-5 pr-3">
+            <div className="grid min-w-0 gap-4 xl:border-l xl:border-white/8 xl:pl-6">
               <section className={railSectionClassName}>
                 <div className="flex min-w-0 items-center justify-between gap-4">
                   <h4 className="m-0 text-base font-semibold text-ink-50">Details</h4>
