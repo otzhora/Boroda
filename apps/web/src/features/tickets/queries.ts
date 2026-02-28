@@ -10,6 +10,7 @@ export function useTicketQuery(ticketId: number | null) {
   return useQuery({
     queryKey: ticketQueryKey(ticketId),
     queryFn: () => apiClient<Ticket>(`/api/tickets/${ticketId}`),
-    enabled: ticketId !== null
+    enabled: ticketId !== null,
+    gcTime: 30 * 1000
   });
 }

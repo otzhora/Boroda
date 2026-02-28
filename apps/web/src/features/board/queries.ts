@@ -35,6 +35,8 @@ function toBoardSearchParams(filters: BoardFilters) {
 export function useBoardQuery(filters: BoardFilters) {
   return useQuery({
     queryKey: boardQueryKey(filters),
-    queryFn: () => apiClient<BoardResponse>(`/api/board${toBoardSearchParams(filters)}`)
+    queryFn: () => apiClient<BoardResponse>(`/api/board${toBoardSearchParams(filters)}`),
+    gcTime: 60 * 1000,
+    placeholderData: (previousData) => previousData
   });
 }

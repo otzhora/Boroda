@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { BoardView } from "../components/board/board-view";
@@ -89,8 +89,9 @@ export function BoardPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const quickCreateTitleRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const deferredBoardFilters = useDeferredValue(boardFilters);
 
-  const boardQuery = useBoardQuery(boardFilters);
+  const boardQuery = useBoardQuery(deferredBoardFilters);
   const projectsQuery = useProjectsQuery();
   const selectedTicketQuery = useTicketQuery(selectedTicketId);
 
@@ -100,8 +101,15 @@ export function BoardPage() {
     }
   }, [selectedTicketQuery.data]);
 
+  useEffect(() => {
+    queryClient.removeQueries({
+      queryKey: ["board"],
+      type: "inactive"
+    });
+  }, [deferredBoardFilters, queryClient]);
+
   const createTicketMutation = useCreateTicketMutation({
-    boardFilters,
+    boardFilters: deferredBoardFilters,
     onCreated: (ticket) => {
       setIsQuickCreateOpen(false);
       setSelectedTicketId(ticket.id);
@@ -113,7 +121,7 @@ export function BoardPage() {
 
   const updateTicketMutation = useUpdateTicketMutation({
     ticketId: selectedTicketId,
-    boardFilters,
+    boardFilters: deferredBoardFilters,
     onUpdated: (ticket) => {
       setEditForm(ticket);
     }
@@ -121,7 +129,7 @@ export function BoardPage() {
 
   const deleteTicketMutation = useDeleteTicketMutation({
     ticketId: selectedTicketId,
-    boardFilters,
+    boardFilters: deferredBoardFilters,
     onDeleted: () => {
       setSelectedTicketId(null);
     },
@@ -131,7 +139,7 @@ export function BoardPage() {
   });
 
   const moveTicketStatusMutation = useMoveTicketStatusMutation({
-    boardFilters,
+    boardFilters: deferredBoardFilters,
     onMoved: (ticketId, status) => {
       if (selectedTicketId === ticketId) {
         setEditForm((current) => ({
