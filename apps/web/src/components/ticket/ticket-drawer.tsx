@@ -1,5 +1,6 @@
 import type { Project, Ticket } from "../../lib/types";
 import type { TicketFormState } from "../../features/tickets/form";
+import { ModalDialog } from "../ui/modal-dialog";
 import { TicketForm } from "./ticket-form";
 import { WorkContextEditor } from "./work-context-editor";
 
@@ -35,30 +36,14 @@ export function TicketDrawer(props: TicketDrawerProps) {
   } = props;
 
   return (
-    <section className="grid gap-5 rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_20px_70px_rgba(0,0,0,0.24)] backdrop-blur-xl">
-      <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <p className="m-0 text-[0.72rem] uppercase tracking-[0.16em] text-accent-500">Ticket editor</p>
-          <h3 className="m-0 text-xl font-semibold tracking-tight text-ink-50">
-            {ticket ? `${ticket.key} ${ticket.title}` : "Select a ticket"}
-          </h3>
-        </div>
-        {ticketId !== null ? (
-          <button
-            type="button"
-            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-ink-50 transition-colors hover:border-white/20 hover:bg-white/10"
-            onClick={onClose}
-          >
-            Close
-          </button>
-        ) : null}
-      </div>
-
-      {ticketId === null ? (
-        <p className="m-0 text-sm text-ink-200">
-          Pick a board card to edit ticket details, work contexts, and linked projects.
-        </p>
-      ) : isLoading ? (
+    <ModalDialog
+      open={ticketId !== null}
+      title={ticket ? `${ticket.key} ${ticket.title}` : "Ticket editor"}
+      description="Edit ticket details, work contexts, linked folders, and recent activity."
+      onClose={onClose}
+      size="wide"
+    >
+      {isLoading ? (
         <p className="m-0 text-sm text-ink-200">Loading ticket…</p>
       ) : isError || !ticket ? (
         <p className="m-0 text-sm text-ink-200">
@@ -92,7 +77,10 @@ export function TicketDrawer(props: TicketDrawerProps) {
               </div>
               {ticket.projectLinks.length ? (
                 ticket.projectLinks.map((link) => (
-                  <div className="flex min-w-0 flex-col gap-4 rounded-[18px] bg-black/20 px-4 py-4 md:flex-row md:items-start md:justify-between" key={link.id}>
+                  <div
+                    className="flex min-w-0 flex-col gap-4 rounded-[18px] bg-black/20 px-4 py-4 md:flex-row md:items-start md:justify-between"
+                    key={link.id}
+                  >
                     <div className="min-w-0">
                       <div>
                         <p className="m-0 text-sm font-medium text-ink-50">
@@ -145,6 +133,6 @@ export function TicketDrawer(props: TicketDrawerProps) {
           </div>
         </div>
       )}
-    </section>
+    </ModalDialog>
   );
 }

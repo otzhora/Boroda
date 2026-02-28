@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -153,15 +153,16 @@ describe("BoardPage", () => {
 
     renderBoardPage();
 
-    const projectFields = screen.getAllByLabelText("Project");
-    const priorityFields = screen.getAllByLabelText("Priority");
+    await user.keyboard("c");
 
-    await user.type(screen.getByLabelText("Title"), "Wire board filters");
-    await user.selectOptions(projectFields[1], "1");
-    await user.selectOptions(screen.getByLabelText("Status"), "READY");
-    await user.selectOptions(priorityFields[1], "HIGH");
-    await user.selectOptions(screen.getByLabelText("Type"), "BUG");
-    await user.click(screen.getByRole("button", { name: "Quick create" }));
+    const dialog = await screen.findByRole("dialog", { name: "Create ticket" });
+
+    await user.type(within(dialog).getByLabelText("Title"), "Wire board filters");
+    await user.selectOptions(within(dialog).getByLabelText("Project"), "1");
+    await user.selectOptions(within(dialog).getByLabelText("Status"), "READY");
+    await user.selectOptions(within(dialog).getByLabelText("Priority"), "HIGH");
+    await user.selectOptions(within(dialog).getByLabelText("Type"), "BUG");
+    await user.click(within(dialog).getAllByRole("button", { name: "Create ticket" })[0]);
 
     expect(mocks.createMutate).toHaveBeenCalledWith({
       title: "Wire board filters",
@@ -227,6 +228,6 @@ describe("BoardPage", () => {
 
     screen.getByLabelText("Search").blur();
     await user.keyboard("c");
-    expect(screen.getByLabelText("Title")).toHaveFocus();
+    expect((await screen.findByLabelText("Title")) as HTMLElement).toHaveFocus();
   });
 });

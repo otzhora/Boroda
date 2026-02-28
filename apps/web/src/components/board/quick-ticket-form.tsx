@@ -14,6 +14,8 @@ interface QuickTicketFormProps {
   form: QuickTicketFormState;
   projects: Project[];
   isSubmitting: boolean;
+  submitLabel?: string;
+  submittingLabel?: string;
   titleInputRef?: Ref<HTMLInputElement>;
   onChange: (updater: (current: QuickTicketFormState) => QuickTicketFormState) => void;
   onSubmit: () => void;
@@ -33,6 +35,8 @@ export function QuickTicketForm({
   form,
   projects,
   isSubmitting,
+  submitLabel = "Create ticket",
+  submittingLabel = "Creating…",
   titleInputRef,
   onChange,
   onSubmit
@@ -145,7 +149,7 @@ export function QuickTicketForm({
             type="submit"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Creating…" : "Quick create"}
+            {isSubmitting ? submittingLabel : submitLabel}
           </button>
         </div>
       </div>

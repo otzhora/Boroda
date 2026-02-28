@@ -45,19 +45,19 @@ function ColumnSection({
   return (
     <section
       ref={setNodeRef}
-      className={`grid min-h-80 gap-4 rounded-[24px] border px-4 py-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-colors ${
+      className={`flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-colors ${
         isOver
           ? "border-accent-300/40 bg-accent-700/12"
           : "border-white/10 bg-white/5"
       }`}
     >
-      <header className="flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-10 flex min-h-11 items-center justify-between gap-3 border-b border-white/8 bg-[rgba(22,18,15,0.98)] px-4 py-2 backdrop-blur-xl">
         <h3 className="m-0 text-base font-semibold text-ink-50">{statusLabelMap[status]}</h3>
         <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-sm text-accent-300">
           {column?.tickets.length ?? 0}
         </span>
       </header>
-      <div className="grid gap-4">
+      <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4 pr-3">
         {column?.tickets.length ? (
           column.tickets.map((ticket) => (
             <TicketCard
@@ -68,11 +68,7 @@ function ColumnSection({
               onSelect={onSelectTicket}
             />
           ))
-        ) : (
-          <p className="m-0 text-sm text-ink-200">
-            No tickets in {statusLabelMap[status].toLowerCase()}.
-          </p>
-        )}
+        ) : null}
       </div>
     </section>
   );
@@ -118,7 +114,7 @@ export function BoardView({
       onDragEnd={handleDragEnd}
       onDragCancel={clearDragState}
     >
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+      <div className="grid h-full min-h-0 grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4">
         {BOARD_STATUS_ORDER.map((status) => (
           <ColumnSection
             key={status}
