@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import fastifyMultipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import { boardRoutes } from "./modules/board/routes";
@@ -20,6 +21,11 @@ export function buildApp() {
   });
 
   app.register(dbPlugin);
+  app.register(fastifyMultipart, {
+    limits: {
+      files: 1
+    }
+  });
 
   app.setErrorHandler((error, _request, reply) => {
     const { statusCode, payload } = toErrorPayload(error);

@@ -22,6 +22,13 @@ interface MoveTicketStatusContext {
   previousBoard?: BoardResponse;
 }
 
+export interface UploadedTicketImage {
+  alt: string;
+  filename: string;
+  url: string;
+  markdown: string;
+}
+
 export function useCreateTicketMutation(options: {
   boardFilters: BoardFilters;
   onCreated: (ticket: Ticket) => void;
@@ -187,6 +194,24 @@ export function useOpenTicketInWindowsTerminalMutation(ticketId: number | null) 
 
       return apiClient<{ ok: true; directory: string }>(`/api/integrations/windows-terminal/tickets/${ticketId}/open`, {
         method: "POST"
+      });
+    }
+  });
+}
+
+export function useUploadTicketImageMutation(ticketId: number | null) {
+  return useMutation({
+    mutationFn: (file: File) => {
+      if (ticketId === null) {
+        throw new Error("Save the ticket before uploading images");
+      }
+
+      const formData = new FormData();
+      formData.set("image", file);
+
+      return apiClient<UploadedTicketImage>(`/api/tickets/${ticketId}/images`, {
+        method: "POST",
+        body: formData
       });
     }
   });

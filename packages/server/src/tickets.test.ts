@@ -16,6 +16,7 @@ const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 before(async () => {
   tempRoot = await mkdtemp(path.join(os.tmpdir(), "boroda-m3-tests-"));
   process.env.BORODA_DB_PATH = path.join(tempRoot, "test.sqlite");
+  process.env.BORODA_UPLOADS_PATH = path.join(tempRoot, "uploads");
 
   const [{ buildApp }, dbClient, importedSchema] = await Promise.all([
     import("./app"),
@@ -228,4 +229,125 @@ test("ticket-project link endpoints enforce duplicate and primary constraints", 
 
   assert.equal(missingProjectResponse.statusCode, 404);
   assert.equal(missingProjectResponse.json().error.code, "PROJECT_NOT_FOUND");
+});
+
+test("ticket image uploads can be pasted and rendered back from local storage", async () => {
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Support pasted screenshots",
+      description: "",
+      status: "READY",
+      priority: "MEDIUM",
+      type: "TASK",
+      projectLinks: []
+    }
+  });
+
+  assert.equal(ticketResponse.statusCode, 200);
+  const ticket = ticketResponse.json();
+
+  const formData = new FormData();
+  formData.set("image", new Blob(["fake-image"], { type: "image/png" }), "clipboard.png");
+
+  const uploadResponse = await app.inject({
+    method: "POST",
+    url: `/api/tickets/${ticket.id}/images`,
+    payload: formData
+  });
+
+  assert.equal(uploadResponse.statusCode, 200);
+  const uploadedImage = uploadResponse.json();
+  assert.match(uploadedImage.url, new RegExp(`^/api/tickets/${ticket.id}/images/.+\\.png$`));
+  assert.equal(uploadedImage.markdown, `![clipboard](${uploadedImage.url})`);
+
+  const imageResponse = await app.inject({
+    method: "GET",
+    url: uploadedImage.url
+  });
+
+  assert.equal(imageResponse.statusCode, 200);
+  assert.equal(imageResponse.headers["content-type"], "image/png");
+  assert.equal(imageResponse.body, "fake-image");
+});
+
+test("ticket image cleanup removes orphaned files on description update and ticket delete", async () => {
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Clean up pasted screenshots",
+      description: "",
+      status: "READY",
+      priority: "MEDIUM",
+      type: "TASK",
+      projectLinks: []
+    }
+  });
+
+  assert.equal(ticketResponse.statusCode, 200);
+  const ticket = ticketResponse.json();
+
+  const firstFormData = new FormData();
+  firstFormData.set("image", new Blob(["first-image"], { type: "image/png" }), "first.png");
+
+  const firstUploadResponse = await app.inject({
+    method: "POST",
+    url: `/api/tickets/${ticket.id}/images`,
+    payload: firstFormData
+  });
+
+  assert.equal(firstUploadResponse.statusCode, 200);
+  const firstImage = firstUploadResponse.json();
+
+  const secondFormData = new FormData();
+  secondFormData.set("image", new Blob(["second-image"], { type: "image/png" }), "second.png");
+
+  const secondUploadResponse = await app.inject({
+    method: "POST",
+    url: `/api/tickets/${ticket.id}/images`,
+    payload: secondFormData
+  });
+
+  assert.equal(secondUploadResponse.statusCode, 200);
+  const secondImage = secondUploadResponse.json();
+
+  const keepOnlySecondResponse = await app.inject({
+    method: "PATCH",
+    url: `/api/tickets/${ticket.id}`,
+    payload: {
+      description: `${secondImage.markdown}\n`
+    }
+  });
+
+  assert.equal(keepOnlySecondResponse.statusCode, 200);
+
+  const deletedFirstImageResponse = await app.inject({
+    method: "GET",
+    url: firstImage.url
+  });
+
+  assert.equal(deletedFirstImageResponse.statusCode, 404);
+
+  const retainedSecondImageResponse = await app.inject({
+    method: "GET",
+    url: secondImage.url
+  });
+
+  assert.equal(retainedSecondImageResponse.statusCode, 200);
+
+  const deleteTicketResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(deleteTicketResponse.statusCode, 200);
+
+  const deletedSecondImageResponse = await app.inject({
+    method: "GET",
+    url: secondImage.url
+  });
+
+  assert.equal(deletedSecondImageResponse.statusCode, 404);
 });

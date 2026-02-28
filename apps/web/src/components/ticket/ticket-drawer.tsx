@@ -10,6 +10,7 @@ import {
   TicketProjectLinksField,
   TicketTitleField
 } from "./ticket-form";
+import { MarkdownDescription } from "./markdown-description";
 import { WorkContextEditor } from "./work-context-editor";
 
 interface TicketDrawerProps {
@@ -256,6 +257,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
             >
               {isEditing ? (
                 <TicketDescriptionField
+                  ticketId={ticket.id}
                   value={form.description}
                   onChange={(value) =>
                     onChange((current) => ({
@@ -276,9 +278,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                       role="region"
                       aria-label="Ticket description"
                     >
-                      <p className="m-0 whitespace-pre-wrap break-words text-sm leading-6 text-ink-100">
-                        {form.description}
-                      </p>
+                      <MarkdownDescription value={form.description} />
                     </div>
                   ) : (
                     <p className="m-0 text-sm text-ink-300">No description yet. Double-click to add one.</p>

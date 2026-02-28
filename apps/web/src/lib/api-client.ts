@@ -6,8 +6,9 @@ interface ErrorResponse {
 
 export async function apiClient<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
+  const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
 
-  if (init?.body && !headers.has("content-type")) {
+  if (init?.body && !isFormDataBody && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }
 

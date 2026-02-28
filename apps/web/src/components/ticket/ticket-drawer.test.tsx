@@ -1,8 +1,30 @@
-import { render, screen } from "@testing-library/react";
+import * as React from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { toTicketForm } from "../../features/tickets/form";
 import type { Project, Ticket } from "../../lib/types";
+
+const uploadTicketImageSpy = vi.fn(async () => ({
+  alt: "Pasted image",
+  filename: "pasted-image.png",
+  url: "/api/tickets/12/images/pasted-image.png",
+  markdown: "![Pasted image](/api/tickets/12/images/pasted-image.png)"
+}));
+
+vi.mock("../../features/tickets/mutations", async () => {
+  const actual = await vi.importActual<typeof import("../../features/tickets/mutations")>(
+    "../../features/tickets/mutations"
+  );
+
+  return {
+    ...actual,
+    useUploadTicketImageMutation: () => ({
+      isPending: false,
+      mutateAsync: uploadTicketImageSpy
+    })
+  };
+});
 
 vi.mock("./work-context-editor", () => ({
   WorkContextEditor: () => <div>Work contexts</div>
@@ -39,6 +61,37 @@ const ticket: Ticket = {
 };
 
 describe("TicketDrawer", () => {
+  it("renders markdown descriptions in read mode", () => {
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          description: "# Summary\n\n- [x] Added support\n\n![Architecture](/api/tickets/12/images/diagram.png)"
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm({
+          ...ticket,
+          description: "# Summary\n\n- [x] Added support\n\n![Architecture](/api/tickets/12/images/diagram.png)"
+        })}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Architecture" })).toBeInTheDocument();
+  });
+
   it("leaves edit mode after a successful save", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();
@@ -212,6 +265,124 @@ describe("TicketDrawer", () => {
 
     expect(descriptionField).toHaveFocus();
     expect(handleChange).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  it("uploads pasted images and inserts markdown into the description", async () => {
+    uploadTicketImageSpy.mockClear();
+    const user = userEvent.setup();
+
+    function DrawerHarness() {
+      const [form, setForm] = React.useState(toTicketForm(ticket));
+
+      return (
+        <TicketDrawer
+          ticketId={ticket.id}
+          ticket={ticket}
+          isLoading={false}
+          isError={false}
+          form={form}
+          projects={[project]}
+          isSaving={false}
+          saveSuccessCount={0}
+          isDeleting={false}
+          isOpeningInTerminal={false}
+          onChange={(updater) => {
+            setForm((current) => updater(current));
+          }}
+          onSave={vi.fn()}
+          onDelete={vi.fn()}
+          onOpenInTerminal={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+    }
+
+    render(<DrawerHarness />);
+
+    await user.click(screen.getByRole("button", { name: "Edit ticket" }));
+
+    const descriptionField = screen.getByLabelText("Description");
+    const pastedImage = new File(["image-data"], "pasted-image.png", { type: "image/png" });
+
+    await user.click(descriptionField);
+    fireEvent.paste(descriptionField, {
+      clipboardData: {
+        items: [
+          {
+            kind: "file",
+            type: pastedImage.type,
+            getAsFile: () => pastedImage
+          }
+        ]
+      }
+    });
+
+    await waitFor(() => {
+      expect(uploadTicketImageSpy).toHaveBeenCalledTimes(1);
+      expect(descriptionField).toHaveValue(
+        `${ticket.description}\n\n![Pasted image](/api/tickets/12/images/pasted-image.png)`
+      );
+    });
+  });
+
+  it("uploads dropped images and inserts markdown into the description", async () => {
+    uploadTicketImageSpy.mockClear();
+    const user = userEvent.setup();
+
+    function DrawerHarness() {
+      const [form, setForm] = React.useState(toTicketForm(ticket));
+
+      return (
+        <TicketDrawer
+          ticketId={ticket.id}
+          ticket={ticket}
+          isLoading={false}
+          isError={false}
+          form={form}
+          projects={[project]}
+          isSaving={false}
+          saveSuccessCount={0}
+          isDeleting={false}
+          isOpeningInTerminal={false}
+          onChange={(updater) => {
+            setForm((current) => updater(current));
+          }}
+          onSave={vi.fn()}
+          onDelete={vi.fn()}
+          onOpenInTerminal={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+    }
+
+    render(<DrawerHarness />);
+
+    await user.click(screen.getByRole("button", { name: "Edit ticket" }));
+
+    const descriptionField = screen.getByLabelText("Description");
+    const dropZone = screen.getByRole("tabpanel", { name: "Write" });
+    const droppedImage = new File(["image-data"], "dropped-image.png", { type: "image/png" });
+
+    fireEvent.dragOver(dropZone, {
+      dataTransfer: {
+        items: [{ kind: "file", type: droppedImage.type }]
+      }
+    });
+
+    expect(screen.getByText("Drop image to upload and insert Markdown.")).toBeInTheDocument();
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: {
+        files: [droppedImage]
+      }
+    });
+
+    await waitFor(() => {
+      expect(uploadTicketImageSpy).toHaveBeenCalledTimes(1);
+      expect(descriptionField).toHaveValue(
+        `${ticket.description}\n\n![Pasted image](/api/tickets/12/images/pasted-image.png)`
+      );
+    });
   });
 
   it("renders long read-only descriptions in the shared drawer scroll flow", () => {
