@@ -45,19 +45,19 @@ function ColumnSection({
   return (
     <section
       ref={setNodeRef}
-      className={`flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-colors ${
+      className={`flex h-full min-h-0 min-w-[320px] flex-1 basis-[320px] flex-col overflow-hidden rounded-[20px] border shadow-[0_18px_48px_rgba(0,0,0,0.2)] transition-colors ${
         isOver
-          ? "border-accent-300/40 bg-accent-700/12"
-          : "border-white/10 bg-white/5"
+          ? "border-white/20 bg-canvas-850"
+          : "border-white/8 bg-canvas-900"
       }`}
     >
-      <header className="sticky top-0 z-10 flex min-h-11 items-center justify-between gap-3 border-b border-white/8 bg-[rgba(22,18,15,0.98)] px-4 py-2 backdrop-blur-xl">
-        <h3 className="m-0 text-base font-semibold text-ink-50">{statusLabelMap[status]}</h3>
-        <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-sm text-accent-300">
+      <header className="sticky top-0 z-10 flex min-h-12 items-center justify-between gap-3 border-b border-white/8 bg-canvas-900 px-4 py-2">
+        <h3 className="m-0 text-sm font-semibold uppercase tracking-[0.16em] text-ink-100">{statusLabelMap[status]}</h3>
+        <span className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-ink-200">
           {column?.tickets.length ?? 0}
         </span>
       </header>
-      <div className="grid min-h-0 flex-1 content-start gap-4 overflow-y-auto p-4 pr-3">
+      <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-3">
         {column?.tickets.length ? (
           column.tickets.map((ticket) => (
             <TicketCard
@@ -114,17 +114,19 @@ export function BoardView({
       onDragEnd={handleDragEnd}
       onDragCancel={clearDragState}
     >
-      <div className="grid h-full min-h-0 grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-4">
-        {BOARD_STATUS_ORDER.map((status) => (
-          <ColumnSection
-            key={status}
-            column={columnsByStatus.get(status)}
-            status={status}
-            draggedTicketId={draggedTicketId}
-            selectedTicketId={selectedTicketId}
-            onSelectTicket={onSelectTicket}
-          />
-        ))}
+      <div className="h-full min-h-0 overflow-x-auto overflow-y-hidden pb-2">
+        <div className="flex h-full min-h-0 min-w-full gap-4">
+          {BOARD_STATUS_ORDER.map((status) => (
+            <ColumnSection
+              key={status}
+              column={columnsByStatus.get(status)}
+              status={status}
+              draggedTicketId={draggedTicketId}
+              selectedTicketId={selectedTicketId}
+              onSelectTicket={onSelectTicket}
+            />
+          ))}
+        </div>
       </div>
     </DndContext>
   );

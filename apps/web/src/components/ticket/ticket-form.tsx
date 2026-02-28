@@ -29,15 +29,15 @@ const fieldClassName = "grid gap-2";
 const fieldWideClassName = "md:col-span-full grid gap-2";
 const labelClassName = "m-0 text-sm font-medium text-ink-50";
 const inputClassName =
-  "min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65";
+  "min-h-11 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50 placeholder:text-ink-300";
 const textareaClassName =
-  "rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65";
+  "rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50 placeholder:text-ink-300";
 const primaryButtonClassName =
-  "inline-flex min-h-11 items-center justify-center rounded-full bg-accent-700 px-4 py-2.5 text-sm font-medium text-canvas-950 transition-opacity disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-ink-50 px-4 py-2.5 text-sm font-medium text-canvas-975 transition-opacity disabled:cursor-progress disabled:opacity-70";
 const secondaryButtonClassName =
-  "inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-ink-50 transition-colors disabled:cursor-progress disabled:opacity-70 hover:border-white/20 hover:bg-white/10";
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-ink-100 transition-colors disabled:cursor-progress disabled:opacity-70 hover:border-white/16 hover:bg-white/[0.06]";
 const dangerButtonClassName =
-  "inline-flex min-h-11 items-center justify-center rounded-full border border-red-500/20 bg-red-700/20 px-4 py-2.5 text-sm font-medium text-red-100 transition-colors disabled:cursor-progress disabled:opacity-70 hover:border-red-400/35 hover:bg-red-700/30";
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-red-400/20 bg-red-950/50 px-4 py-2.5 text-sm font-medium text-red-100 transition-colors disabled:cursor-progress disabled:opacity-70 hover:border-red-300/30 hover:bg-red-950/70";
 
 export function TicketForm(props: TicketFormProps) {
   const {

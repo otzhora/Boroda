@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { createBrowserRouter, NavLink, Outlet, RouterProvider } from "react-router-dom";
-import { OverflowMenu } from "../components/ui/overflow-menu";
 import { BoardPage } from "../pages/board-page";
 import { ProjectsPage } from "../pages/projects-page";
 
@@ -24,18 +23,24 @@ function AppShell() {
   return (
     <AppHeaderContext.Provider value={{ actions, setActions }}>
       <div className="flex min-h-screen w-full flex-col">
-        <header className="sticky top-0 z-40 border-b border-white/10 bg-[rgba(22,18,15,0.92)] backdrop-blur-xl">
-          <div className="flex h-12 items-center justify-between gap-3 px-4 sm:px-5">
+        <a
+          href="#content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-canvas-800 focus:px-3 focus:py-2 focus:text-sm"
+        >
+          Skip to content
+        </a>
+        <header className="sticky top-0 z-40 border-b border-white/8 bg-canvas-950">
+          <div className="flex min-h-14 w-full items-center justify-between gap-4 px-5">
             <div className="flex min-w-0 items-center gap-4">
-              <h1 className="m-0 text-base font-semibold tracking-tight text-ink-50">Boroda</h1>
-              <nav className="hidden items-center gap-1 sm:flex" aria-label="Primary">
+              <h1 className="m-0 text-sm font-semibold uppercase tracking-[0.22em] text-ink-100">Boroda</h1>
+              <nav className="flex items-center gap-1" aria-label="Primary">
                 <NavLink
                   to="/"
                   className={({ isActive }) =>
-                    `inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    `inline-flex min-h-10 items-center rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
                       isActive
-                        ? "bg-accent-700 text-canvas-950"
-                        : "text-ink-200 hover:bg-white/8 hover:text-ink-50"
+                        ? "border border-white/12 bg-white/10 text-ink-50"
+                        : "text-ink-200 hover:bg-white/5 hover:text-ink-50"
                     }`
                   }
                 >
@@ -44,10 +49,10 @@ function AppShell() {
                 <NavLink
                   to="/projects"
                   className={({ isActive }) =>
-                    `inline-flex min-h-9 items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    `inline-flex min-h-10 items-center rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
                       isActive
-                        ? "bg-accent-700 text-canvas-950"
-                        : "text-ink-200 hover:bg-white/8 hover:text-ink-50"
+                        ? "border border-white/12 bg-white/10 text-ink-50"
+                        : "text-ink-200 hover:bg-white/5 hover:text-ink-50"
                     }`
                   }
                 >
@@ -55,42 +60,10 @@ function AppShell() {
                 </NavLink>
               </nav>
             </div>
-            <div className="flex items-center gap-2">
-              {actions}
-              <div className="sm:hidden">
-                <OverflowMenu buttonLabel="Open navigation menu">
-                  <NavLink
-                    to="/"
-                    className={({ isActive }) =>
-                      `inline-flex min-h-10 items-center rounded-2xl px-3 py-2 text-sm font-medium transition-colors ${
-                        isActive
-                          ? "bg-accent-700 text-canvas-950"
-                          : "text-ink-50 hover:bg-white/8"
-                      }`
-                    }
-                    role="menuitem"
-                  >
-                    Board
-                  </NavLink>
-                  <NavLink
-                    to="/projects"
-                    className={({ isActive }) =>
-                      `inline-flex min-h-10 items-center rounded-2xl px-3 py-2 text-sm font-medium transition-colors ${
-                        isActive
-                          ? "bg-accent-700 text-canvas-950"
-                          : "text-ink-50 hover:bg-white/8"
-                      }`
-                    }
-                    role="menuitem"
-                  >
-                    Projects
-                  </NavLink>
-                </OverflowMenu>
-              </div>
-            </div>
+            <div className="flex items-center gap-2">{actions}</div>
           </div>
         </header>
-        <main className="grid min-h-0 flex-1 px-4 pb-4 pt-2 sm:px-5">
+        <main id="content" className="grid min-h-0 flex-1 px-5 py-4" tabIndex={-1}>
           <Outlet />
         </main>
       </div>

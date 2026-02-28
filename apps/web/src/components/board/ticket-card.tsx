@@ -9,10 +9,10 @@ interface TicketCardProps {
 }
 
 const priorityClassNameMap = {
-  LOW: "bg-slate-600/80 text-white",
-  MEDIUM: "bg-amber-700/70 text-amber-50",
-  HIGH: "bg-orange-800/70 text-orange-50",
-  CRITICAL: "bg-red-700/85 text-red-50"
+  LOW: "border border-white/8 bg-white/[0.04] text-ink-100",
+  MEDIUM: "border border-white/10 bg-canvas-800 text-ink-100",
+  HIGH: "border border-white/14 bg-white/[0.08] text-ink-50",
+  CRITICAL: "border border-red-400/20 bg-red-950/50 text-red-100"
 } as const;
 
 function toTransformStyle(transform: { x: number; y: number } | null) {
@@ -37,10 +37,10 @@ export function TicketCard({ ticket, isSelected, isDragging, onSelect }: TicketC
     <button
       type="button"
       ref={setNodeRef}
-      className={`grid w-full gap-3 rounded-[18px] border bg-black/20 px-4 py-4 text-left text-ink-50 shadow-[0_10px_30px_rgba(0,0,0,0.18)] transition-[border-color,background-color,opacity,box-shadow] ${
+      className={`grid w-full gap-3 rounded-[16px] border bg-canvas-850 px-4 py-4 text-left text-ink-50 shadow-[0_12px_30px_rgba(0,0,0,0.16)] transition-[border-color,background-color,opacity,box-shadow] ${
         isSelected
-          ? "border-accent-300/40 shadow-[inset_0_0_0_1px_rgba(255,219,180,0.14),0_10px_30px_rgba(0,0,0,0.18)]"
-          : "border-transparent hover:border-white/10 hover:bg-black/25"
+          ? "border-white/16 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04),0_12px_30px_rgba(0,0,0,0.2)]"
+          : "border-white/6 hover:border-white/10 hover:bg-canvas-800"
       } ${isDragging ? "cursor-grabbing opacity-45" : "cursor-pointer"}`}
       style={{
         transform: toTransformStyle(transform),
@@ -51,7 +51,7 @@ export function TicketCard({ ticket, isSelected, isDragging, onSelect }: TicketC
       {...attributes}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase tracking-[0.14em] text-accent-500">
+        <span className="text-[0.7rem] font-medium uppercase tracking-[0.18em] text-ink-300">
           {ticket.key}
         </span>
         <span
@@ -60,13 +60,13 @@ export function TicketCard({ ticket, isSelected, isDragging, onSelect }: TicketC
           {ticket.priority}
         </span>
       </div>
-      <h4 className="m-0 text-base font-semibold text-ink-50">{ticket.title}</h4>
-      <p className="m-0 text-sm text-ink-200">{ticket.type}</p>
+      <h4 className="m-0 text-[0.98rem] font-semibold leading-6 text-ink-50">{ticket.title}</h4>
+      <p className="m-0 text-sm text-ink-300">{ticket.type}</p>
       {ticket.projectBadges.length ? (
         <div className="flex flex-wrap gap-2">
           {ticket.projectBadges.map((badge) => (
             <span
-              className="rounded-full bg-accent-700/18 px-2.5 py-1 text-[0.78rem] text-accent-300"
+              className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[0.78rem] text-ink-200"
               key={`${ticket.id}-${badge.id}-${badge.relationship}`}
             >
               {badge.name}
@@ -74,7 +74,7 @@ export function TicketCard({ ticket, isSelected, isDragging, onSelect }: TicketC
           ))}
         </div>
       ) : null}
-      <p className="m-0 text-sm text-ink-200">{ticket.contextsCount} work contexts</p>
+      <p className="m-0 text-sm text-ink-300">{ticket.contextsCount} work contexts</p>
     </button>
   );
 }

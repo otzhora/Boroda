@@ -31,28 +31,28 @@ interface MutationContext {
 
 const PROJECTS_QUERY_KEY = ["projects"] as const;
 const panelClassName =
-  "grid gap-5 rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl";
-const insetPanelClassName = "grid gap-4 rounded-[20px] border border-white/8 bg-black/15 px-4 py-4";
-const cardClassName = "rounded-[18px] bg-black/20 px-4 py-4";
+  "grid gap-5 rounded-[20px] border border-white/8 bg-canvas-900 px-5 py-5 shadow-[0_18px_48px_rgba(0,0,0,0.22)]";
+const insetPanelClassName = "grid gap-4 rounded-[18px] border border-white/8 bg-canvas-850 px-4 py-4";
+const cardClassName = "rounded-[16px] border border-white/6 bg-canvas-850 px-4 py-4";
 const headingRowClassName = "flex flex-col items-start justify-between gap-4 md:flex-row md:items-center";
-const eyebrowClassName = "m-0 text-[0.72rem] uppercase tracking-[0.16em] text-accent-500";
-const pageTitleClassName = "m-0 text-2xl font-semibold tracking-tight text-ink-50";
+const eyebrowClassName = "m-0 text-[0.72rem] uppercase tracking-[0.2em] text-ink-300";
+const pageTitleClassName = "m-0 text-[1.7rem] font-semibold tracking-[-0.03em] text-ink-50";
 const sectionTitleClassName = "m-0 text-base font-semibold text-ink-50";
 const fieldClassName = "grid gap-2";
 const fieldWideClassName = "grid gap-2 md:col-span-full";
 const labelClassName = "m-0 text-sm font-medium text-ink-50";
 const inputClassName =
-  "min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65";
+  "min-h-11 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50 placeholder:text-ink-300";
 const textareaClassName =
-  "rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65";
+  "rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50 placeholder:text-ink-300";
 const primaryButtonClassName =
-  "inline-flex min-h-11 items-center justify-center rounded-full bg-accent-700 px-4 py-2.5 text-sm font-medium text-canvas-950 transition-opacity disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-ink-50 px-4 py-2.5 text-sm font-medium text-canvas-975 transition-opacity disabled:cursor-progress disabled:opacity-70";
 const secondaryButtonClassName =
-  "inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-ink-50 transition-colors hover:border-white/20 hover:bg-white/10 disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-progress disabled:opacity-70";
 const dangerButtonClassName =
-  "inline-flex min-h-11 items-center justify-center rounded-full border border-red-500/20 bg-red-700/20 px-4 py-2.5 text-sm font-medium text-red-100 transition-colors hover:border-red-400/35 hover:bg-red-700/30 disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-11 items-center justify-center rounded-full border border-red-400/20 bg-red-950/50 px-4 py-2.5 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/70 disabled:cursor-progress disabled:opacity-70";
 const checkboxLabelClassName =
-  "flex min-h-11 items-center gap-3 rounded-2xl border border-white/8 bg-black/10 px-3.5 py-3 text-sm text-ink-50";
+  "flex min-h-11 items-center gap-3 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-sm text-ink-50";
 
 function slugifyProjectName(value: string) {
   return value
@@ -706,7 +706,7 @@ export function ProjectsPage() {
   }
 
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-4 pb-2">
       <div className={headingRowClassName}>
         <div>
           <p className={eyebrowClassName}>Projects</p>
@@ -783,11 +783,11 @@ export function ProjectsPage() {
                   <div className="h-12 w-4 shrink-0 rounded-full" style={{ backgroundColor: project.color || "#445" }} />
                   <div>
                     <h3 className="m-0 text-xl font-semibold text-ink-50">{project.name}</h3>
-                    <p className="m-0 mt-1 flex flex-wrap gap-3 text-[0.82rem] text-accent-500">
+                    <p className="m-0 mt-1 flex flex-wrap gap-3 text-[0.82rem] text-ink-300">
                       <span>{project.slug}</span>
                       <span>{project.folders.length} folders</span>
                     </p>
-                    <p className="m-0 mt-2 text-sm text-ink-200">{project.description || "No description yet."}</p>
+                    <p className="m-0 mt-2 text-sm text-ink-300">{project.description || "No description yet."}</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -890,12 +890,12 @@ export function ProjectsPage() {
                           <div className="flex min-w-0 flex-col items-start justify-between gap-4 xl:flex-row">
                             <div>
                               <p className="m-0 text-sm font-medium text-ink-50">
-                                {folder.label} <span className="ml-2 text-[0.82rem] text-accent-500">{folder.kind}</span>
+                                {folder.label} <span className="ml-2 text-[0.82rem] text-ink-300">{folder.kind}</span>
                               </p>
-                              <p className="m-0 mt-1 break-words font-mono text-[0.88rem] text-ink-200">
+                              <p className="m-0 mt-1 break-words font-mono text-[0.88rem] text-ink-300">
                                 {folder.path}
                               </p>
-                              <p className="m-0 mt-2 flex flex-wrap gap-3 text-[0.82rem] text-accent-500">
+                              <p className="m-0 mt-2 flex flex-wrap gap-3 text-[0.82rem] text-ink-300">
                                 <span>{folder.isPrimary ? "Primary" : "Secondary"}</span>
                                 <span>{folder.existsOnDisk ? "On disk" : "Missing"}</span>
                               </p>
@@ -974,7 +974,7 @@ export function ProjectsPage() {
                                 </label>
                                 <label className={checkboxLabelClassName}>
                                   <input
-                                    className="h-4 w-4 shrink-0 accent-accent-700"
+                                    className="h-4 w-4 shrink-0 accent-ink-50"
                                     type="checkbox"
                                     checked={folderEditForm.isPrimary}
                                     onChange={(event) =>
@@ -1013,7 +1013,7 @@ export function ProjectsPage() {
                                 </button>
                               </div>
                               {folderValidation ? (
-                                <p className="m-0 text-sm text-accent-500">
+                                <p className="m-0 text-sm text-ink-300">
                                   {folderValidation.exists
                                     ? folderValidation.isDirectory
                                       ? `Valid directory: ${folderValidation.resolvedPath}`
@@ -1078,7 +1078,7 @@ export function ProjectsPage() {
                   </label>
                   <label className={checkboxLabelClassName}>
                     <input
-                      className="h-4 w-4 shrink-0 accent-accent-700"
+                      className="h-4 w-4 shrink-0 accent-ink-50"
                       type="checkbox"
                       checked={folderCreateForm.isPrimary}
                       onChange={(event) =>
@@ -1106,7 +1106,7 @@ export function ProjectsPage() {
                   </button>
                 </div>
                 {projectValidation ? (
-                  <p className="m-0 text-sm text-accent-500">
+                  <p className="m-0 text-sm text-ink-300">
                     {projectValidation.exists
                       ? projectValidation.isDirectory
                         ? `Valid directory: ${projectValidation.resolvedPath}`

@@ -31,19 +31,17 @@ import { TICKET_PRIORITIES } from "../lib/constants";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
 const panelClassName =
-  "grid gap-5 rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl";
+  "grid gap-5 rounded-[20px] border border-white/8 bg-canvas-900 px-5 py-5 shadow-[0_18px_48px_rgba(0,0,0,0.22)]";
 const softPanelClassName =
-  "grid gap-3 rounded-[24px] border border-white/10 bg-white/5 px-5 py-5 shadow-[0_20px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl";
+  "grid gap-3 rounded-[16px] border border-white/8 bg-canvas-900 px-4 py-4";
 const toolbarClassName =
-  "sticky top-12 z-30 grid gap-2 border-b border-white/10 bg-[rgba(22,18,15,0.94)] py-2 backdrop-blur-xl";
-const fieldClassName = "grid gap-2";
-const labelClassName = "m-0 text-xs font-medium uppercase tracking-[0.08em] text-ink-200";
+  "sticky top-14 z-30 border-b border-white/8 bg-canvas-975 py-2";
 const inputClassName =
-  "min-h-10 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-ink-50 placeholder:text-ink-200/65";
+  "min-h-9 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300";
 const secondaryButtonClassName =
-  "inline-flex min-h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-sm font-medium text-ink-50 transition-colors hover:border-white/20 hover:bg-white/10 disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-progress disabled:opacity-70";
 const primaryButtonClassName =
-  "inline-flex min-h-10 items-center justify-center rounded-xl bg-accent-700 px-3.5 py-2 text-sm font-medium text-canvas-950 transition-opacity disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-10 items-center justify-center rounded-full border border-white/10 bg-ink-50 px-3.5 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-white disabled:cursor-progress disabled:opacity-70";
 
 function hasBoardFilters(filters: BoardFilters) {
   return Boolean(filters.projectId || filters.priority || filters.q?.trim());
@@ -272,7 +270,7 @@ export function BoardPage() {
         <OverflowMenu buttonLabel="Open board actions">
           <button
             type="button"
-            className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-50 transition-colors hover:bg-white/8"
+            className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-100 transition-colors hover:bg-white/5"
             onClick={() => {
               importInputRef.current?.click();
             }}
@@ -283,7 +281,7 @@ export function BoardPage() {
           </button>
           <button
             type="button"
-            className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-50 transition-colors hover:bg-white/8"
+            className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-100 transition-colors hover:bg-white/5"
             onClick={() => void exportBoardData()}
             disabled={isExporting}
             role="menuitem"
@@ -292,7 +290,7 @@ export function BoardPage() {
           </button>
           <Link
             to="/projects"
-            className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-medium text-ink-50 transition-colors hover:bg-white/8"
+            className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:bg-white/5"
             role="menuitem"
           >
             Projects
@@ -307,7 +305,7 @@ export function BoardPage() {
   }, [exportBoardData, importInputRef, isExporting, isImporting, setActions]);
 
   return (
-    <section className="flex min-h-full flex-col gap-2">
+    <section className="flex h-full min-h-0 flex-col gap-3">
       <input
         ref={importInputRef}
         className="sr-only"
@@ -334,30 +332,13 @@ export function BoardPage() {
       ) : null}
 
       <section className={toolbarClassName}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="m-0 text-xl font-semibold tracking-tight text-ink-50">Board</h2>
-            <p className="m-0 text-xs text-accent-500">`/` search, `C` create ticket, `Esc` close ticket</p>
-          </div>
-          {boardHasFilters ? (
-            <button
-              type="button"
-              className={secondaryButtonClassName}
-              onClick={() => {
-                setBoardFilters(EMPTY_BOARD_FILTERS);
-              }}
-            >
-              Clear
-            </button>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="grid min-w-[min(100%,260px)] flex-1 gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="min-w-[320px] flex-1">
             <span className="sr-only">Search</span>
             <input
               ref={searchInputRef}
               className={inputClassName}
-              placeholder="Search title or description…"
+              placeholder="Search…"
               value={boardFilters.q ?? ""}
               onChange={(event) => {
                 const value = event.target.value;
@@ -368,8 +349,8 @@ export function BoardPage() {
               }}
             />
           </label>
-          <label className={`${fieldClassName} min-w-[180px] flex-none gap-1.5`}>
-            <span className={labelClassName}>Project</span>
+          <label className="min-w-[180px] flex-none">
+            <span className="sr-only">Project</span>
             <select
               className={inputClassName}
               value={boardFilters.projectId ? String(boardFilters.projectId) : ""}
@@ -389,8 +370,8 @@ export function BoardPage() {
               ))}
             </select>
           </label>
-          <label className={`${fieldClassName} min-w-[160px] flex-none gap-1.5`}>
-            <span className={labelClassName}>Priority</span>
+          <label className="min-w-[150px] flex-none">
+            <span className="sr-only">Priority</span>
             <select
               className={inputClassName}
               value={boardFilters.priority ?? ""}
@@ -410,10 +391,21 @@ export function BoardPage() {
               ))}
             </select>
           </label>
+          {boardHasFilters ? (
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={() => {
+                setBoardFilters(EMPTY_BOARD_FILTERS);
+              }}
+            >
+              Clear
+            </button>
+          ) : null}
         </div>
       </section>
 
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {boardQuery.isLoading ? <p className={`${softPanelClassName} m-0 text-sm text-ink-50`}>Loading board…</p> : null}
         {boardQuery.isError ? (
           <section className={`${panelClassName} h-full`} aria-live="polite">

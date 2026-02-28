@@ -53,7 +53,7 @@ export function QuickTicketForm({
         <span className="m-0 text-sm font-medium text-ink-50">Title</span>
         <input
           ref={titleInputRef}
-          className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50 placeholder:text-ink-200/65"
+          className="min-h-11 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50 placeholder:text-ink-300"
           placeholder="Capture the next ticket…"
           value={form.title}
           onChange={(event) =>
@@ -69,7 +69,7 @@ export function QuickTicketForm({
         <label className="grid gap-2">
           <span className="m-0 text-sm font-medium text-ink-50">Project</span>
           <select
-            className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50"
+            className="min-h-11 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50"
             value={form.projectId}
             onChange={(event) =>
               onChange((current) => ({
@@ -89,7 +89,7 @@ export function QuickTicketForm({
         <label className="grid gap-2">
           <span className="m-0 text-sm font-medium text-ink-50">Status</span>
           <select
-            className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50"
+            className="min-h-11 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50"
             value={form.status}
             onChange={(event) =>
               onChange((current) => ({
@@ -108,7 +108,7 @@ export function QuickTicketForm({
         <label className="grid gap-2">
           <span className="m-0 text-sm font-medium text-ink-50">Priority</span>
           <select
-            className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50"
+            className="min-h-11 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50"
             value={form.priority}
             onChange={(event) =>
               onChange((current) => ({
@@ -127,7 +127,7 @@ export function QuickTicketForm({
         <label className="grid gap-2">
           <span className="m-0 text-sm font-medium text-ink-50">Type</span>
           <select
-            className="min-h-11 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50"
+            className="min-h-11 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50"
             value={form.type}
             onChange={(event) =>
               onChange((current) => ({
@@ -145,7 +145,7 @@ export function QuickTicketForm({
         </label>
         <div className="flex flex-wrap justify-start gap-3">
           <button
-            className="inline-flex min-h-11 items-center justify-center rounded-full bg-accent-700 px-4 py-2.5 text-sm font-medium text-canvas-950 transition-opacity disabled:cursor-progress disabled:opacity-70"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-ink-50 px-4 py-2.5 text-sm font-medium text-canvas-975 transition-opacity disabled:cursor-progress disabled:opacity-70"
             type="submit"
             disabled={isSubmitting}
           >

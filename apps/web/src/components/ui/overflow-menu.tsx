@@ -44,7 +44,7 @@ export function OverflowMenu({
     <div className="relative" ref={containerRef}>
       <button
         type="button"
-        className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-2.5 py-2 text-sm font-medium text-ink-50 transition-colors hover:border-white/20 hover:bg-white/10"
+        className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06]"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label={buttonLabel}
@@ -62,7 +62,7 @@ export function OverflowMenu({
 
       {isOpen ? (
         <div
-          className={`absolute top-[calc(100%+0.5rem)] z-30 grid min-w-[220px] gap-1 rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(34,26,21,0.98)_0%,rgba(22,18,15,0.98)_100%)] p-2 shadow-[0_20px_70px_rgba(0,0,0,0.35)] ${
+          className={`absolute top-[calc(100%+0.5rem)] z-30 grid min-w-[220px] gap-1 rounded-[16px] border border-white/8 bg-canvas-900 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.34)] ${
             align === "right" ? "right-0" : "left-0"
           }`}
           role="menu"

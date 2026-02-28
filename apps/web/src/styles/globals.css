@@ -3,15 +3,20 @@
 @theme {
   --font-sans: "IBM Plex Sans", "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", "Consolas", monospace;
-  --color-canvas-950: #16120f;
-  --color-canvas-900: #221a15;
-  --color-ink-50: #f4f1e8;
-  --color-ink-200: #d5c4ad;
-  --color-accent-300: #f4d4a6;
-  --color-accent-500: #cfb287;
-  --color-accent-700: #b07e3e;
-  --color-danger-400: #ff9f92;
-  --color-danger-700: #b3261e;
+  --color-canvas-975: #090a0b;
+  --color-canvas-950: #101214;
+  --color-canvas-900: #171a1d;
+  --color-canvas-850: #20242a;
+  --color-canvas-800: #2a3037;
+  --color-ink-50: #f3f5f7;
+  --color-ink-100: #d7dbe0;
+  --color-ink-200: #a5adb7;
+  --color-ink-300: #7b8591;
+  --color-accent-300: #d6dee8;
+  --color-accent-500: #96a3b3;
+  --color-accent-700: #e8edf2;
+  --color-danger-400: #ffb0b0;
+  --color-danger-700: #7f1d1d;
 }
 
 @layer base {
@@ -27,16 +32,18 @@
   }
 
   html {
-    background: var(--color-canvas-950);
+    background: var(--color-canvas-975);
   }
 
   body {
     margin: 0;
     min-width: 320px;
     min-height: 100vh;
-    background:
-      radial-gradient(circle at top, rgba(176, 126, 62, 0.18), transparent 40%),
-      linear-gradient(180deg, var(--color-canvas-950) 0%, var(--color-canvas-900) 100%);
+    background-color: var(--color-canvas-975);
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 28px 28px;
     color: var(--color-ink-50);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -63,16 +70,38 @@
   textarea,
   select {
     width: 100%;
-    border: 1px solid rgba(255, 219, 180, 0.16);
-    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
     padding: 12px 14px;
     font-size: 16px;
     color: var(--color-ink-50);
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.03);
+    transition:
+      border-color 140ms ease,
+      background-color 140ms ease,
+      box-shadow 140ms ease;
   }
 
   textarea {
     resize: vertical;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: color-mix(in srgb, var(--color-ink-200) 72%, transparent);
+  }
+
+  input:hover,
+  textarea:hover,
+  select:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    border-color: rgba(214, 222, 232, 0.4);
+    box-shadow: inset 0 0 0 1px rgba(214, 222, 232, 0.18);
   }
 
   a:focus-visible,
@@ -80,8 +109,8 @@
   input:focus-visible,
   textarea:focus-visible,
   select:focus-visible {
-    outline: 2px solid var(--color-accent-300);
-    outline-offset: 3px;
+    outline: 2px solid rgba(214, 222, 232, 0.72);
+    outline-offset: 2px;
   }
 
   #root {

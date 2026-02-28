@@ -17,7 +17,7 @@ export function ProjectLinkEditor({ value, projects, onChange }: ProjectLinkEdit
           value.map((link, index) => (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center" key={`${link.projectId}-${index}`}>
               <select
-                className="min-h-11 flex-[1.4] rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50"
+                className="min-h-11 flex-[1.4] rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50"
                 value={link.projectId}
                 onChange={(event) => {
                   const nextValue = [...value];
@@ -36,7 +36,7 @@ export function ProjectLinkEditor({ value, projects, onChange }: ProjectLinkEdit
                 ))}
               </select>
               <select
-                className="min-h-11 flex-1 rounded-2xl border border-white/10 bg-black/20 px-3.5 py-3 text-ink-50"
+                className="min-h-11 flex-1 rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-3 text-ink-50"
                 value={link.relationship}
                 onChange={(event) => {
                   const nextValue = [...value];
@@ -54,7 +54,7 @@ export function ProjectLinkEditor({ value, projects, onChange }: ProjectLinkEdit
                 ))}
               </select>
               <button
-                className="inline-flex min-h-11 items-center justify-center rounded-full border border-red-500/20 bg-red-700/20 px-4 py-2.5 text-sm font-medium text-red-100 transition-colors hover:border-red-400/35 hover:bg-red-700/30"
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-red-400/20 bg-red-950/50 px-4 py-2.5 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/70"
                 type="button"
                 onClick={() => onChange(value.filter((_, currentIndex) => currentIndex !== index))}
               >
@@ -66,7 +66,7 @@ export function ProjectLinkEditor({ value, projects, onChange }: ProjectLinkEdit
           <p className="m-0 text-sm text-ink-200">No linked projects yet.</p>
         )}
         <button
-          className="inline-flex min-h-11 w-fit items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-ink-50 transition-colors hover:border-white/20 hover:bg-white/10"
+          className="inline-flex min-h-11 w-fit items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06]"
           type="button"
           onClick={() => onChange([...value, createProjectLinkRow()])}
         >

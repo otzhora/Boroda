@@ -118,7 +118,7 @@ export function ModalDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 py-4 backdrop-blur-sm sm:px-6"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-4 py-4 backdrop-blur-sm sm:px-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -127,7 +127,7 @@ export function ModalDialog({
     >
       <div
         ref={panelRef}
-        className={`grid max-h-[min(92vh,960px)] w-full min-w-0 gap-5 overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(34,26,21,0.96)_0%,rgba(22,18,15,0.98)_100%)] px-5 py-5 shadow-[0_28px_120px_rgba(0,0,0,0.46)] backdrop-blur-xl ${
+        className={`grid max-h-[min(92vh,960px)] w-full min-w-0 gap-5 overflow-hidden rounded-[24px] border border-white/8 bg-canvas-900 px-5 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.44)] ${
           size === "wide" ? "max-w-5xl" : "max-w-2xl"
         }`}
         role="dialog"
@@ -138,18 +138,18 @@ export function ModalDialog({
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h2 id={titleId} className="m-0 text-2xl font-semibold tracking-tight text-ink-50">
+            <h2 id={titleId} className="m-0 text-[1.65rem] font-semibold tracking-[-0.03em] text-ink-50">
               {title}
             </h2>
             {description ? (
-              <p id={descriptionId} className="m-0 mt-1 text-sm text-ink-200">
+              <p id={descriptionId} className="m-0 mt-1 text-sm text-ink-300">
                 {description}
               </p>
             ) : null}
           </div>
           <button
             type="button"
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-ink-50 transition-colors hover:border-white/20 hover:bg-white/10"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06]"
             onClick={onClose}
             aria-label="Close dialog"
           >
