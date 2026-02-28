@@ -3,9 +3,11 @@ import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react"
 interface ModalDialogProps {
   open: boolean;
   title: string;
+  header?: ReactNode;
   description?: string;
   children: ReactNode;
   onClose: () => void;
+  onEscapeKeyDown?: (event: KeyboardEvent) => boolean | void;
   initialFocusRef?: RefObject<HTMLElement | null>;
   size?: "default" | "wide";
 }
@@ -28,9 +30,11 @@ function getFocusableElements(container: HTMLElement) {
 export function ModalDialog({
   open,
   title,
+  header,
   description,
   children,
   onClose,
+  onEscapeKeyDown,
   initialFocusRef,
   size = "default"
 }: ModalDialogProps) {
@@ -69,6 +73,11 @@ export function ModalDialog({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
+
+        if (onEscapeKeyDown?.(event) === false) {
+          return;
+        }
+
         onClose();
         return;
       }
@@ -110,7 +119,7 @@ export function ModalDialog({
       document.body.style.overflow = previousOverflow;
       previousActiveElement?.focus();
     };
-  }, [initialFocusRef, onClose, open]);
+  }, [initialFocusRef, onClose, onEscapeKeyDown, open]);
 
   if (!open) {
     return null;
@@ -127,8 +136,8 @@ export function ModalDialog({
     >
       <div
         ref={panelRef}
-        className={`grid max-h-[min(92vh,960px)] w-full min-w-0 gap-5 overflow-hidden rounded-[24px] border border-white/8 bg-canvas-900 px-5 py-5 shadow-[0_30px_120px_rgba(0,0,0,0.44)] ${
-          size === "wide" ? "max-w-5xl" : "max-w-2xl"
+        className={`grid max-h-[96vh] w-full min-w-0 gap-4 overflow-hidden rounded-[22px] border border-white/8 bg-canvas-900 px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.44)] sm:px-5 sm:py-5 ${
+          size === "wide" ? "max-w-6xl" : "max-w-2xl"
         }`}
         role="dialog"
         aria-modal="true"
@@ -136,11 +145,20 @@ export function ModalDialog({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
       >
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 id={titleId} className="m-0 text-[1.65rem] font-semibold tracking-[-0.03em] text-ink-50">
-              {title}
-            </h2>
+            {header ? (
+              <>
+                <h2 id={titleId} className="sr-only">
+                  {title}
+                </h2>
+                {header}
+              </>
+            ) : (
+              <h2 id={titleId} className="m-0 text-[1.65rem] font-semibold tracking-[-0.03em] text-ink-50">
+                {title}
+              </h2>
+            )}
             {description ? (
               <p id={descriptionId} className="m-0 mt-1 text-sm text-ink-300">
                 {description}
@@ -149,14 +167,19 @@ export function ModalDialog({
           </div>
           <button
             type="button"
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06]"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06]"
             onClick={onClose}
             aria-label="Close dialog"
           >
             Close
           </button>
         </div>
-        <div className="min-h-0 overflow-y-auto pr-1">{children}</div>
+        <div
+          className="min-h-0 overflow-x-hidden overflow-y-auto pr-2"
+          style={{ scrollbarGutter: "stable" }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

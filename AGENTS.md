@@ -147,3 +147,14 @@ Concise rules for building accessible, fast, delightful UIs. Use MUST/SHOULD/NEV
 - MUST: Increase contrast on `:hover`/`:active`/`:focus`
 - SHOULD: Match browser UI to bg
 - SHOULD: Avoid dark color gradient banding (use background images when needed)
+
+### Project Visual Language
+
+- MUST: Prefer one primary surface with dividers over many nested cards; if two adjacent boxes can be one section with separators, collapse them
+- MUST: Keep modal, drawer, and sidebar interiors tight; reduce padding and gaps before shrinking type or introducing overflow
+- MUST: Use flatter controls by default: low-radius corners, muted fills, thin borders, minimal shadows
+- NEVER: Stack multiple tinted gray panels inside each other unless hierarchy is genuinely unclear without them
+- SHOULD: Treat sidebars as continuous rails with section headings and borders, not independent floating cards
+- SHOULD: Keep primary actions visually restrained in dense admin UI; avoid bright white filled buttons unless the whole screen needs a single dominant CTA
+- MUST: Make long technical content resilient inside narrow rails and panels with `min-w-0`, wrapping, and overflow-safe sizing
+- SHOULD: When a layout breaks under real data, fix the layout rules first rather than hiding content or adding special-case styles

@@ -82,6 +82,7 @@ export function BoardPage() {
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<TicketFormState>(createEmptyTicketForm());
+  const [ticketSaveSuccessCount, setTicketSaveSuccessCount] = useState(0);
   const [exportError, setExportError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -124,6 +125,7 @@ export function BoardPage() {
     boardFilters: deferredBoardFilters,
     onUpdated: (ticket) => {
       setEditForm(ticket);
+      setTicketSaveSuccessCount((current) => current + 1);
     }
   });
 
@@ -261,7 +263,7 @@ export function BoardPage() {
     return () => {
       window.removeEventListener("keydown", handleKeyboardShortcuts);
     };
-  }, [handleKeyboardShortcuts]);
+  }, []);
 
   useEffect(() => {
     setActions(
@@ -310,7 +312,7 @@ export function BoardPage() {
     return () => {
       setActions(null);
     };
-  }, [exportBoardData, importInputRef, isExporting, isImporting, setActions]);
+  }, [isExporting, isImporting, setActions]);
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-3">
@@ -506,6 +508,7 @@ export function BoardPage() {
         form={editForm}
         projects={projects}
         isSaving={updateTicketMutation.isPending}
+        saveSuccessCount={ticketSaveSuccessCount}
         isDeleting={deleteTicketMutation.isPending}
         onChange={(updater) => {
           setEditForm((current) => updater(current));
