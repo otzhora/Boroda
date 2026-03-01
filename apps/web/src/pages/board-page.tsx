@@ -486,11 +486,13 @@ export function BoardPage() {
       <ModalDialog
         open={isQuickCreateOpen}
         title="Create ticket"
-        description="Capture a new ticket without leaving the board."
         onClose={() => {
           setIsQuickCreateOpen(false);
         }}
         initialFocusRef={quickCreateTitleRef}
+        variant="flat"
+        showHeader={false}
+        showCloseButton={false}
       >
         <QuickTicketForm
           form={quickCreateForm}
@@ -502,6 +504,9 @@ export function BoardPage() {
           }}
           onSubmit={() => {
             createTicketMutation.mutate(toQuickCreatePayload(quickCreateForm));
+          }}
+          onCancel={() => {
+            setIsQuickCreateOpen(false);
           }}
         />
       </ModalDialog>
