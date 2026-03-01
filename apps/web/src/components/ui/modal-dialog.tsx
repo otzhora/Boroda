@@ -10,6 +10,8 @@ interface ModalDialogProps {
   onEscapeKeyDown?: (event: KeyboardEvent) => boolean | void;
   initialFocusRef?: RefObject<HTMLElement | null>;
   size?: "default" | "wide";
+  variant?: "default" | "flat";
+  showHeader?: boolean;
   showCloseButton?: boolean;
 }
 
@@ -38,6 +40,8 @@ export function ModalDialog({
   onEscapeKeyDown,
   initialFocusRef,
   size = "default",
+  variant = "default",
+  showHeader = true,
   showCloseButton = true
 }: ModalDialogProps) {
   const titleId = useId();
@@ -57,6 +61,22 @@ export function ModalDialog({
     size === "wide" && hasBodyOverflow
       ? "min-h-0 overflow-x-hidden overflow-y-auto pr-2"
       : "min-h-0 overflow-x-hidden overflow-y-auto";
+  const panelClassName =
+    variant === "flat"
+      ? `grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-[16px] border border-white/10 bg-canvas-900 shadow-[0_24px_72px_rgba(0,0,0,0.32)] ${
+          size === "wide" ? "max-w-[94rem]" : "max-w-3xl"
+        }`
+      : `grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden rounded-[22px] border border-white/8 bg-canvas-900 px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.44)] sm:px-6 sm:py-6 ${
+          size === "wide" ? "max-w-[94rem]" : "max-w-2xl"
+        }`;
+  const titleClassName =
+    variant === "flat"
+      ? "m-0 text-[1.4rem] font-semibold tracking-[-0.025em] text-ink-50"
+      : "m-0 text-[1.65rem] font-semibold tracking-[-0.03em] text-ink-50";
+  const closeButtonClassName =
+    variant === "flat"
+      ? "inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.05] xl:justify-self-start"
+      : "inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] xl:justify-self-start";
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -207,48 +227,53 @@ export function ModalDialog({
     >
       <div
         ref={panelRef}
-        className={`grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden rounded-[22px] border border-white/8 bg-canvas-900 px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.44)] sm:px-6 sm:py-6 ${
-          size === "wide" ? "max-w-[94rem]" : "max-w-2xl"
-        }`}
+        className={panelClassName}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
       >
-        <div className="w-full">
-          <div className={headerLayoutClass}>
-            <div className="min-w-0">
-              {header ? (
-                <>
-                  <h2 id={titleId} className="sr-only">
+        {showHeader ? (
+          <div className="w-full">
+            <div className={headerLayoutClass}>
+              <div className="min-w-0">
+                {header ? (
+                  <>
+                    <h2 id={titleId} className="sr-only">
+                      {title}
+                    </h2>
+                    {header}
+                  </>
+                ) : (
+                  <h2 id={titleId} className={titleClassName}>
                     {title}
                   </h2>
-                  {header}
-                </>
-              ) : (
-                <h2 id={titleId} className="m-0 text-[1.65rem] font-semibold tracking-[-0.03em] text-ink-50">
-                  {title}
-                </h2>
-              )}
-              {description ? (
-                <p id={descriptionId} className="m-0 mt-1 text-sm text-ink-300">
-                  {description}
-                </p>
+                )}
+                {description ? (
+                  <p id={descriptionId} className="m-0 mt-1 text-sm text-ink-300">
+                    {description}
+                  </p>
+                ) : null}
+              </div>
+              {showCloseButton ? (
+                <button
+                  type="button"
+                  className={closeButtonClassName}
+                  onClick={onClose}
+                  aria-label="Close dialog"
+                >
+                  Close
+                </button>
               ) : null}
             </div>
-            {showCloseButton ? (
-              <button
-                type="button"
-                className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] xl:justify-self-start"
-                onClick={onClose}
-                aria-label="Close dialog"
-              >
-                Close
-              </button>
-            ) : null}
           </div>
-        </div>
+        ) : (
+          <div className="sr-only">
+            <h2 id={titleId}>{title}</h2>
+            {description ? <p id={descriptionId}>{description}</p> : null}
+          </div>
+        )}
         <div ref={bodyRef} className={bodyClassName}>
           <div className="min-h-0 w-full">{children}</div>
         </div>

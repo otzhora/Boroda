@@ -35,8 +35,7 @@ const panelClassName =
   "grid gap-5 rounded-[20px] border border-white/8 bg-canvas-900 px-5 py-5 shadow-[0_18px_48px_rgba(0,0,0,0.22)]";
 const softPanelClassName =
   "grid gap-3 rounded-[16px] border border-white/8 bg-canvas-900 px-4 py-4";
-const toolbarClassName =
-  "sticky top-14 z-30 border-b border-white/8 bg-canvas-975 py-2";
+const toolbarClassName = "sticky top-0 z-30 border-b border-white/8 bg-canvas-975 py-2";
 const inputClassName =
   "min-h-9 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300";
 const secondaryButtonClassName =
@@ -322,7 +321,7 @@ export function BoardPage() {
   }, [isExporting, isImporting, setActions]);
 
   return (
-    <section className="flex h-full min-h-0 flex-col gap-3">
+    <section className="flex h-full min-h-0 min-w-0 flex-col gap-3">
       <input
         ref={importInputRef}
         className="sr-only"
@@ -349,7 +348,7 @@ export function BoardPage() {
       ) : null}
 
       <section className={toolbarClassName}>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <label className="min-w-[320px] flex-1">
             <span className="sr-only">Search</span>
             <input
@@ -422,7 +421,7 @@ export function BoardPage() {
         </div>
       </section>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {boardQuery.isLoading ? <p className={`${softPanelClassName} m-0 text-sm text-ink-50`}>Loading board…</p> : null}
         {boardQuery.isError ? (
           <section className={`${panelClassName} h-full`} aria-live="polite">

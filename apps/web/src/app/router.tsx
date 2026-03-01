@@ -63,7 +63,7 @@ function AppShell() {
             <div className="flex items-center gap-2">{actions}</div>
           </div>
         </header>
-        <main id="content" className="grid min-h-0 flex-1 px-5 py-4" tabIndex={-1}>
+        <main id="content" className="grid min-h-0 min-w-0 flex-1 overflow-x-hidden px-5 py-4" tabIndex={-1}>
           <Outlet />
         </main>
       </div>
