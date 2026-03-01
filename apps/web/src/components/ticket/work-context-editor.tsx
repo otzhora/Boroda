@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useCreateWorkContextMutation, useDeleteWorkContextMutation, useUpdateWorkContextMutation } from "../../features/tickets/work-context-mutations";
-import { WORK_CONTEXT_TYPES, workContextTypeLabelMap } from "../../lib/constants";
+import { VISIBLE_WORK_CONTEXT_TYPES, workContextTypeLabelMap } from "../../lib/constants";
 import type { WorkContext, WorkContextType } from "../../lib/types";
+import { MarkdownDescription } from "./markdown-description";
+import { TicketDescriptionField } from "./ticket-form";
 
 interface WorkContextDraft {
   type: WorkContextType;
@@ -17,10 +19,34 @@ interface WorkContextEditorProps {
 
 function createEmptyContextDraft(): WorkContextDraft {
   return {
-    type: "PR",
+    type: "NOTE",
     label: "",
     value: ""
   };
+}
+
+function getSelectableWorkContextTypes(currentType?: WorkContextType) {
+  if (currentType && !VISIBLE_WORK_CONTEXT_TYPES.includes(currentType as (typeof VISIBLE_WORK_CONTEXT_TYPES)[number])) {
+    return [currentType, ...VISIBLE_WORK_CONTEXT_TYPES];
+  }
+
+  return VISIBLE_WORK_CONTEXT_TYPES;
+}
+
+function getContextTimestamp(context: Pick<WorkContext, "createdAt" | "updatedAt" | "id">) {
+  const createdAt = Date.parse(context.createdAt);
+
+  if (!Number.isNaN(createdAt)) {
+    return createdAt;
+  }
+
+  const updatedAt = Date.parse(context.updatedAt);
+
+  if (!Number.isNaN(updatedAt)) {
+    return updatedAt;
+  }
+
+  return context.id;
 }
 
 function toDraft(context: WorkContext): WorkContextDraft {
@@ -65,6 +91,18 @@ function getValuePlaceholder(type: WorkContextType) {
   }
 }
 
+function usesDedicatedNoteEditor(type: WorkContextType) {
+  return type === "NOTE";
+}
+
+function getContextHeading(context: Pick<WorkContext, "type" | "label">) {
+  if (context.label.trim()) {
+    return context.label;
+  }
+
+  return context.type === "NOTE" ? "" : "Untitled context";
+}
+
 function SubmitLabel(props: { pending: boolean; idle: string; pendingText: string }) {
   return (
     <>
@@ -79,25 +117,166 @@ function SubmitLabel(props: { pending: boolean; idle: string; pendingText: strin
   );
 }
 
-export function WorkContextEditor({ ticketId, contexts, embedded = false }: WorkContextEditorProps) {
-  const [drafts, setDrafts] = useState<Record<number, WorkContextDraft>>({});
+const WorkContextCreateForm = memo(function WorkContextCreateForm({
+  ticketId,
+  contexts
+}: Pick<WorkContextEditorProps, "ticketId" | "contexts">) {
   const [newContext, setNewContext] = useState<WorkContextDraft>(createEmptyContextDraft());
-  const [editingContextId, setEditingContextId] = useState<number | null>(null);
-  const contextItemRefs = useRef<Record<number, HTMLElement | null>>({});
-  const editFieldRefs = useRef<Record<number, HTMLInputElement | HTMLTextAreaElement | null>>({});
+  const createMutation = useCreateWorkContextMutation(ticketId);
 
   useEffect(() => {
-    setDrafts(Object.fromEntries(contexts.map((context) => [context.id, toDraft(context)])));
     setNewContext(createEmptyContextDraft());
-    setEditingContextId(null);
   }, [contexts, ticketId]);
 
+  return (
+    <form
+      className={`grid min-w-0 gap-2 border-b border-white/8 pb-3 transition-opacity ${
+        createMutation.isPending ? "opacity-85" : ""
+      }`}
+      aria-busy={createMutation.isPending}
+      onSubmit={(event) => {
+        event.preventDefault();
+        createMutation.mutate({
+          type: newContext.type,
+          label: newContext.label.trim(),
+          value: newContext.value.trim()
+        });
+      }}
+    >
+      {createMutation.error?.message ? (
+        <p className="m-0 text-sm text-danger-400" aria-live="polite">
+          {createMutation.error.message}
+        </p>
+      ) : null}
+
+      <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <label className="grid min-w-0 w-[10rem] shrink-0 gap-1">
+            <span className="sr-only">Type</span>
+            <select
+              className="min-h-10 w-full min-w-0 rounded-md border border-white/8 bg-white/[0.02] px-3 py-2 text-sm text-ink-50"
+              disabled={createMutation.isPending}
+              value={newContext.type}
+              onChange={(event) => {
+                setNewContext((current) => ({
+                  ...current,
+                  type: event.target.value as WorkContextType
+                }));
+              }}
+            >
+              {getSelectableWorkContextTypes().map((type) => (
+                <option key={type} value={type}>
+                  {workContextTypeLabelMap[type]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid min-w-0 flex-1 gap-1">
+            <span className="sr-only">Label</span>
+            <input
+              className="min-h-10 w-full min-w-0 rounded-md border border-white/8 bg-white/[0.02] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300"
+              disabled={createMutation.isPending}
+              placeholder="Label…"
+              value={newContext.label}
+              onChange={(event) => {
+                setNewContext((current) => ({
+                  ...current,
+                  label: event.target.value
+                }));
+              }}
+            />
+          </label>
+        </div>
+      </div>
+
+      {usesDedicatedNoteEditor(newContext.type) ? (
+        <TicketDescriptionField
+          ticketId={ticketId}
+          value={newContext.value}
+          onChange={(value) => {
+            setNewContext((current) => ({
+              ...current,
+              value
+            }));
+          }}
+          label="Note"
+          modeLabel="Note editor mode"
+          uploadAriaLabel="Upload note image"
+          compact
+          rows={7}
+          showImageUploadButton={false}
+          showModeTabs={false}
+        />
+      ) : (
+        <label className="grid min-w-0 gap-1">
+          <span className="sr-only">{getValueLabel(newContext.type)}</span>
+          {newContext.type === "MANUAL_UI" ? (
+            <textarea
+              className="w-full min-w-0 rounded-md border border-white/8 bg-white/[0.02] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300"
+              disabled={createMutation.isPending}
+              rows={3}
+              placeholder={getValuePlaceholder(newContext.type)}
+              value={newContext.value}
+              onChange={(event) => {
+                setNewContext((current) => ({
+                  ...current,
+                  value: event.target.value
+                }));
+              }}
+            />
+          ) : (
+            <input
+              className="min-h-10 w-full min-w-0 rounded-md border border-white/8 bg-white/[0.02] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300"
+              disabled={createMutation.isPending}
+              placeholder={getValuePlaceholder(newContext.type)}
+              value={newContext.value}
+              onChange={(event) => {
+                setNewContext((current) => ({
+                  ...current,
+                  value: event.target.value
+                }));
+              }}
+            />
+          )}
+        </label>
+      )}
+    </form>
+  );
+});
+
+interface WorkContextRowProps {
+  context: WorkContext;
+  ticketId: number | null;
+  isEditing: boolean;
+  onEditingChange: React.Dispatch<React.SetStateAction<number | null>>;
+  updateMutation: ReturnType<typeof useUpdateWorkContextMutation>;
+  deleteMutation: ReturnType<typeof useDeleteWorkContextMutation>;
+}
+
+const WorkContextRow = memo(function WorkContextRow({
+  context,
+  ticketId,
+  isEditing,
+  onEditingChange,
+  updateMutation,
+  deleteMutation
+}: WorkContextRowProps) {
+  const [draft, setDraft] = useState<WorkContextDraft>(() => toDraft(context));
+  const contextItemRef = useRef<HTMLElement | null>(null);
+  const editFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const isSaving = updateMutation.isPending && updateMutation.variables?.id === context.id;
+  const isDeleting = deleteMutation.isPending && deleteMutation.variables === context.id;
+
   useEffect(() => {
-    if (editingContextId === null) {
+    setDraft(toDraft(context));
+  }, [context]);
+
+  useEffect(() => {
+    if (!isEditing) {
       return;
     }
 
-    const field = editFieldRefs.current[editingContextId];
+    const field = editFieldRef.current;
     if (!field) {
       return;
     }
@@ -106,34 +285,255 @@ export function WorkContextEditor({ ticketId, contexts, embedded = false }: Work
     if ("select" in field) {
       field.select();
     }
-  }, [editingContextId]);
+  }, [isEditing]);
 
-  const createMutation = useCreateWorkContextMutation(ticketId);
+  function startEditing() {
+    setDraft(toDraft(context));
+    onEditingChange(context.id);
+  }
+
+  function stopEditing() {
+    setDraft(toDraft(context));
+    onEditingChange((current) => (current === context.id ? null : current));
+    requestAnimationFrame(() => {
+      contextItemRef.current?.focus();
+    });
+  }
+
+  function saveChanges() {
+    updateMutation.mutate({
+      id: context.id,
+      type: draft.type,
+      label: draft.label.trim(),
+      value: draft.value.trim()
+    });
+  }
+
+  return (
+    <section
+      className="grid min-w-0 border-b border-white/8 py-3 last:border-b-0 last:pb-0"
+      onDoubleClick={() => {
+        if (!isEditing) {
+          startEditing();
+        }
+      }}
+    >
+      {isEditing ? (
+        <form
+          className={`grid min-w-0 gap-3 rounded-lg border bg-white/[0.02] p-3 transition-opacity ${
+            isSaving ? "border-white/15 opacity-85" : "border-white/10"
+          }`}
+          aria-busy={isSaving}
+          onSubmit={(event) => {
+            event.preventDefault();
+            saveChanges();
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") {
+              return;
+            }
+
+            event.preventDefault();
+            stopEditing();
+          }}
+        >
+          <p className="m-0 text-xs text-ink-300" aria-live="polite">
+            {isSaving ? "Saving changes…" : ""}
+          </p>
+          <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-end">
+            <label className="grid min-w-0 flex-1 gap-2">
+              <span className="m-0 text-sm font-medium text-ink-50">Type</span>
+              <select
+                className="min-h-11 w-full min-w-0 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5 text-ink-50"
+                disabled={isSaving}
+                value={draft.type}
+                onChange={(event) => {
+                  const type = event.target.value as WorkContextType;
+                  setDraft((current) => ({
+                    ...current,
+                    type
+                  }));
+                }}
+              >
+                {getSelectableWorkContextTypes(draft.type).map((type) => (
+                  <option key={type} value={type}>
+                    {workContextTypeLabelMap[type]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid min-w-0 flex-1 gap-2">
+              <span className="m-0 text-sm font-medium text-ink-50">Label</span>
+              <input
+                ref={editFieldRef as React.RefObject<HTMLInputElement | null>}
+                className="min-h-11 w-full min-w-0 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5 text-ink-50 placeholder:text-ink-300"
+                disabled={isSaving}
+                name={`context-label-${context.id}`}
+                placeholder="Short reference label…"
+                value={draft.label}
+                onChange={(event) => {
+                  const label = event.target.value;
+                  setDraft((current) => ({
+                    ...current,
+                    label
+                  }));
+                }}
+              />
+            </label>
+          </div>
+
+          {usesDedicatedNoteEditor(draft.type) ? (
+            <TicketDescriptionField
+              ticketId={ticketId}
+              value={draft.value}
+              onChange={(value) => {
+                setDraft((current) => ({
+                  ...current,
+                  value
+                }));
+              }}
+              onSubmit={saveChanges}
+              label="Note"
+              modeLabel="Note editor mode"
+              uploadAriaLabel="Upload note image"
+              textareaRef={editFieldRef as React.RefObject<HTMLTextAreaElement | null>}
+            />
+          ) : (
+            <label className="grid min-w-0 gap-2">
+              <span className="m-0 text-sm font-medium text-ink-50">{getValueLabel(draft.type)}</span>
+              {draft.type === "MANUAL_UI" ? (
+                <textarea
+                  ref={editFieldRef as React.RefObject<HTMLTextAreaElement | null>}
+                  className="w-full min-w-0 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5 text-ink-50 placeholder:text-ink-300"
+                  disabled={isSaving}
+                  name={`context-value-${context.id}`}
+                  rows={3}
+                  placeholder={getValuePlaceholder(draft.type)}
+                  value={draft.value}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setDraft((current) => ({
+                      ...current,
+                      value
+                    }));
+                  }}
+                />
+              ) : (
+                <input
+                  className="min-h-11 w-full min-w-0 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5 text-ink-50 placeholder:text-ink-300"
+                  disabled={isSaving}
+                  name={`context-value-${context.id}`}
+                  placeholder={getValuePlaceholder(draft.type)}
+                  value={draft.value}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setDraft((current) => ({
+                      ...current,
+                      value
+                    }));
+                  }}
+                />
+              )}
+            </label>
+          )}
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/10 bg-ink-50 px-4 py-2 text-sm font-medium text-canvas-975 transition-opacity disabled:cursor-progress disabled:opacity-70"
+              type="submit"
+              disabled={isSaving}
+            >
+              <SubmitLabel pending={isSaving} idle="Save changes" pendingText="Saving changes" />
+            </button>
+            <button
+              type="button"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-red-400/20 bg-red-950/40 px-4 py-2 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/55 disabled:cursor-progress disabled:opacity-70"
+              disabled={isDeleting}
+              onClick={() => {
+                deleteMutation.mutate(context.id);
+              }}
+            >
+              <SubmitLabel pending={isDeleting} idle="Remove context" pendingText="Removing context" />
+            </button>
+          </div>
+        </form>
+      ) : (
+        <article
+          ref={contextItemRef}
+          tabIndex={0}
+          role="button"
+          aria-label={`Edit ${context.label || "work context"}`}
+          className="grid min-w-0 gap-2 rounded-md px-1 py-1 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ink-200/60"
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") {
+              return;
+            }
+
+            event.preventDefault();
+            startEditing();
+          }}
+        >
+          <div className="flex min-w-0 items-baseline gap-3">
+            <p className="m-0 shrink-0 text-[11px] font-medium uppercase tracking-[0.16em] text-ink-300">
+              {workContextTypeLabelMap[context.type]}
+            </p>
+            {getContextHeading(context) ? (
+              <h5 className="m-0 min-w-0 break-words text-sm font-semibold text-ink-50">{getContextHeading(context)}</h5>
+            ) : null}
+          </div>
+          {context.type === "NOTE" ? (
+            <MarkdownDescription value={context.value} />
+          ) : (
+            <p className="m-0 break-words text-sm leading-6 text-ink-100">{context.value}</p>
+          )}
+        </article>
+      )}
+    </section>
+  );
+});
+
+const WorkContextList = memo(function WorkContextList({
+  ticketId,
+  contexts
+}: Pick<WorkContextEditorProps, "ticketId" | "contexts">) {
+  const [editingContextId, setEditingContextId] = useState<number | null>(null);
   const updateMutation = useUpdateWorkContextMutation(ticketId);
   const deleteMutation = useDeleteWorkContextMutation(ticketId);
+  const sortedContexts = useMemo(
+    () => [...contexts].sort((left, right) => getContextTimestamp(right) - getContextTimestamp(left)),
+    [contexts]
+  );
 
-  const actionMessage =
-    createMutation.error?.message ??
-    updateMutation.error?.message ??
-    deleteMutation.error?.message;
+  useEffect(() => {
+    setEditingContextId(null);
+  }, [contexts, ticketId]);
 
-  function startEditing(context: WorkContext) {
-    setDrafts((current) => ({
-      ...current,
-      [context.id]: current[context.id] ?? toDraft(context)
-    }));
-    setEditingContextId(context.id);
-  }
+  return sortedContexts.length ? (
+    <>
+      {updateMutation.error?.message || deleteMutation.error?.message ? (
+        <p className="m-0 text-sm text-danger-400" aria-live="polite">
+          {updateMutation.error?.message ?? deleteMutation.error?.message}
+        </p>
+      ) : null}
 
-  function stopEditing(context: WorkContext) {
-    setDrafts((current) => ({
-      ...current,
-      [context.id]: toDraft(context)
-    }));
-    setEditingContextId((current) => (current === context.id ? null : current));
-    contextItemRefs.current[context.id]?.focus();
-  }
+      {sortedContexts.map((context) => (
+        <WorkContextRow
+          key={context.id}
+          context={context}
+          ticketId={ticketId}
+          isEditing={editingContextId === context.id}
+          onEditingChange={setEditingContextId}
+          updateMutation={updateMutation}
+          deleteMutation={deleteMutation}
+        />
+      ))}
+    </>
+  ) : (
+    <p className="m-0 text-sm text-ink-300">No work contexts attached yet.</p>
+  );
+});
 
+export function WorkContextEditor({ ticketId, contexts, embedded = false }: WorkContextEditorProps) {
   return (
     <section className={embedded ? "grid min-w-0 gap-3" : "grid min-w-0 gap-3 border-b border-white/8 pb-5"}>
       {!embedded ? (
@@ -142,309 +542,9 @@ export function WorkContextEditor({ ticketId, contexts, embedded = false }: Work
         </div>
       ) : null}
 
-      <p className="m-0 text-xs text-ink-300">PRs, sessions, links, and notes for this ticket.</p>
-
-      {actionMessage ? (
-        <p className="m-0 text-sm text-danger-400" aria-live="polite">
-          {actionMessage}
-        </p>
-      ) : null}
-
       <div className="grid min-w-0 gap-4">
-        <form
-          className={`grid min-w-0 gap-3 border-b border-white/8 pb-4 transition-opacity ${
-            createMutation.isPending ? "opacity-85" : ""
-          }`}
-          aria-busy={createMutation.isPending}
-          onSubmit={(event) => {
-            event.preventDefault();
-            createMutation.mutate({
-              type: newContext.type,
-              label: newContext.label.trim(),
-              value: newContext.value.trim()
-            });
-          }}
-        >
-          <div className="flex items-center justify-between gap-4">
-            <h4 className="m-0 text-sm font-semibold text-ink-100">Add context</h4>
-            <p className="m-0 text-xs text-ink-300" aria-live="polite">
-              {createMutation.isPending ? "Adding context…" : ""}
-            </p>
-          </div>
-          <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-end">
-            <label className="grid min-w-0 flex-1 gap-2">
-              <span className="m-0 text-xs font-medium uppercase tracking-[0.14em] text-ink-300">Type</span>
-              <select
-                className="min-h-10 w-full min-w-0 rounded-md border border-white/8 bg-white/[0.02] px-3 py-2 text-sm text-ink-50"
-                disabled={createMutation.isPending}
-                value={newContext.type}
-                onChange={(event) => {
-                  setNewContext((current) => ({
-                    ...current,
-                    type: event.target.value as WorkContextType
-                  }));
-                }}
-              >
-                {WORK_CONTEXT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {workContextTypeLabelMap[type]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid min-w-0 flex-1 gap-2">
-              <span className="m-0 text-xs font-medium uppercase tracking-[0.14em] text-ink-300">Label</span>
-              <input
-                className="min-h-10 w-full min-w-0 rounded-md border border-white/8 bg-white/[0.02] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300"
-                disabled={createMutation.isPending}
-                placeholder="Short reference label…"
-                value={newContext.label}
-                onChange={(event) => {
-                  setNewContext((current) => ({
-                    ...current,
-                    label: event.target.value
-                  }));
-                }}
-              />
-            </label>
-          </div>
-
-          <label className="grid min-w-0 gap-2">
-            <span className="m-0 text-xs font-medium uppercase tracking-[0.14em] text-ink-300">
-              {getValueLabel(newContext.type)}
-            </span>
-            {newContext.type === "NOTE" || newContext.type === "MANUAL_UI" ? (
-              <textarea
-                className="w-full min-w-0 rounded-md border border-white/8 bg-white/[0.02] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300"
-                disabled={createMutation.isPending}
-                rows={3}
-                placeholder={getValuePlaceholder(newContext.type)}
-                value={newContext.value}
-                onChange={(event) => {
-                  setNewContext((current) => ({
-                    ...current,
-                    value: event.target.value
-                  }));
-                }}
-              />
-            ) : (
-              <input
-                className="min-h-10 w-full min-w-0 rounded-md border border-white/8 bg-white/[0.02] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300"
-                disabled={createMutation.isPending}
-                placeholder={getValuePlaceholder(newContext.type)}
-                value={newContext.value}
-                onChange={(event) => {
-                  setNewContext((current) => ({
-                    ...current,
-                    value: event.target.value
-                  }));
-                }}
-              />
-            )}
-          </label>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/10 bg-ink-50 px-4 py-2 text-sm font-medium text-canvas-975 transition-opacity disabled:cursor-progress disabled:opacity-70"
-              type="submit"
-              disabled={createMutation.isPending}
-            >
-              <SubmitLabel pending={createMutation.isPending} idle="Add context" pendingText="Adding context" />
-            </button>
-          </div>
-        </form>
-
-        {contexts.length ? (
-          contexts.map((context) => {
-            const draft = drafts[context.id] ?? toDraft(context);
-            const isSaving = updateMutation.isPending && updateMutation.variables?.id === context.id;
-            const isDeleting = deleteMutation.isPending && deleteMutation.variables === context.id;
-            const isEditing = editingContextId === context.id;
-
-            return (
-              <section
-                key={context.id}
-                className="grid min-w-0 border-b border-white/8 py-3 last:border-b-0 last:pb-0"
-                onDoubleClick={() => {
-                  if (!isEditing) {
-                    startEditing(context);
-                  }
-                }}
-              >
-                {isEditing ? (
-                  <form
-                    className={`grid min-w-0 gap-3 rounded-lg border bg-white/[0.02] p-3 transition-opacity ${
-                      isSaving ? "border-white/15 opacity-85" : "border-white/10"
-                    }`}
-                    aria-busy={isSaving}
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      updateMutation.mutate({
-                        id: context.id,
-                        type: draft.type,
-                        label: draft.label.trim(),
-                        value: draft.value.trim()
-                      });
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Escape") {
-                        return;
-                      }
-
-                      event.preventDefault();
-                      stopEditing(context);
-                    }}
-                  >
-                    <p className="m-0 text-xs text-ink-300" aria-live="polite">
-                      {isSaving ? "Saving changes…" : ""}
-                    </p>
-                    <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-end">
-                      <label className="grid min-w-0 flex-1 gap-2">
-                        <span className="m-0 text-sm font-medium text-ink-50">Type</span>
-                        <select
-                          className="min-h-11 w-full min-w-0 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5 text-ink-50"
-                          disabled={isSaving}
-                          value={draft.type}
-                          onChange={(event) => {
-                            const type = event.target.value as WorkContextType;
-                            setDrafts((current) => ({
-                              ...current,
-                              [context.id]: {
-                                ...draft,
-                                type
-                              }
-                            }));
-                          }}
-                        >
-                          {WORK_CONTEXT_TYPES.map((type) => (
-                            <option key={type} value={type}>
-                              {workContextTypeLabelMap[type]}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="grid min-w-0 flex-1 gap-2">
-                        <span className="m-0 text-sm font-medium text-ink-50">Label</span>
-                        <input
-                          ref={(node) => {
-                            editFieldRefs.current[context.id] = node;
-                          }}
-                          className="min-h-11 w-full min-w-0 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5 text-ink-50 placeholder:text-ink-300"
-                          disabled={isSaving}
-                          name={`context-label-${context.id}`}
-                          placeholder="Short reference label…"
-                          value={draft.label}
-                          onChange={(event) => {
-                            const label = event.target.value;
-                            setDrafts((current) => ({
-                              ...current,
-                              [context.id]: {
-                                ...draft,
-                                label
-                              }
-                            }));
-                          }}
-                        />
-                      </label>
-                    </div>
-
-                    <label className="grid min-w-0 gap-2">
-                      <span className="m-0 text-sm font-medium text-ink-50">{getValueLabel(draft.type)}</span>
-                      {draft.type === "NOTE" || draft.type === "MANUAL_UI" ? (
-                        <textarea
-                          className="w-full min-w-0 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5 text-ink-50 placeholder:text-ink-300"
-                          disabled={isSaving}
-                          name={`context-value-${context.id}`}
-                          rows={3}
-                          placeholder={getValuePlaceholder(draft.type)}
-                          value={draft.value}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            setDrafts((current) => ({
-                              ...current,
-                              [context.id]: {
-                                ...draft,
-                                value
-                              }
-                            }));
-                          }}
-                        />
-                      ) : (
-                        <input
-                          className="min-h-11 w-full min-w-0 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5 text-ink-50 placeholder:text-ink-300"
-                          disabled={isSaving}
-                          name={`context-value-${context.id}`}
-                          placeholder={getValuePlaceholder(draft.type)}
-                          value={draft.value}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            setDrafts((current) => ({
-                              ...current,
-                              [context.id]: {
-                                ...draft,
-                                value
-                              }
-                            }));
-                          }}
-                        />
-                      )}
-                    </label>
-
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/10 bg-ink-50 px-4 py-2 text-sm font-medium text-canvas-975 transition-opacity disabled:cursor-progress disabled:opacity-70"
-                        type="submit"
-                        disabled={isSaving}
-                      >
-                        <SubmitLabel pending={isSaving} idle="Save changes" pendingText="Saving changes" />
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-red-400/20 bg-red-950/40 px-4 py-2 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/55 disabled:cursor-progress disabled:opacity-70"
-                        disabled={isDeleting}
-                        onClick={() => {
-                          deleteMutation.mutate(context.id);
-                        }}
-                      >
-                        <SubmitLabel pending={isDeleting} idle="Remove context" pendingText="Removing context" />
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <article
-                    ref={(node) => {
-                      contextItemRefs.current[context.id] = node;
-                    }}
-                    tabIndex={0}
-                    role="button"
-                    aria-label={`Edit ${context.label || "work context"}`}
-                    className="grid min-w-0 gap-2 rounded-md px-1 py-1 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ink-200/60"
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") {
-                        return;
-                      }
-
-                      event.preventDefault();
-                      startEditing(context);
-                    }}
-                  >
-                    <div className="flex min-w-0 items-baseline gap-3">
-                      <p className="m-0 shrink-0 text-[11px] font-medium uppercase tracking-[0.16em] text-ink-300">
-                        {workContextTypeLabelMap[context.type]}
-                      </p>
-                      <h5 className="m-0 min-w-0 break-words text-sm font-semibold text-ink-50">
-                        {context.label || "Untitled context"}
-                      </h5>
-                    </div>
-                    <p className="m-0 break-words text-sm leading-6 text-ink-100">{context.value}</p>
-                  </article>
-                )}
-              </section>
-            );
-          })
-        ) : (
-          <p className="m-0 text-sm text-ink-300">No work contexts attached yet.</p>
-        )}
+        <WorkContextCreateForm ticketId={ticketId} contexts={contexts} />
+        <WorkContextList ticketId={ticketId} contexts={contexts} />
       </div>
     </section>
   );

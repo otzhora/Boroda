@@ -45,6 +45,8 @@ export const WORK_CONTEXT_TYPES = [
   "NOTE"
 ] as const;
 
+export const VISIBLE_WORK_CONTEXT_TYPES = ["PR", "AWS_CONSOLE", "TERRAFORM_RUN", "LINK", "NOTE"] as const;
+
 export const workContextTypeLabelMap: Record<(typeof WORK_CONTEXT_TYPES)[number], string> = {
   CODEX_SESSION: "Codex session",
   CLAUDE_SESSION: "Claude session",

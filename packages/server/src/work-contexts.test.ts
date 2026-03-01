@@ -68,7 +68,7 @@ async function createTicket() {
   return response.json();
 }
 
-test("work context CRUD supports PR, session, and manual UI references", async () => {
+test("work context CRUD supports PR, session, note, and manual UI references", async () => {
   const ticket = await createTicket();
 
   const createPrResponse = await app.inject({
@@ -97,6 +97,20 @@ test("work context CRUD supports PR, session, and manual UI references", async (
 
   assert.equal(createSessionResponse.statusCode, 200);
   assert.equal(createSessionResponse.json().type, "CODEX_SESSION");
+
+  const createNoteResponse = await app.inject({
+    method: "POST",
+    url: `/api/tickets/${ticket.id}/contexts`,
+    payload: {
+      type: "NOTE",
+      label: "",
+      value: "Manual verification needed after deploy"
+    }
+  });
+
+  assert.equal(createNoteResponse.statusCode, 200);
+  assert.equal(createNoteResponse.json().type, "NOTE");
+  assert.equal(createNoteResponse.json().label, "");
 
   const updateResponse = await app.inject({
     method: "PATCH",
@@ -127,13 +141,42 @@ test("work context CRUD supports PR, session, and manual UI references", async (
 
   assert.equal(ticketResponse.statusCode, 200);
   const updatedTicket = ticketResponse.json();
-  assert.equal(updatedTicket.workContexts.length, 1);
-  assert.equal(updatedTicket.workContexts[0].type, "MANUAL_UI");
+  assert.equal(updatedTicket.workContexts.length, 2);
+  assert.equal(updatedTicket.workContexts[0].type, "NOTE");
+  assert.equal(updatedTicket.workContexts[1].type, "MANUAL_UI");
 
   const activityTypes = updatedTicket.activities.map((activity: { type: string }) => activity.type);
   assert.ok(activityTypes.includes("work-context.created"));
   assert.ok(activityTypes.includes("work-context.updated"));
   assert.ok(activityTypes.includes("work-context.deleted"));
+});
+
+test("work contexts allow empty labels for non-note types", async () => {
+  const ticket = await createTicket();
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: `/api/tickets/${ticket.id}/contexts`,
+    payload: {
+      type: "PR",
+      label: "",
+      value: "https://example.test/pr/42"
+    }
+  });
+
+  assert.equal(createResponse.statusCode, 200);
+  assert.equal(createResponse.json().label, "");
+
+  const updateResponse = await app.inject({
+    method: "PATCH",
+    url: `/api/work-contexts/${createResponse.json().id}`,
+    payload: {
+      label: ""
+    }
+  });
+
+  assert.equal(updateResponse.statusCode, 200);
+  assert.equal(updateResponse.json().label, "");
 });
 
 test("creating a work context for a missing ticket returns ticket not found", async () => {

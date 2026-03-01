@@ -390,6 +390,7 @@ export async function getTicketOrThrow(app: FastifyInstance, id: number) {
     .select()
     .from(workContexts)
     .where(eq(workContexts.ticketId, id))
+    .orderBy(desc(workContexts.createdAt), desc(workContexts.id))
     .all();
 
   const activities = app.db

@@ -31,6 +31,15 @@ interface TicketDescriptionFieldProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit?: () => void;
+  label?: string;
+  modeLabel?: string;
+  uploadAriaLabel?: string;
+  emptyPreviewText?: string;
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  compact?: boolean;
+  rows?: number;
+  showImageUploadButton?: boolean;
+  showModeTabs?: boolean;
 }
 
 interface TicketMetaFieldsProps {
@@ -98,15 +107,32 @@ export function TicketTitleField({ value, onChange, inputRef, hideLabel = false 
   );
 }
 
-export function TicketDescriptionField({ ticketId, value, onChange, onSubmit }: TicketDescriptionFieldProps) {
+export function TicketDescriptionField({
+  ticketId,
+  value,
+  onChange,
+  onSubmit,
+  label = "Description",
+  modeLabel = "Description editor mode",
+  uploadAriaLabel = "Upload ticket image",
+  emptyPreviewText = "Nothing to preview yet. Start writing Markdown in the editor.",
+  textareaRef: externalTextareaRef,
+  compact = false,
+  rows = 10,
+  showImageUploadButton = true,
+  showModeTabs = true
+}: TicketDescriptionFieldProps) {
   const [activeTab, setActiveTab] = useState<"write" | "preview">("write");
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const internalTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = externalTextareaRef ?? internalTextareaRef;
   const tabListId = useId();
   const textareaId = useId();
   const uploadImageMutation = useUploadTicketImageMutation(ticketId);
+  const showToolbar = showImageUploadButton || showModeTabs;
+  const isPreviewMode = showModeTabs && activeTab === "preview";
 
   const extractImageFiles = (files: File[]) => files.filter((file) => file.type.startsWith("image/"));
 
@@ -212,64 +238,71 @@ export function TicketDescriptionField({ ticketId, value, onChange, onSubmit }: 
 
   return (
     <div className="grid gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className={labelClassName} htmlFor={textareaId}>
-          Description
-        </label>
-        <div
-          className="inline-flex min-h-10 rounded-[12px] border border-white/8 bg-black/40 p-1"
-          role="tablist"
-          aria-label="Description editor mode"
-        >
-          {[
-            { id: "write", label: "Write" },
-            { id: "preview", label: "Preview" }
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
+      {showToolbar ? (
+        <div className={`flex flex-wrap items-center justify-between gap-2 ${compact ? "" : "gap-3"}`}>
+          <label className={compact ? "sr-only" : labelClassName} htmlFor={textareaId}>
+            {label}
+          </label>
+          {showImageUploadButton ? (
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={() => {
+                fileInputRef.current?.click();
+              }}
+              disabled={uploadImageMutation.isPending}
+            >
+              {uploadImageMutation.isPending ? <LoadingSpinner /> : null}
+              <span>Insert image…</span>
+            </button>
+          ) : null}
+          {showModeTabs ? (
+            <div
+              className="inline-flex min-h-10 rounded-[12px] border border-white/8 bg-black/40 p-1"
+              role="tablist"
+              aria-label={modeLabel}
+            >
+              {[
+                { id: "write", label: "Write" },
+                { id: "preview", label: "Preview" }
+              ].map((tab) => {
+                const isActive = activeTab === tab.id;
 
-            return (
-              <button
-                key={tab.id}
-                id={`${tabListId}-${tab.id}-tab`}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={`${tabListId}-${tab.id}-panel`}
-                tabIndex={isActive ? 0 : -1}
-                className={`${secondaryTabClassName} ${
-                  isActive ? "bg-white text-canvas-975" : "text-ink-300 hover:bg-white/[0.05] hover:text-ink-100"
-                }`}
-                onClick={() => {
-                  setActiveTab(tab.id as "write" | "preview");
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+                return (
+                  <button
+                    key={tab.id}
+                    id={`${tabListId}-${tab.id}-tab`}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls={`${tabListId}-${tab.id}-panel`}
+                    tabIndex={isActive ? 0 : -1}
+                    className={`${secondaryTabClassName} ${
+                      isActive ? "bg-white text-canvas-975" : "text-ink-300 hover:bg-white/[0.05] hover:text-ink-100"
+                    }`}
+                    onClick={() => {
+                      setActiveTab(tab.id as "write" | "preview");
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          className={secondaryButtonClassName}
-          onClick={() => {
-            fileInputRef.current?.click();
-          }}
-          disabled={uploadImageMutation.isPending}
-        >
-          {uploadImageMutation.isPending ? <LoadingSpinner /> : null}
-          <span>Insert image…</span>
-        </button>
-        <span className="text-xs text-ink-300">Paste images directly from your clipboard or upload a local file.</span>
-      </div>
+      ) : (
+        <label className="sr-only" htmlFor={textareaId}>
+          {label}
+        </label>
+      )}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/png,image/jpeg,image/gif,image/webp"
         className="sr-only"
         tabIndex={-1}
-        aria-label="Upload ticket image"
+        aria-label={uploadAriaLabel}
         onChange={(event) => {
           void handleFileSelection(event);
         }}
@@ -280,25 +313,25 @@ export function TicketDescriptionField({ ticketId, value, onChange, onSubmit }: 
         </p>
       ) : null}
       <div
-        id={`${tabListId}-${activeTab}-panel`}
-        role="tabpanel"
-        aria-labelledby={`${tabListId}-${activeTab}-tab`}
+        id={showModeTabs ? `${tabListId}-${activeTab}-panel` : undefined}
+        role={showModeTabs ? "tabpanel" : undefined}
+        aria-labelledby={showModeTabs ? `${tabListId}-${activeTab}-tab` : undefined}
         className={`min-w-0 rounded-xl border p-3 transition-colors ${
           isDraggingImage
             ? "border-ink-50 bg-white/[0.06]"
             : "border-white/8 bg-black/10"
         }`}
-        onDragOver={activeTab === "write" ? handleDragOver : undefined}
-        onDragLeave={activeTab === "write" ? handleDragLeave : undefined}
+        onDragOver={!isPreviewMode ? handleDragOver : undefined}
+        onDragLeave={!isPreviewMode ? handleDragLeave : undefined}
         onDrop={(event) => {
-          if (activeTab !== "write") {
+          if (isPreviewMode) {
             return;
           }
 
           void handleDrop(event);
         }}
       >
-        {activeTab === "write" ? (
+        {!isPreviewMode ? (
           <div className="grid gap-3">
             {isDraggingImage ? (
               <p className="m-0 text-sm text-ink-100" aria-live="polite">
@@ -309,7 +342,7 @@ export function TicketDescriptionField({ ticketId, value, onChange, onSubmit }: 
               id={textareaId}
               ref={textareaRef}
               className={textareaClassName}
-              rows={10}
+              rows={rows}
               value={value}
               onChange={(event) => onChange(event.target.value)}
               onPaste={(event) => {
@@ -326,7 +359,7 @@ export function TicketDescriptionField({ ticketId, value, onChange, onSubmit }: 
         ) : value ? (
           <MarkdownDescription value={value} />
         ) : (
-          <p className="m-0 text-sm text-ink-300">Nothing to preview yet. Start writing Markdown in the editor.</p>
+          <p className="m-0 text-sm text-ink-300">{emptyPreviewText}</p>
         )}
       </div>
     </div>

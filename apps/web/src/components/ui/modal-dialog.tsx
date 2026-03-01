@@ -208,7 +208,7 @@ export function ModalDialog({
       <div
         ref={panelRef}
         className={`grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden rounded-[22px] border border-white/8 bg-canvas-900 px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.44)] sm:px-6 sm:py-6 ${
-          size === "wide" ? "max-w-6xl" : "max-w-2xl"
+          size === "wide" ? "max-w-[94rem]" : "max-w-2xl"
         }`}
         role="dialog"
         aria-modal="true"

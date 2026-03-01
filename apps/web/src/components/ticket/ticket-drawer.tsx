@@ -354,8 +354,8 @@ export function TicketDrawer(props: TicketDrawerProps) {
             </section>
           </div>
 
-          <aside className="grid min-w-0 content-start">
-            <div className="grid min-w-0 gap-4 xl:border-l xl:border-white/8 xl:pl-6">
+          <aside className="grid min-w-0 content-start xl:self-stretch xl:border-l xl:border-white/8 xl:pl-6">
+            <div className="grid min-w-0 gap-4">
               <section className={railSectionClassName}>
                 <div className="flex min-w-0 items-center justify-between gap-4">
                   <h4 className="m-0 text-base font-semibold text-ink-50">Details</h4>

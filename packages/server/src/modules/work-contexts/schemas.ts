@@ -22,7 +22,7 @@ export const ticketIdParamSchema = z.object({
 
 export const createWorkContextSchema = z.object({
   type: workContextTypeSchema,
-  label: z.string().trim().min(1),
+  label: z.string().trim(),
   value: z.string().trim().min(1),
   meta: z.record(z.unknown()).default({})
 });

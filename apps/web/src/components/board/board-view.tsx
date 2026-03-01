@@ -1,5 +1,6 @@
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   type DragEndEvent,
   type DragStartEvent,
@@ -83,6 +84,10 @@ export function BoardView({
   const [draggedTicketId, setDraggedTicketId] = useState<number | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const columnsByStatus = new Map(columns.map((column) => [column.status, column]));
+  const draggedTicket =
+    draggedTicketId === null
+      ? null
+      : columns.flatMap((column) => column.tickets).find((ticket) => ticket.id === draggedTicketId) ?? null;
 
   function handleDragStart(event: DragStartEvent) {
     const ticketId = event.active.data.current?.ticketId;
@@ -98,13 +103,13 @@ export function BoardView({
     const sourceStatus = event.active.data.current?.status as TicketStatus | undefined;
     const targetStatus = event.over?.data.current?.status as TicketStatus | undefined;
 
-    clearDragState();
-
     if (typeof ticketId !== "number" || !sourceStatus || !targetStatus || sourceStatus === targetStatus) {
+      clearDragState();
       return;
     }
 
     onMoveTicket(ticketId, targetStatus);
+    clearDragState();
   }
 
   return (
@@ -128,6 +133,19 @@ export function BoardView({
           ))}
         </div>
       </div>
+      <DragOverlay dropAnimation={null} zIndex={999}>
+        {draggedTicket ? (
+          <div className="w-[min(100vw-2rem,24rem)] touch-none select-none">
+            <TicketCard
+              ticket={draggedTicket}
+              isSelected={selectedTicketId === draggedTicket.id}
+              isDragging={false}
+              onSelect={onSelectTicket}
+              interactive={false}
+            />
+          </div>
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 }

@@ -238,6 +238,10 @@ export function BoardPage() {
   });
 
   const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+
     if (isTypingTarget(event.target)) {
       return;
     }

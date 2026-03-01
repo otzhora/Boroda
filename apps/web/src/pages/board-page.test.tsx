@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -56,14 +57,61 @@ vi.mock("../features/tickets/mutations", () => ({
 }));
 
 vi.mock("../components/ticket/ticket-drawer", () => ({
-  TicketDrawer: () => <div data-testid="ticket-drawer" />
+  TicketDrawer: ({
+    ticketId,
+    onClose
+  }: {
+    ticketId: number | null;
+    onClose: () => void;
+  }) => {
+    useEffect(() => {
+      if (ticketId === null) {
+        return;
+      }
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+        }
+      };
+
+      document.addEventListener("keydown", handleKeyDown);
+
+      return () => {
+        document.removeEventListener("keydown", handleKeyDown);
+      };
+    }, [ticketId]);
+
+    if (ticketId === null) {
+      return null;
+    }
+
+    return (
+      <div data-testid="ticket-drawer">
+        <button type="button" onClick={onClose}>
+          Close drawer
+        </button>
+      </div>
+    );
+  }
 }));
 
 vi.mock("../components/board/board-view", () => ({
-  BoardView: ({ onMoveTicket }: { onMoveTicket: (ticketId: number, status: string) => void }) => (
-    <button type="button" onClick={() => onMoveTicket(12, "DONE")}>
-      Trigger move
-    </button>
+  BoardView: ({
+    onMoveTicket,
+    onSelectTicket
+  }: {
+    onMoveTicket: (ticketId: number, status: string) => void;
+    onSelectTicket: (ticketId: number) => void;
+  }) => (
+    <>
+      <button type="button" onClick={() => onMoveTicket(12, "DONE")}>
+        Trigger move
+      </button>
+      <button type="button" onClick={() => onSelectTicket(12)}>
+        Select ticket
+      </button>
+    </>
   )
 }));
 
@@ -236,5 +284,44 @@ describe("BoardPage", () => {
     screen.getByLabelText("Search").blur();
     await user.keyboard("c");
     expect((await screen.findByLabelText("Title")) as HTMLElement).toHaveFocus();
+  });
+
+  it("does not close the selected ticket when escape was already handled", async () => {
+    const user = userEvent.setup();
+    mocks.useBoardQuery.mockReturnValue({
+      data: {
+        columns: [
+          {
+            status: "INBOX",
+            label: "Inbox",
+            tickets: [
+              {
+                id: 12,
+                key: "BRD-12",
+                title: "Trigger card",
+                status: "INBOX",
+                priority: "MEDIUM",
+                type: "TASK",
+                contextsCount: 0,
+                updatedAt: "",
+                projectBadges: []
+              }
+            ]
+          }
+        ]
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetchBoard
+    });
+
+    renderBoardPage();
+
+    await user.click(screen.getByRole("button", { name: "Select ticket" }));
+    expect(screen.getByTestId("ticket-drawer")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.getByTestId("ticket-drawer")).toBeInTheDocument();
   });
 });

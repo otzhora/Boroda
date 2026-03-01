@@ -6,6 +6,7 @@ interface TicketCardProps {
   isSelected: boolean;
   isDragging: boolean;
   onSelect: (ticketId: number) => void;
+  interactive?: boolean;
 }
 
 const priorityClassNameMap = {
@@ -23,33 +24,9 @@ function toTransformStyle(transform: { x: number; y: number } | null) {
   return `translate3d(${transform.x}px, ${transform.y}px, 0)`;
 }
 
-export function TicketCard({ ticket, isSelected, isDragging, onSelect }: TicketCardProps) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
-    id: `ticket-${ticket.id}`,
-    data: {
-      type: "ticket",
-      ticketId: ticket.id,
-      status: ticket.status
-    }
-  });
-
+function TicketCardContent({ ticket }: { ticket: BoardTicket }) {
   return (
-    <button
-      type="button"
-      ref={setNodeRef}
-      className={`grid w-full gap-3 rounded-[16px] border bg-canvas-850 px-4 py-4 text-left text-ink-50 shadow-[0_12px_30px_rgba(0,0,0,0.16)] transition-[border-color,background-color,opacity,box-shadow] ${
-        isSelected
-          ? "border-white/16 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04),0_12px_30px_rgba(0,0,0,0.2)]"
-          : "border-white/6 hover:border-white/10 hover:bg-canvas-800"
-      } ${isDragging ? "cursor-grabbing opacity-45" : "cursor-pointer"}`}
-      style={{
-        transform: toTransformStyle(transform),
-        zIndex: isDragging ? 2 : undefined
-      }}
-      onClick={() => onSelect(ticket.id)}
-      {...listeners}
-      {...attributes}
-    >
+    <>
       <div className="flex items-center justify-between gap-3">
         <span className="text-[0.7rem] font-medium uppercase tracking-[0.18em] text-ink-300">
           {ticket.key}
@@ -75,6 +52,55 @@ export function TicketCard({ ticket, isSelected, isDragging, onSelect }: TicketC
         </div>
       ) : null}
       <p className="m-0 text-sm text-ink-300">{ticket.contextsCount} work contexts</p>
+    </>
+  );
+}
+
+export function TicketCard({
+  ticket,
+  isSelected,
+  isDragging,
+  onSelect,
+  interactive = true
+}: TicketCardProps) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: `ticket-${ticket.id}`,
+    data: {
+      type: "ticket",
+      ticketId: ticket.id,
+      status: ticket.status
+    },
+    disabled: !interactive
+  });
+  const className = `grid w-full gap-3 rounded-[16px] border bg-canvas-850 px-4 py-4 text-left text-ink-50 shadow-[0_12px_30px_rgba(0,0,0,0.16)] transition-[border-color,background-color,opacity,box-shadow] ${
+    isSelected
+      ? "border-white/16 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04),0_12px_30px_rgba(0,0,0,0.2)]"
+      : "border-white/6 hover:border-white/10 hover:bg-canvas-800"
+  } ${isDragging ? "cursor-grabbing opacity-0" : interactive ? "cursor-pointer" : "cursor-grabbing"}`;
+  const style = {
+    transform: interactive && !isDragging ? toTransformStyle(transform) : undefined,
+    zIndex: isDragging ? 2 : undefined
+  };
+
+  if (!interactive) {
+    return (
+      <div aria-hidden="true" className={className} style={style}>
+        <TicketCardContent ticket={ticket} />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      ref={setNodeRef}
+      className={className}
+      style={style}
+      onClick={() => onSelect(ticket.id)}
+      {...listeners}
+      {...attributes}
+    >
+      <TicketCardContent ticket={ticket} />
     </button>
   );
 }
