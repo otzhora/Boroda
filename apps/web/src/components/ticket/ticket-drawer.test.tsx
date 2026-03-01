@@ -50,7 +50,6 @@ const ticket: Ticket = {
   description: "Saving should return the ticket drawer to read mode.",
   status: "INBOX",
   priority: "HIGH",
-  type: "BUG",
   dueAt: null,
   createdAt: "2026-02-28T12:00:00.000Z",
   updatedAt: "2026-02-28T12:00:00.000Z",

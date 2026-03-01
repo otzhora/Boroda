@@ -20,8 +20,6 @@ export const statusLabelMap: Record<(typeof BOARD_STATUS_ORDER)[number], string>
 
 export const TICKET_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 
-export const TICKET_TYPES = ["TASK", "BUG", "CHORE", "REVIEW", "MANUAL"] as const;
-
 export const TICKET_PROJECT_RELATIONSHIPS = ["PRIMARY", "RELATED", "DEPENDENCY"] as const;
 
 export const PROJECT_FOLDER_KINDS = [

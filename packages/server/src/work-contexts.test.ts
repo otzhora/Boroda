@@ -59,7 +59,6 @@ async function createTicket() {
       description: "",
       status: "IN_PROGRESS",
       priority: "HIGH",
-      type: "TASK",
       projectLinks: []
     }
   });

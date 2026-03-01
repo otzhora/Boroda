@@ -79,7 +79,6 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
       description: "Need app repo changes and infra follow-up",
       status: "IN_PROGRESS",
       priority: "HIGH",
-      type: "TASK",
       projectLinks: [
         { projectId: primaryProject.id, relationship: "PRIMARY" },
         { projectId: relatedProject.id, relationship: "RELATED" }
@@ -145,7 +144,6 @@ test("ticket-project link endpoints enforce duplicate and primary constraints", 
       description: "",
       status: "READY",
       priority: "MEDIUM",
-      type: "CHORE",
       projectLinks: []
     }
   });
@@ -240,7 +238,6 @@ test("ticket image uploads can be pasted and rendered back from local storage", 
       description: "",
       status: "READY",
       priority: "MEDIUM",
-      type: "TASK",
       projectLinks: []
     }
   });
@@ -281,7 +278,6 @@ test("ticket image cleanup removes orphaned files on description update and tick
       description: "",
       status: "READY",
       priority: "MEDIUM",
-      type: "TASK",
       projectLinks: []
     }
   });

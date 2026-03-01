@@ -216,7 +216,6 @@ describe("BoardPage", () => {
     await user.selectOptions(within(dialog).getByLabelText("Project"), "1");
     await user.selectOptions(within(dialog).getByLabelText("Status"), "READY");
     await user.selectOptions(within(dialog).getByLabelText("Priority"), "HIGH");
-    await user.selectOptions(within(dialog).getByLabelText("Type"), "BUG");
     await user.click(within(dialog).getAllByRole("button", { name: "Create ticket" })[0]);
 
     expect(mocks.createMutate).toHaveBeenCalledWith({
@@ -224,7 +223,6 @@ describe("BoardPage", () => {
       description: "",
       status: "READY",
       priority: "HIGH",
-      type: "BUG",
       dueAt: null,
       projectLinks: [
         {
@@ -250,7 +248,6 @@ describe("BoardPage", () => {
                 title: "Trigger card",
                 status: "INBOX",
                 priority: "MEDIUM",
-                type: "TASK",
                 contextsCount: 0,
                 updatedAt: "",
                 projectBadges: []
@@ -301,7 +298,6 @@ describe("BoardPage", () => {
                 title: "Trigger card",
                 status: "INBOX",
                 priority: "MEDIUM",
-                type: "TASK",
                 contextsCount: 0,
                 updatedAt: "",
                 projectBadges: []

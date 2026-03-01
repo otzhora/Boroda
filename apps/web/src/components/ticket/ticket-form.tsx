@@ -10,11 +10,10 @@ import {
 import {
   BOARD_STATUS_ORDER,
   statusLabelMap,
-  TICKET_PRIORITIES,
-  TICKET_TYPES
+  TICKET_PRIORITIES
 } from "../../lib/constants";
 import { useUploadTicketImageMutation } from "../../features/tickets/mutations";
-import type { Project, TicketPriority, TicketStatus, TicketType } from "../../lib/types";
+import type { Project, TicketPriority, TicketStatus } from "../../lib/types";
 import { ProjectLinkEditor } from "./project-link-editor";
 import { MarkdownDescription } from "./markdown-description";
 import type { TicketFormState } from "../../features/tickets/form";
@@ -404,26 +403,6 @@ export function TicketMetaFields({ form, onChange }: TicketMetaFieldsProps) {
           {TICKET_PRIORITIES.map((priority) => (
             <option key={priority} value={priority}>
               {priority}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="grid gap-2">
-        <span className={labelClassName}>Type</span>
-        <select
-          className={inputClassName}
-          value={form.type}
-          onChange={(event) =>
-            onChange((current) => ({
-              ...current,
-              type: event.target.value as TicketType
-            }))
-          }
-        >
-          {TICKET_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type}
             </option>
           ))}
         </select>

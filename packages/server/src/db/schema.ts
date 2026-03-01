@@ -45,7 +45,6 @@ export const tickets = sqliteTable(
     description: text("description").notNull().default(""),
     status: text("status").notNull(),
     priority: text("priority").notNull(),
-    type: text("type").notNull(),
     dueAt: text("due_at"),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -152,4 +151,3 @@ export const ticketActivityRelations = relations(ticketActivities, ({ one }) => 
     references: [tickets.id]
   })
 }));
-

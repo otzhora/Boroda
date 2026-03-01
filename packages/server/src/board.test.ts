@@ -71,7 +71,6 @@ async function createTicket(payload: {
   description: string;
   status: string;
   priority: string;
-  type: string;
   projectLinks: Array<{ projectId: number; relationship: string }>;
 }) {
   const response = await app.inject({
@@ -93,7 +92,6 @@ test("board endpoint groups tickets by status and includes context counts and pr
     description: "Search and project filtering",
     status: "INBOX",
     priority: "HIGH",
-    type: "TASK",
     projectLinks: [
       { projectId: appProject.id, relationship: "PRIMARY" },
       { projectId: infraProject.id, relationship: "RELATED" }
@@ -105,7 +103,6 @@ test("board endpoint groups tickets by status and includes context counts and pr
     description: "Initial board delivery",
     status: "DONE",
     priority: "MEDIUM",
-    type: "CHORE",
     projectLinks: [{ projectId: appProject.id, relationship: "PRIMARY" }]
   });
 
@@ -162,7 +159,6 @@ test("board endpoint applies project, priority, and text filters together", asyn
     description: "Infra review and apply",
     status: "READY",
     priority: "HIGH",
-    type: "TASK",
     projectLinks: [{ projectId: infraProject.id, relationship: "PRIMARY" }]
   });
 
@@ -171,7 +167,6 @@ test("board endpoint applies project, priority, and text filters together", asyn
     description: "Documentation only",
     status: "READY",
     priority: "LOW",
-    type: "CHORE",
     projectLinks: [{ projectId: infraProject.id, relationship: "PRIMARY" }]
   });
 
@@ -180,7 +175,6 @@ test("board endpoint applies project, priority, and text filters together", asyn
     description: "User-facing issue",
     status: "READY",
     priority: "HIGH",
-    type: "BUG",
     projectLinks: [{ projectId: appProject.id, relationship: "PRIMARY" }]
   });
 
@@ -205,7 +199,6 @@ test("export endpoint returns a workspace snapshot with current records", async 
     description: "Verify export payload",
     status: "READY",
     priority: "MEDIUM",
-    type: "TASK",
     projectLinks: [{ projectId: appProject.id, relationship: "PRIMARY" }]
   });
 
@@ -267,7 +260,6 @@ test("import endpoint replaces workspace data from an exported snapshot", async 
     description: "Roundtrip import test",
     status: "READY",
     priority: "HIGH",
-    type: "TASK",
     projectLinks: [{ projectId: sourceProject.id, relationship: "PRIMARY" }]
   });
 

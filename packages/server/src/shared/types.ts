@@ -8,7 +8,6 @@ export type TicketStatus =
   | "DONE";
 
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-export type TicketType = "TASK" | "BUG" | "CHORE" | "REVIEW" | "MANUAL";
 export type ProjectFolderKind = "APP" | "BACKEND" | "TERRAFORM" | "INFRA" | "DOCS" | "OTHER";
 export type TicketProjectRelationship = "PRIMARY" | "RELATED" | "DEPENDENCY";
 export type WorkContextType =
@@ -28,4 +27,3 @@ export interface PathInfo {
   exists: boolean;
   isDirectory: boolean;
 }
-

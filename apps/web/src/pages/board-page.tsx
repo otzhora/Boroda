@@ -66,7 +66,6 @@ function toQuickCreatePayload(form: QuickTicketFormState) {
     description: "",
     status: form.status,
     priority: form.priority,
-    type: form.type,
     dueAt: null,
     projectLinks: form.projectId
       ? [{ projectId: Number(form.projectId), relationship: "PRIMARY" as const }]

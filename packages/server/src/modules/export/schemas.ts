@@ -29,7 +29,6 @@ const ticketSchema = z.object({
   description: z.string(),
   status: z.enum(["INBOX", "READY", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "MANUAL_UI", "DONE"]),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
-  type: z.enum(["TASK", "BUG", "CHORE", "REVIEW", "MANUAL"]),
   dueAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),

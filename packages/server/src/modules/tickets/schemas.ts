@@ -11,7 +11,6 @@ const statusEnum = z.enum([
 ]);
 
 const priorityEnum = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
-const typeEnum = z.enum(["TASK", "BUG", "CHORE", "REVIEW", "MANUAL"]);
 const relationshipEnum = z.enum(["PRIMARY", "RELATED", "DEPENDENCY"]);
 
 export const ticketIdParamSchema = z.object({
@@ -34,7 +33,6 @@ export const createTicketSchema = z.object({
   description: z.string().default(""),
   status: statusEnum.default("INBOX"),
   priority: priorityEnum.default("MEDIUM"),
-  type: typeEnum.default("TASK"),
   dueAt: z.string().datetime().optional().nullable(),
   projectLinks: z
     .array(

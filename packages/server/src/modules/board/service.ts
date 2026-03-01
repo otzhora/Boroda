@@ -91,7 +91,6 @@ export async function getBoard(
           title: ticket.title,
           status: ticket.status,
           priority: ticket.priority,
-          type: ticket.type,
           updatedAt: ticket.updatedAt,
           contextsCount: contextCounts.find((item) => item.ticketId === ticket.id)?.count ?? 0,
           projectBadges: links

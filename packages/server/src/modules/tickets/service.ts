@@ -415,7 +415,6 @@ export async function createTicket(
     description: string;
     status: string;
     priority: string;
-    type: string;
     dueAt?: string | null;
     projectLinks: Array<{ projectId: number; relationship: string }>;
   }
@@ -435,7 +434,6 @@ export async function createTicket(
       description: input.description,
       status: input.status,
       priority: input.priority,
-      type: input.type,
       dueAt: input.dueAt ?? null,
       createdAt: now,
       updatedAt: now
@@ -463,7 +461,6 @@ export async function updateTicket(
     description: string;
     status: string;
     priority: string;
-    type: string;
     dueAt: string | null;
     projectLinks: Array<{ projectId: number; relationship: string }>;
   }>
@@ -478,7 +475,6 @@ export async function updateTicket(
       description: input.description ?? existing.description,
       status: input.status ?? existing.status,
       priority: input.priority ?? existing.priority,
-      type: input.type ?? existing.type,
       dueAt: input.dueAt === undefined ? existing.dueAt : input.dueAt,
       updatedAt: nextUpdatedAt
     })

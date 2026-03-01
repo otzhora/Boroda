@@ -10,7 +10,6 @@ interface TicketPayload {
   description: string;
   status: string;
   priority: string;
-  type: string;
   dueAt: string | null;
   projectLinks: Array<{
     projectId: number;

@@ -108,7 +108,6 @@ test("opens Windows Terminal for the primary linked project folder", async () =>
       description: "",
       status: "READY",
       priority: "HIGH",
-      type: "TASK",
       projectLinks: [
         {
           projectId: project.id,
@@ -152,7 +151,6 @@ test("returns 409 when the ticket has no available linked project folder", async
       description: "",
       status: "INBOX",
       priority: "MEDIUM",
-      type: "TASK",
       projectLinks: [
         {
           projectId: project.id,
@@ -212,7 +210,6 @@ test("returns 501 when Windows Terminal is unavailable", async () => {
       description: "",
       status: "READY",
       priority: "LOW",
-      type: "TASK",
       projectLinks: [
         {
           projectId: project.id,

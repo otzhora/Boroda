@@ -149,10 +149,9 @@ export function TicketDrawer(props: TicketDrawerProps) {
     () => [
       { label: "Status", value: statusLabelMap[form.status] },
       { label: "Priority", value: form.priority },
-      { label: "Type", value: form.type },
       { label: "Due at", value: formatDateTime(ticket?.dueAt ?? null) }
     ],
-    [form.priority, form.status, form.type, ticket?.dueAt]
+    [form.priority, form.status, ticket?.dueAt]
   );
 
   const handleCancelEdit = () => {

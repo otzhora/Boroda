@@ -2,8 +2,7 @@ import type {
   Ticket,
   TicketPriority,
   TicketProjectRelationship,
-  TicketStatus,
-  TicketType
+  TicketStatus
 } from "../../lib/types";
 
 export interface TicketProjectLinkFormState {
@@ -16,7 +15,6 @@ export interface TicketFormState {
   description: string;
   status: TicketStatus;
   priority: TicketPriority;
-  type: TicketType;
   dueAt: string;
   projectLinks: TicketProjectLinkFormState[];
 }
@@ -27,7 +25,6 @@ export function createEmptyTicketForm(): TicketFormState {
     description: "",
     status: "INBOX",
     priority: "MEDIUM",
-    type: "TASK",
     dueAt: "",
     projectLinks: []
   };
@@ -70,7 +67,6 @@ export function toTicketForm(ticket: Ticket): TicketFormState {
     description: ticket.description,
     status: ticket.status,
     priority: ticket.priority,
-    type: ticket.type,
     dueAt: toDateTimeInput(ticket.dueAt),
     projectLinks: ticket.projectLinks.map((link) => ({
       projectId: String(link.projectId),
@@ -85,7 +81,6 @@ export function toTicketPayload(form: TicketFormState) {
     description: form.description.trim(),
     status: form.status,
     priority: form.priority,
-    type: form.type,
     dueAt: toApiDateTime(form.dueAt),
     projectLinks: form.projectLinks
       .filter((link) => link.projectId)

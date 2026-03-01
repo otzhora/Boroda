@@ -121,7 +121,6 @@ db.insert(tickets)
       description: "Add guided empty states, shortcuts, and an export action.",
       status: "IN_PROGRESS",
       priority: "HIGH",
-      type: "TASK",
       dueAt: null,
       createdAt: isoOffset(24),
       updatedAt: isoOffset(2)
@@ -132,7 +131,6 @@ db.insert(tickets)
       description: "Backend follow-up after failed staging replay.",
       status: "READY",
       priority: "CRITICAL",
-      type: "BUG",
       dueAt: null,
       createdAt: isoOffset(40),
       updatedAt: isoOffset(5)
@@ -143,7 +141,6 @@ db.insert(tickets)
       description: "Needs manual AWS console verification after plan review.",
       status: "MANUAL_UI",
       priority: "MEDIUM",
-      type: "MANUAL",
       dueAt: null,
       createdAt: isoOffset(36),
       updatedAt: isoOffset(8)
@@ -154,7 +151,6 @@ db.insert(tickets)
       description: "Close out the initial discovery thread.",
       status: "DONE",
       priority: "LOW",
-      type: "CHORE",
       dueAt: null,
       createdAt: isoOffset(84),
       updatedAt: isoOffset(20)

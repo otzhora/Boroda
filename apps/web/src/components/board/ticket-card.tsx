@@ -38,7 +38,6 @@ function TicketCardContent({ ticket }: { ticket: BoardTicket }) {
         </span>
       </div>
       <h4 className="m-0 text-[0.98rem] font-semibold leading-6 text-ink-50">{ticket.title}</h4>
-      <p className="m-0 text-sm text-ink-300">{ticket.type}</p>
       {ticket.projectBadges.length ? (
         <div className="flex flex-wrap gap-2">
           {ticket.projectBadges.map((badge) => (

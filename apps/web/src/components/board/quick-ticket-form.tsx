@@ -1,13 +1,12 @@
 import type { Ref } from "react";
-import { BOARD_STATUS_ORDER, TICKET_PRIORITIES, TICKET_TYPES, statusLabelMap } from "../../lib/constants";
-import type { Project, TicketPriority, TicketStatus, TicketType } from "../../lib/types";
+import { BOARD_STATUS_ORDER, TICKET_PRIORITIES, statusLabelMap } from "../../lib/constants";
+import type { Project, TicketPriority, TicketStatus } from "../../lib/types";
 
 export interface QuickTicketFormState {
   title: string;
   projectId: string;
   status: TicketStatus;
   priority: TicketPriority;
-  type: TicketType;
 }
 
 interface QuickTicketFormProps {
@@ -44,8 +43,7 @@ export function createEmptyQuickTicketForm(): QuickTicketFormState {
     title: "",
     projectId: "",
     status: "INBOX",
-    priority: "MEDIUM",
-    type: "TASK"
+    priority: "MEDIUM"
   };
 }
 
@@ -131,7 +129,7 @@ export function QuickTicketForm({
           </label>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3">
           <label className="grid min-w-0 gap-2">
             <span className={fieldLabelClassName}>Priority</span>
             <select
@@ -147,26 +145,6 @@ export function QuickTicketForm({
               {TICKET_PRIORITIES.map((priority) => (
                 <option key={priority} value={priority}>
                   {priority}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="grid min-w-0 gap-2">
-            <span className={fieldLabelClassName}>Type</span>
-            <select
-              className={fieldClassName}
-              value={form.type}
-              onChange={(event) =>
-                onChange((current) => ({
-                  ...current,
-                  type: event.target.value as TicketType
-                }))
-              }
-            >
-              {TICKET_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
                 </option>
               ))}
             </select>
