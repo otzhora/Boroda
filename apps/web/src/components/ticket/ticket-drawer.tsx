@@ -147,11 +147,13 @@ export function TicketDrawer(props: TicketDrawerProps) {
 
   const metadata = useMemo(
     () => [
+      { label: "Branch", value: form.branch.trim() || "No branch" },
+      { label: "Jira ticket", value: form.jiraTicket.trim() || "No Jira ticket" },
       { label: "Status", value: statusLabelMap[form.status] },
       { label: "Priority", value: form.priority },
       { label: "Due at", value: formatDateTime(ticket?.dueAt ?? null) }
     ],
-    [form.priority, form.status, ticket?.dueAt]
+    [form.branch, form.jiraTicket, form.priority, form.status, ticket?.dueAt]
   );
 
   const handleCancelEdit = () => {

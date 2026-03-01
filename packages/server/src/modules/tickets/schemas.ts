@@ -12,6 +12,12 @@ const statusEnum = z.enum([
 
 const priorityEnum = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 const relationshipEnum = z.enum(["PRIMARY", "RELATED", "DEPENDENCY"]);
+const optionalTicketTextField = z
+  .string()
+  .trim()
+  .transform((value) => (value.length ? value : null))
+  .nullable()
+  .optional();
 
 export const ticketIdParamSchema = z.object({
   id: z.coerce.number().int().positive()
@@ -31,6 +37,8 @@ export const ticketQuerySchema = z.object({
 export const createTicketSchema = z.object({
   title: z.string().min(1),
   description: z.string().default(""),
+  branch: optionalTicketTextField,
+  jiraTicket: optionalTicketTextField,
   status: statusEnum.default("INBOX"),
   priority: priorityEnum.default("MEDIUM"),
   dueAt: z.string().datetime().optional().nullable(),

@@ -221,6 +221,8 @@ describe("BoardPage", () => {
     expect(mocks.createMutate).toHaveBeenCalledWith({
       title: "Wire board filters",
       description: "",
+      branch: null,
+      jiraTicket: null,
       status: "READY",
       priority: "HIGH",
       dueAt: null,

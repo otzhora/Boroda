@@ -413,6 +413,8 @@ export async function createTicket(
   input: {
     title: string;
     description: string;
+    branch?: string | null;
+    jiraTicket?: string | null;
     status: string;
     priority: string;
     dueAt?: string | null;
@@ -432,6 +434,8 @@ export async function createTicket(
       key,
       title: input.title,
       description: input.description,
+      branch: input.branch ?? null,
+      jiraTicket: input.jiraTicket ?? null,
       status: input.status,
       priority: input.priority,
       dueAt: input.dueAt ?? null,
@@ -459,6 +463,8 @@ export async function updateTicket(
   input: Partial<{
     title: string;
     description: string;
+    branch: string | null;
+    jiraTicket: string | null;
     status: string;
     priority: string;
     dueAt: string | null;
@@ -473,6 +479,8 @@ export async function updateTicket(
     .set({
       title: input.title ?? existing.title,
       description: input.description ?? existing.description,
+      branch: input.branch === undefined ? existing.branch : input.branch,
+      jiraTicket: input.jiraTicket === undefined ? existing.jiraTicket : input.jiraTicket,
       status: input.status ?? existing.status,
       priority: input.priority ?? existing.priority,
       dueAt: input.dueAt === undefined ? existing.dueAt : input.dueAt,

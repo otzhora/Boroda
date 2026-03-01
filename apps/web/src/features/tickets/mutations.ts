@@ -8,6 +8,8 @@ import { createEmptyTicketForm, toTicketForm, type TicketFormState } from "./for
 interface TicketPayload {
   title: string;
   description: string;
+  branch: string | null;
+  jiraTicket: string | null;
   status: string;
   priority: string;
   dueAt: string | null;

@@ -43,6 +43,8 @@ export const tickets = sqliteTable(
     key: text("key").notNull().unique(),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
+    branch: text("branch"),
+    jiraTicket: text("jira_ticket"),
     status: text("status").notNull(),
     priority: text("priority").notNull(),
     dueAt: text("due_at"),

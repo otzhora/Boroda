@@ -105,6 +105,8 @@ export interface Ticket {
   key: string;
   title: string;
   description: string;
+  branch: string | null;
+  jiraTicket: string | null;
   status: TicketStatus;
   priority: TicketPriority;
   dueAt: string | null;

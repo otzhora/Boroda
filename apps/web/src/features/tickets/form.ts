@@ -13,6 +13,8 @@ export interface TicketProjectLinkFormState {
 export interface TicketFormState {
   title: string;
   description: string;
+  branch: string;
+  jiraTicket: string;
   status: TicketStatus;
   priority: TicketPriority;
   dueAt: string;
@@ -23,6 +25,8 @@ export function createEmptyTicketForm(): TicketFormState {
   return {
     title: "",
     description: "",
+    branch: "",
+    jiraTicket: "",
     status: "INBOX",
     priority: "MEDIUM",
     dueAt: "",
@@ -61,10 +65,17 @@ function toApiDateTime(value: string) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function toOptionalApiText(value: string) {
+  const trimmedValue = value.trim();
+  return trimmedValue.length ? trimmedValue : null;
+}
+
 export function toTicketForm(ticket: Ticket): TicketFormState {
   return {
     title: ticket.title,
     description: ticket.description,
+    branch: ticket.branch ?? "",
+    jiraTicket: ticket.jiraTicket ?? "",
     status: ticket.status,
     priority: ticket.priority,
     dueAt: toDateTimeInput(ticket.dueAt),
@@ -79,6 +90,8 @@ export function toTicketPayload(form: TicketFormState) {
   return {
     title: form.title.trim(),
     description: form.description.trim(),
+    branch: toOptionalApiText(form.branch),
+    jiraTicket: toOptionalApiText(form.jiraTicket),
     status: form.status,
     priority: form.priority,
     dueAt: toApiDateTime(form.dueAt),

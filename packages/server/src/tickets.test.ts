@@ -77,6 +77,8 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
     payload: {
       title: "Finish backend refactor",
       description: "Need app repo changes and infra follow-up",
+      branch: "feature/backend-refactor",
+      jiraTicket: "PAY-128",
       status: "IN_PROGRESS",
       priority: "HIGH",
       projectLinks: [
@@ -89,6 +91,8 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   assert.equal(createResponse.statusCode, 200);
   const createdTicket = createResponse.json();
   assert.equal(createdTicket.key, "BRD-1");
+  assert.equal(createdTicket.branch, "feature/backend-refactor");
+  assert.equal(createdTicket.jiraTicket, "PAY-128");
   assert.equal(createdTicket.projectLinks.length, 2);
   assert.equal(createdTicket.activities[0].type, "ticket.created");
 
@@ -106,6 +110,8 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
     method: "PATCH",
     url: `/api/tickets/${createdTicket.id}`,
     payload: {
+      branch: "release/backend-refactor",
+      jiraTicket: null,
       status: "DONE",
       priority: "CRITICAL",
       projectLinks: [{ projectId: relatedProject.id, relationship: "PRIMARY" }]
@@ -114,6 +120,8 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
 
   assert.equal(updateResponse.statusCode, 200);
   const updatedTicket = updateResponse.json();
+  assert.equal(updatedTicket.branch, "release/backend-refactor");
+  assert.equal(updatedTicket.jiraTicket, null);
   assert.equal(updatedTicket.status, "DONE");
   assert.equal(updatedTicket.priority, "CRITICAL");
   assert.deepEqual(

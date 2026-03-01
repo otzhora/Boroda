@@ -15,6 +15,13 @@
       "when": 1772292507714,
       "tag": "0002_remove_ticket_type",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1772292507715,
+      "tag": "0003_add_ticket_branch_and_jira_ticket",
+      "breakpoints": true
     }
   ]
 }

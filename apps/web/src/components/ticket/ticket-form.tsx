@@ -369,6 +369,40 @@ export function TicketMetaFields({ form, onChange }: TicketMetaFieldsProps) {
   return (
     <div className="grid gap-4">
       <label className="grid gap-2">
+        <span className={labelClassName}>Branch</span>
+        <input
+          className={inputClassName}
+          type="text"
+          inputMode="text"
+          placeholder="feature/ticket-context…"
+          value={form.branch}
+          onChange={(event) =>
+            onChange((current) => ({
+              ...current,
+              branch: event.target.value
+            }))
+          }
+        />
+      </label>
+
+      <label className="grid gap-2">
+        <span className={labelClassName}>Jira ticket</span>
+        <input
+          className={inputClassName}
+          type="text"
+          inputMode="text"
+          placeholder="PROJ-123…"
+          value={form.jiraTicket}
+          onChange={(event) =>
+            onChange((current) => ({
+              ...current,
+              jiraTicket: event.target.value
+            }))
+          }
+        />
+      </label>
+
+      <label className="grid gap-2">
         <span className={labelClassName}>Status</span>
         <select
           className={inputClassName}

@@ -27,6 +27,8 @@ const ticketSchema = z.object({
   key: z.string(),
   title: z.string(),
   description: z.string(),
+  branch: z.string().nullable(),
+  jiraTicket: z.string().nullable(),
   status: z.enum(["INBOX", "READY", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "MANUAL_UI", "DONE"]),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
   dueAt: z.string().nullable(),

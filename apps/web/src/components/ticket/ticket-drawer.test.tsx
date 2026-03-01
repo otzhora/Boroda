@@ -48,6 +48,8 @@ const ticket: Ticket = {
   key: "BRD-12",
   title: "Fix save state in drawer",
   description: "Saving should return the ticket drawer to read mode.",
+  branch: null,
+  jiraTicket: null,
   status: "INBOX",
   priority: "HIGH",
   dueAt: null,
@@ -60,6 +62,39 @@ const ticket: Ticket = {
 };
 
 describe("TicketDrawer", () => {
+  it("renders branch and jira ticket metadata in read mode", () => {
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          branch: "feature/fix-save-state",
+          jiraTicket: "BRD-321"
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm({
+          ...ticket,
+          branch: "feature/fix-save-state",
+          jiraTicket: "BRD-321"
+        })}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("feature/fix-save-state")).toBeInTheDocument();
+    expect(screen.getByText("BRD-321")).toBeInTheDocument();
+  });
+
   it("renders markdown descriptions in read mode", () => {
     render(
       <TicketDrawer
