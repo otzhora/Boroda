@@ -1,6 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAppHeader } from "../app/router";
+import {
+  useJiraSettingsQuery,
+  useUpdateJiraSettingsMutation,
+  type UpdateJiraSettingsPayload
+} from "../features/jira/queries";
 import { apiClient, apiClientBlob } from "../lib/api-client";
 
 const railClassName = "lg:sticky lg:top-20 lg:self-start";
@@ -10,6 +16,24 @@ const sectionHeaderClassName = "m-0 text-xs font-semibold uppercase tracking-[0.
 const buttonClassName =
   "inline-flex min-h-10 items-center justify-center gap-2 rounded-[8px] border border-white/10 bg-white/[0.02] px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.05] disabled:cursor-progress disabled:opacity-70";
 const spinnerClassName = "h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent";
+const fieldClassName = "grid gap-1.5";
+const inputClassName =
+  "min-h-10 rounded-[10px] border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300";
+const helperTextClassName = "m-0 text-xs text-ink-200";
+
+interface JiraSettingsFormState {
+  baseUrl: string;
+  email: string;
+  apiToken: string;
+}
+
+function createEmptyJiraSettingsFormState(): JiraSettingsFormState {
+  return {
+    baseUrl: "",
+    email: "",
+    apiToken: ""
+  };
+}
 
 export function SettingsPage() {
   const { setActions } = useAppHeader();
@@ -17,14 +41,36 @@ export function SettingsPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [jiraForm, setJiraForm] = useState<JiraSettingsFormState>(createEmptyJiraSettingsFormState());
+
+  const jiraSettingsQuery = useJiraSettingsQuery();
+  const updateJiraSettingsMutation = useUpdateJiraSettingsMutation();
 
   useEffect(() => {
-    setActions(null);
+    setActions(
+      <Link to="/jira" className={buttonClassName}>
+        Jira issues
+      </Link>
+    );
+
     document.title = "Settings · Boroda";
+
     return () => {
       setActions(null);
     };
   }, [setActions]);
+
+  useEffect(() => {
+    if (!jiraSettingsQuery.data) {
+      return;
+    }
+
+    setJiraForm((current) => ({
+      baseUrl: current.baseUrl || jiraSettingsQuery.data.baseUrl,
+      email: current.email || jiraSettingsQuery.data.email,
+      apiToken: ""
+    }));
+  }, [jiraSettingsQuery.data]);
 
   const exportBoardData = useEffectEvent(async () => {
     setIsExporting(true);
@@ -55,7 +101,7 @@ export function SettingsPage() {
 
     try {
       const snapshot = JSON.parse(await file.text()) as unknown;
-      const result = await apiClient<{
+      await apiClient<{
         ok: true;
         counts: {
           projects: number;
@@ -79,6 +125,27 @@ export function SettingsPage() {
     }
   });
 
+  const saveJiraSettings = useEffectEvent(async () => {
+    const payload: UpdateJiraSettingsPayload = {
+      baseUrl: jiraForm.baseUrl.trim(),
+      email: jiraForm.email.trim()
+    };
+
+    if (jiraForm.apiToken.trim()) {
+      payload.apiToken = jiraForm.apiToken.trim();
+    }
+
+    await updateJiraSettingsMutation.mutateAsync(payload);
+    setJiraForm((current) => ({
+      ...current,
+      apiToken: ""
+    }));
+  });
+
+  const jiraSettingsStatus = jiraSettingsQuery.data?.hasApiToken
+    ? "API token saved"
+    : "No API token saved";
+
   return (
     <section className="mx-auto grid w-full min-w-0 max-w-5xl gap-4 lg:grid-cols-[12rem_minmax(0,42rem)] lg:gap-6">
       <input
@@ -98,6 +165,9 @@ export function SettingsPage() {
           Settings
         </h1>
         <nav aria-label="Settings sections" className="grid border-t border-white/8 pt-1">
+          <a href="#settings-jira" className={navLinkClassName}>
+            Jira
+          </a>
           <a href="#settings-backups" className={navLinkClassName}>
             Backups
           </a>
@@ -105,6 +175,101 @@ export function SettingsPage() {
       </aside>
 
       <div className="min-w-0 border-t border-white/8">
+        <section id="settings-jira" aria-labelledby="settings-jira-heading" className="scroll-mt-20 border-b border-white/8">
+          <form
+            className="grid gap-4 px-1 py-4 sm:px-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveJiraSettings();
+            }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2 id="settings-jira-heading" className={sectionHeaderClassName}>
+                Jira
+              </h2>
+              <Link to="/jira" className={buttonClassName}>
+                Open issues
+              </Link>
+            </div>
+
+            <label className={fieldClassName}>
+              <span className="text-sm text-ink-100">Jira base URL</span>
+              <input
+                className={inputClassName}
+                type="url"
+                name="jira_base_url"
+                autoComplete="url"
+                placeholder="https://your-company.atlassian.net…"
+                required
+                value={jiraForm.baseUrl}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setJiraForm((current) => ({
+                    ...current,
+                    baseUrl: value
+                  }));
+                }}
+              />
+            </label>
+
+            <label className={fieldClassName}>
+              <span className="text-sm text-ink-100">Jira email</span>
+              <input
+                className={inputClassName}
+                type="email"
+                name="jira_email"
+                autoComplete="email"
+                spellCheck={false}
+                required
+                value={jiraForm.email}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setJiraForm((current) => ({
+                    ...current,
+                    email: value
+                  }));
+                }}
+              />
+            </label>
+
+            <label className={fieldClassName}>
+              <span className="text-sm text-ink-100">Jira API token</span>
+              <input
+                className={inputClassName}
+                type="password"
+                name="jira_api_token"
+                autoComplete="off"
+                placeholder={jiraSettingsQuery.data?.hasApiToken ? "Leave blank to keep existing token…" : "Paste API token…"}
+                value={jiraForm.apiToken}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setJiraForm((current) => ({
+                    ...current,
+                    apiToken: value
+                  }));
+                }}
+              />
+            </label>
+
+            <p className={helperTextClassName} aria-live="polite">
+              {jiraSettingsStatus}
+            </p>
+
+            {updateJiraSettingsMutation.error ? (
+              <p className="m-0 text-sm text-danger-400" role="alert">
+                {updateJiraSettingsMutation.error.message}
+              </p>
+            ) : null}
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="submit" className={buttonClassName} disabled={updateJiraSettingsMutation.isPending}>
+                {updateJiraSettingsMutation.isPending ? <span className={spinnerClassName} aria-hidden="true" /> : null}
+                <span>{updateJiraSettingsMutation.isPending ? "Saving…" : "Save Jira settings"}</span>
+              </button>
+            </div>
+          </form>
+        </section>
+
         <section id="settings-backups" aria-labelledby="settings-backups-heading" className="scroll-mt-20 border-b border-white/8">
           <div className="grid gap-3 px-1 py-4 sm:px-2">
             <h2 id="settings-backups-heading" className={sectionHeaderClassName}>

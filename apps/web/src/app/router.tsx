@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { createBrowserRouter, NavLink, Outlet, RouterProvider } from "react-router-dom";
 import { BoardPage } from "../pages/board-page";
+import { JiraPage } from "../pages/jira-page";
 import { ProjectsPage } from "../pages/projects-page";
 import { SettingsPage } from "../pages/settings-page";
 
@@ -59,6 +60,18 @@ function AppShell() {
                 >
                   Projects
                 </NavLink>
+                <NavLink
+                  to="/jira"
+                  className={({ isActive }) =>
+                    `inline-flex min-h-10 items-center rounded-full px-3.5 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "border border-white/12 bg-white/10 text-ink-50"
+                        : "text-ink-200 hover:bg-white/5 hover:text-ink-50"
+                    }`
+                  }
+                >
+                  Jira
+                </NavLink>
               </nav>
             </div>
             <div className="flex items-center gap-2">{actions}</div>
@@ -79,6 +92,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <BoardPage /> },
       { path: "projects", element: <ProjectsPage /> },
+      { path: "jira", element: <JiraPage /> },
       { path: "settings", element: <SettingsPage /> }
     ]
   }

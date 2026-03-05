@@ -7,6 +7,7 @@ import { getConfig } from "./config";
 import { exportRoutes } from "./modules/export/routes";
 import { fsRoutes } from "./modules/fs/routes";
 import { healthRoutes } from "./modules/health/routes";
+import { jiraRoutes } from "./modules/integrations/jira/routes";
 import { windowsTerminalRoutes } from "./modules/integrations/windows-terminal/routes";
 import { projectRoutes } from "./modules/projects/routes";
 import { ticketRoutes } from "./modules/tickets/routes";
@@ -40,6 +41,7 @@ export function buildApp() {
     api.register(workContextRoutes);
     api.register(fsRoutes);
     api.register(exportRoutes);
+    api.register(jiraRoutes);
     api.register(windowsTerminalRoutes);
   }, { prefix: "/api" });
 

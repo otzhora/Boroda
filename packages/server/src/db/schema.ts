@@ -111,6 +111,15 @@ export const ticketActivities = sqliteTable("ticket_activities", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
 });
 
+export const jiraSettings = sqliteTable("jira_settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  baseUrl: text("base_url").notNull(),
+  email: text("email").notNull(),
+  apiToken: text("api_token").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
 export const projectRelations = relations(projects, ({ many }) => ({
   folders: many(projectFolders),
   ticketLinks: many(ticketProjectLinks)
