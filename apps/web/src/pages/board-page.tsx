@@ -9,7 +9,6 @@ import {
 } from "../components/board/quick-ticket-form";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
 import { ModalDialog } from "../components/ui/modal-dialog";
-import { OverflowMenu } from "../components/ui/overflow-menu";
 import { useAppHeader } from "../app/router";
 import { useBoardQuery, type BoardFilters } from "../features/board/queries";
 import { useProjectsQuery } from "../features/projects/queries";
@@ -27,7 +26,6 @@ import {
   useUpdateTicketMutation
 } from "../features/tickets/mutations";
 import { useTicketQuery } from "../features/tickets/queries";
-import { apiClient, apiClientBlob } from "../lib/api-client";
 import { TICKET_PRIORITIES } from "../lib/constants";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
@@ -84,13 +82,8 @@ export function BoardPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<TicketFormState>(createEmptyTicketForm());
   const [ticketSaveSuccessCount, setTicketSaveSuccessCount] = useState(0);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const quickCreateTitleRef = useRef<HTMLInputElement>(null);
-  const importInputRef = useRef<HTMLInputElement>(null);
   const deferredBoardFilters = useDeferredValue(boardFilters);
 
   const boardQuery = useBoardQuery(deferredBoardFilters);
@@ -155,7 +148,6 @@ export function BoardPage() {
   const openTicketInWindowsTerminalMutation = useOpenTicketInWindowsTerminalMutation(selectedTicketId);
 
   const actionError =
-    exportError ??
     createTicketMutation.error?.message ??
     updateTicketMutation.error?.message ??
     deleteTicketMutation.error?.message ??
@@ -166,76 +158,6 @@ export function BoardPage() {
   const projects = projectsQuery.data ?? [];
   const totalTickets = columns.reduce((count, column) => count + column.tickets.length, 0);
   const boardHasFilters = hasBoardFilters(boardFilters);
-
-  const exportBoardData = useEffectEvent(async () => {
-    setExportError(null);
-    setStatusMessage(null);
-    setIsExporting(true);
-
-    try {
-      const blob = await apiClientBlob("/api/export");
-      const downloadUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      const dateStamp = new Date().toISOString().slice(0, 10);
-
-      anchor.href = downloadUrl;
-      anchor.download = `boroda-export-${dateStamp}.json`;
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(downloadUrl);
-      setStatusMessage("Backup downloaded.");
-    } catch (error) {
-      setExportError(error instanceof Error ? error.message : "Export failed");
-    } finally {
-      setIsExporting(false);
-    }
-  });
-
-  const importBoardData = useEffectEvent(async (file: File) => {
-    if (!window.confirm("Import will replace the current local workspace. Continue?")) {
-      return;
-    }
-
-    setExportError(null);
-    setStatusMessage(null);
-    setIsImporting(true);
-
-    try {
-      const snapshot = JSON.parse(await file.text()) as unknown;
-      const result = await apiClient<{
-        ok: true;
-        counts: {
-          projects: number;
-          tickets: number;
-        };
-      }>("/api/import", {
-        method: "POST",
-        body: JSON.stringify({
-          replaceExisting: true,
-          snapshot
-        })
-      });
-
-      setSelectedTicketId(null);
-      setEditForm(createEmptyTicketForm());
-      setQuickCreateForm(createEmptyQuickTicketForm());
-      await queryClient.invalidateQueries();
-      setStatusMessage(`Imported ${result.counts.projects} projects and ${result.counts.tickets} tickets.`);
-    } catch (error) {
-      if (error instanceof SyntaxError) {
-        setExportError("Selected file is not valid JSON.");
-      } else {
-        setExportError(error instanceof Error ? error.message : "Import failed");
-      }
-    } finally {
-      setIsImporting(false);
-
-      if (importInputRef.current) {
-        importInputRef.current.value = "";
-      }
-    }
-  });
 
   const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
     if (event.defaultPrevented) {
@@ -284,67 +206,22 @@ export function BoardPage() {
         >
           Create
         </button>
-        <OverflowMenu buttonLabel="Open board actions">
-          <button
-            type="button"
-            className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-100 transition-colors hover:bg-white/5"
-            onClick={() => {
-              importInputRef.current?.click();
-            }}
-            disabled={isImporting}
-            role="menuitem"
-          >
-            {isImporting ? "Importing…" : "Import backup…"}
-          </button>
-          <button
-            type="button"
-            className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-100 transition-colors hover:bg-white/5"
-            onClick={() => void exportBoardData()}
-            disabled={isExporting}
-            role="menuitem"
-          >
-            {isExporting ? "Exporting…" : "Export backup"}
-          </button>
-          <Link
-            to="/projects"
-            className="inline-flex min-h-10 items-center rounded-xl px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:bg-white/5"
-            role="menuitem"
-          >
-            Projects
-          </Link>
-        </OverflowMenu>
+        <Link to="/settings" className={secondaryButtonClassName}>
+          Settings
+        </Link>
       </>
     );
 
     return () => {
       setActions(null);
     };
-  }, [isExporting, isImporting, setActions]);
+  }, [setActions]);
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col gap-3">
-      <input
-        ref={importInputRef}
-        className="sr-only"
-        type="file"
-        accept="application/json,.json"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-
-          if (file) {
-            void importBoardData(file);
-          }
-        }}
-      />
-
       {actionError ? (
         <p className={`${softPanelClassName} m-0 text-sm text-danger-400`} role="alert">
           {actionError}
-        </p>
-      ) : null}
-      {statusMessage ? (
-        <p className={`${softPanelClassName} m-0 text-sm text-ink-50`} role="status">
-          {statusMessage}
         </p>
       ) : null}
 

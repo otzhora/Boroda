@@ -1,6 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { useAppHeader } from "../app/router";
 import { ModalDialog } from "../components/ui/modal-dialog";
 import { apiClient } from "../lib/api-client";
 import type {
@@ -55,6 +57,8 @@ const primaryButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.92] px-3 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-white disabled:cursor-progress disabled:opacity-70";
 const secondaryButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-progress disabled:opacity-70";
+const headerActionButtonClassName =
+  "inline-flex min-h-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-progress disabled:opacity-70";
 const dangerButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-red-400/24 bg-red-950/36 px-3 py-2 text-sm font-medium text-red-100 transition-colors hover:border-red-300/32 hover:bg-red-950/52 disabled:cursor-progress disabled:opacity-70";
 const subtleDangerButtonClassName =
@@ -173,6 +177,7 @@ function getFolderStatusClassName(existsOnDisk: boolean) {
 }
 
 export function ProjectsPage() {
+  const { setActions } = useAppHeader();
   const queryClient = useQueryClient();
   const [projectForm, setProjectForm] = useState<ProjectFormState>(createProjectFormState());
   const [slugTouched, setSlugTouched] = useState(false);
@@ -189,6 +194,18 @@ export function ProjectsPage() {
   useEffect(() => {
     document.title = "Projects · Boroda";
   }, []);
+
+  useEffect(() => {
+    setActions(
+      <Link to="/settings" className={headerActionButtonClassName}>
+        Settings
+      </Link>
+    );
+
+    return () => {
+      setActions(null);
+    };
+  }, [setActions]);
 
   const projectsQuery = useQuery({
     queryKey: PROJECTS_QUERY_KEY,

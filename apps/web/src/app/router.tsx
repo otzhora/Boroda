@@ -2,6 +2,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import { createBrowserRouter, NavLink, Outlet, RouterProvider } from "react-router-dom";
 import { BoardPage } from "../pages/board-page";
 import { ProjectsPage } from "../pages/projects-page";
+import { SettingsPage } from "../pages/settings-page";
 
 interface AppHeaderContextValue {
   actions: ReactNode;
@@ -77,7 +78,8 @@ const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <BoardPage /> },
-      { path: "projects", element: <ProjectsPage /> }
+      { path: "projects", element: <ProjectsPage /> },
+      { path: "settings", element: <SettingsPage /> }
     ]
   }
 ]);
