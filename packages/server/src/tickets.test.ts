@@ -308,6 +308,105 @@ test("refreshing linked Jira issues updates cached summaries", async () => {
   }
 });
 
+test("assigned Jira issues include linked Boroda tickets", async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          issues: [
+            {
+              key: "PAY-128",
+              fields: {
+                summary: "Backend refactor"
+              }
+            },
+            {
+              key: "OPS-42",
+              fields: {
+                summary: "Ops cleanup"
+              }
+            }
+          ],
+          total: 2
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json"
+          }
+        }
+      );
+
+    app.db.insert(schema.jiraSettings).values({
+      baseUrl: "https://jira.example.test",
+      email: "me@example.test",
+      apiToken: "secret-token"
+    }).run();
+
+    const firstTicketResponse = await app.inject({
+      method: "POST",
+      url: "/api/tickets",
+      payload: {
+        title: "Refactor backend service",
+        description: "",
+        jiraIssues: [{ key: "PAY-128", summary: "Backend refactor" }],
+        status: "READY",
+        priority: "HIGH",
+        projectLinks: []
+      }
+    });
+
+    const secondTicketResponse = await app.inject({
+      method: "POST",
+      url: "/api/tickets",
+      payload: {
+        title: "Follow-up checklist",
+        description: "",
+        jiraIssues: [{ key: "PAY-128", summary: "Backend refactor" }],
+        status: "IN_PROGRESS",
+        priority: "MEDIUM",
+        projectLinks: []
+      }
+    });
+
+    assert.equal(firstTicketResponse.statusCode, 200);
+    assert.equal(secondTicketResponse.statusCode, 200);
+
+    const linkedIssuesResponse = await app.inject({
+      method: "GET",
+      url: "/api/integrations/jira/issues/assigned/links"
+    });
+
+    assert.equal(linkedIssuesResponse.statusCode, 200);
+    const payload = linkedIssuesResponse.json();
+    assert.equal(payload.total, 2);
+    assert.equal(payload.linked, 1);
+    assert.equal(payload.unlinked, 1);
+
+    const payIssue = payload.issues.find((issue: { key: string }) => issue.key === "PAY-128");
+    const opsIssue = payload.issues.find((issue: { key: string }) => issue.key === "OPS-42");
+
+    assert.ok(payIssue);
+    assert.ok(opsIssue);
+    assert.equal(payIssue.borodaTickets.length, 2);
+    assert.deepEqual(
+      payIssue.borodaTickets.map((ticket: { title: string; status: string }) => ({
+        title: ticket.title,
+        status: ticket.status
+      })),
+      [
+        { title: "Follow-up checklist", status: "IN_PROGRESS" },
+        { title: "Refactor backend service", status: "READY" }
+      ]
+    );
+    assert.deepEqual(opsIssue.borodaTickets, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("ticket image uploads can be pasted and rendered back from local storage", async () => {
   const ticketResponse = await app.inject({
     method: "POST",

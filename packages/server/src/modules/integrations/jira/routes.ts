@@ -1,5 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
-import { listAssignedJiraIssues, getJiraSettings, upsertJiraSettings } from "./service";
+import {
+  listAssignedJiraIssues,
+  listAssignedJiraIssuesWithLinks,
+  getJiraSettings,
+  upsertJiraSettings
+} from "./service";
 import { updateJiraSettingsSchema } from "./schemas";
 
 export const jiraRoutes: FastifyPluginAsync = async (app) => {
@@ -14,5 +19,9 @@ export const jiraRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/integrations/jira/issues/assigned", async () => {
     return listAssignedJiraIssues(app);
+  });
+
+  app.get("/integrations/jira/issues/assigned/links", async () => {
+    return listAssignedJiraIssuesWithLinks(app);
   });
 };

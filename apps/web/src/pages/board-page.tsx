@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { BoardView } from "../components/board/board-view";
 import {
   createEmptyQuickTicketForm,
@@ -74,13 +74,23 @@ function toQuickCreatePayload(form: QuickTicketFormState) {
   };
 }
 
+function parseTicketId(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export function BoardPage() {
   const { setActions } = useAppHeader();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(EMPTY_BOARD_FILTERS);
   const [quickCreateForm, setQuickCreateForm] = useState<QuickTicketFormState>(createEmptyQuickTicketForm());
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => parseTicketId(searchParams.get("ticketId")));
   const [editForm, setEditForm] = useState<TicketFormState>(createEmptyTicketForm());
   const [ticketSaveSuccessCount, setTicketSaveSuccessCount] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -96,6 +106,29 @@ export function BoardPage() {
       setEditForm(toTicketForm(selectedTicketQuery.data));
     }
   }, [selectedTicketQuery.data]);
+
+  useEffect(() => {
+    const nextSelectedTicketId = parseTicketId(searchParams.get("ticketId"));
+    setSelectedTicketId((current) => (current === nextSelectedTicketId ? current : nextSelectedTicketId));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const currentTicketId = parseTicketId(searchParams.get("ticketId"));
+
+    if (currentTicketId === selectedTicketId) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+
+    if (selectedTicketId === null) {
+      nextSearchParams.delete("ticketId");
+    } else {
+      nextSearchParams.set("ticketId", String(selectedTicketId));
+    }
+
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [searchParams, selectedTicketId, setSearchParams]);
 
   useEffect(() => {
     queryClient.removeQueries({

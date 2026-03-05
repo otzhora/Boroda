@@ -1,7 +1,7 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { jiraSettings } from "../../../db/schema";
+import { jiraSettings, ticketJiraIssueLinks, tickets } from "../../../db/schema";
 import { AppError } from "../../../shared/errors";
 import { updateJiraSettingsSchema } from "./schemas";
 
@@ -19,6 +19,10 @@ interface JiraSearchResponse {
 
 function sanitizeBaseUrl(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+function normalizeIssueKey(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, "");
 }
 
 async function getStoredJiraSettings(app: FastifyInstance) {
@@ -195,6 +199,67 @@ export async function listAssignedJiraIssues(app: FastifyInstance) {
     jql: "assignee = currentUser() ORDER BY updated DESC",
     maxResults: 200
   });
+}
+
+export async function listAssignedJiraIssuesWithLinks(app: FastifyInstance) {
+  const assignedIssues = await listAssignedJiraIssues(app);
+  const normalizedIssueKeys = assignedIssues.issues.map((issue) => normalizeIssueKey(issue.key));
+
+  const linkedBorodaTickets = normalizedIssueKeys.length
+    ? app.db
+        .select({
+          issueKey: ticketJiraIssueLinks.issueKey,
+          id: tickets.id,
+          key: tickets.key,
+          title: tickets.title,
+          status: tickets.status,
+          priority: tickets.priority,
+          updatedAt: tickets.updatedAt
+        })
+        .from(ticketJiraIssueLinks)
+        .innerJoin(tickets, eq(ticketJiraIssueLinks.ticketId, tickets.id))
+        .where(and(inArray(ticketJiraIssueLinks.issueKey, normalizedIssueKeys), isNull(tickets.archivedAt)))
+        .orderBy(desc(tickets.updatedAt), desc(tickets.id))
+        .all()
+    : [];
+
+  const borodaTicketsByIssueKey = new Map<
+    string,
+    Array<{
+      id: number;
+      key: string;
+      title: string;
+      status: string;
+      priority: string;
+      updatedAt: string;
+    }>
+  >();
+
+  for (const ticket of linkedBorodaTickets) {
+    const existing = borodaTicketsByIssueKey.get(ticket.issueKey) ?? [];
+    existing.push({
+      id: ticket.id,
+      key: ticket.key,
+      title: ticket.title,
+      status: ticket.status,
+      priority: ticket.priority,
+      updatedAt: ticket.updatedAt
+    });
+    borodaTicketsByIssueKey.set(ticket.issueKey, existing);
+  }
+
+  const issues = assignedIssues.issues.map((issue) => ({
+    key: issue.key,
+    summary: issue.summary,
+    borodaTickets: borodaTicketsByIssueKey.get(normalizeIssueKey(issue.key)) ?? []
+  }));
+
+  return {
+    issues,
+    total: assignedIssues.total,
+    linked: issues.filter((issue) => issue.borodaTickets.length > 0).length,
+    unlinked: issues.filter((issue) => issue.borodaTickets.length === 0).length
+  };
 }
 
 export async function getJiraIssuesByKeys(app: FastifyInstance, issueKeys: string[]) {

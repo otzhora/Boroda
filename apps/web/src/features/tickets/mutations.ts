@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
 import type { BoardResponse, Ticket, TicketStatus } from "../../lib/types";
 import { boardQueryKey, type BoardFilters } from "../board/queries";
+import { assignedJiraIssueLinksQueryKey, assignedJiraIssuesQueryKey } from "../jira/queries";
 import { ticketQueryKey } from "./queries";
 import { createEmptyTicketForm, toTicketForm, type TicketFormState } from "./form";
 
@@ -51,6 +52,8 @@ export function useCreateTicketMutation(options: {
       options.onCreated(ticket);
       void queryClient.invalidateQueries({ queryKey: ["board"] });
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
+      void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
       void queryClient.invalidateQueries({ queryKey: ticketQueryKey(ticket.id) });
     }
   });
@@ -78,6 +81,8 @@ export function useUpdateTicketMutation(options: {
       options.onUpdated(toTicketForm(ticket));
       void queryClient.invalidateQueries({ queryKey: ["board"] });
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
+      void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
       void queryClient.invalidateQueries({ queryKey: ticketQueryKey(ticket.id) });
     }
   });
@@ -107,6 +112,8 @@ export function useDeleteTicketMutation(options: {
       options.onReset(createEmptyTicketForm());
       void queryClient.invalidateQueries({ queryKey: ["board"] });
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
+      void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
 
       if (deletedTicketId !== null) {
         void queryClient.removeQueries({ queryKey: ticketQueryKey(deletedTicketId) });
@@ -218,6 +225,7 @@ export function useRefreshTicketJiraLinksMutation(ticketId: number | null) {
     },
     onSuccess: (ticket) => {
       void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
       void queryClient.invalidateQueries({ queryKey: ticketQueryKey(ticket.id) });
     }
   });

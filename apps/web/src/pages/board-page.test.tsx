@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 
 const mocks = vi.hoisted(() => ({
   useBoardQuery: vi.fn(),
@@ -123,13 +124,15 @@ vi.mock("../components/board/board-view", () => ({
 
 import { BoardPage } from "./board-page";
 
-function renderBoardPage() {
+function renderBoardPage(options?: { initialEntries?: string[] }) {
   const queryClient = new QueryClient();
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <BoardPage />
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={options?.initialEntries}>
+      <QueryClientProvider client={queryClient}>
+        <BoardPage />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
@@ -328,6 +331,13 @@ describe("BoardPage", () => {
 
     await user.keyboard("{Escape}");
 
+    expect(screen.getByTestId("ticket-drawer")).toBeInTheDocument();
+  });
+
+  it("opens the deep-linked ticket from the search params", () => {
+    renderBoardPage({ initialEntries: ["/?ticketId=12"] });
+
+    expect(mocks.useTicketQuery).toHaveBeenLastCalledWith(12);
     expect(screen.getByTestId("ticket-drawer")).toBeInTheDocument();
   });
 });
