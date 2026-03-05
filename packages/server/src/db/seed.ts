@@ -1,4 +1,5 @@
-import { eq } from "drizzle-orm";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { db } from "./client";
 import {
   projectFolders,
@@ -10,190 +11,235 @@ import {
   workContexts
 } from "./schema";
 
+const repoRoot = fileURLToPath(new URL("../../../..", import.meta.url));
+const mockReposRoot = path.resolve(repoRoot, "data/mock-repos");
+
 function isoOffset(hoursAgo: number) {
   return new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString();
 }
 
-async function getProjectId(slug: string) {
-  const project = db.select({ id: projects.id }).from(projects).where(eq(projects.slug, slug)).get();
-
-  if (!project) {
-    throw new Error(`Seed project missing after insert: ${slug}`);
-  }
-
-  return project.id;
-}
-
-async function getTicketId(key: string) {
-  const ticket = db.select({ id: tickets.id }).from(tickets).where(eq(tickets.key, key)).get();
-
-  if (!ticket) {
-    throw new Error(`Seed ticket missing after insert: ${key}`);
-  }
-
-  return ticket.id;
-}
-
-const existingRecords =
-  db.select({ count: projects.id }).from(projects).all().length +
-  db.select({ count: tickets.id }).from(tickets).all().length;
-
-if (existingRecords > 0) {
-  console.log("Seed skipped because the database already contains data.");
-  process.exit(0);
+function mockRepoPath(folderName: string) {
+  return path.resolve(mockReposRoot, folderName);
 }
 
 const seedProjects = [
   {
-    name: "Boroda Product",
-    slug: "boroda-product",
-    description: "Local planning board and frontend shell.",
-    color: "#b07e3e",
-    createdAt: isoOffset(72),
+    name: "Hello Contacts API (.NET)",
+    slug: "hello-contacts-dotnet",
+    description: "ASP.NET minimal API sample with in-memory contacts CRUD.",
+    color: "#2f6690",
+    createdAt: isoOffset(120),
+    updatedAt: isoOffset(4)
+  },
+  {
+    name: "Task Notes API (TypeScript)",
+    slug: "task-notes-typescript",
+    description: "Express + TypeScript service with hello route and notes CRUD.",
+    color: "#1f7a8c",
+    createdAt: isoOffset(96),
     updatedAt: isoOffset(3)
   },
   {
-    name: "Payments API",
-    slug: "payments-api",
-    description: "Backend service work and migration follow-up.",
-    color: "#355c7d",
-    createdAt: isoOffset(96),
-    updatedAt: isoOffset(6)
-  },
-  {
-    name: "Ops Terraform",
-    slug: "ops-terraform",
-    description: "Infra changes that need manual console verification.",
-    color: "#4f6f52",
-    createdAt: isoOffset(120),
-    updatedAt: isoOffset(12)
+    name: "Habit Tracker API (Python)",
+    slug: "habit-tracker-python",
+    description: "FastAPI sample for habit tracking with simple CRUD endpoints.",
+    color: "#4d7c0f",
+    createdAt: isoOffset(84),
+    updatedAt: isoOffset(2)
   }
 ];
 
-db.insert(projects).values(seedProjects).run();
+const seedTickets = [
+  {
+    key: "BRD-1",
+    title: "Add list endpoint for contacts",
+    description: "Expose `GET /contacts` and seed two sample records.",
+    branch: "feature/contacts-list",
+    jiraTicket: "DEMO-101",
+    status: "IN_PROGRESS",
+    priority: "HIGH",
+    dueAt: null,
+    createdAt: isoOffset(48),
+    updatedAt: isoOffset(2)
+  },
+  {
+    key: "BRD-2",
+    title: "Implement create/update/delete contacts",
+    description: "Finish core CRUD handlers in Program.cs for the .NET sample.",
+    branch: "feature/contacts-crud",
+    jiraTicket: null,
+    status: "READY",
+    priority: "MEDIUM",
+    dueAt: null,
+    createdAt: isoOffset(56),
+    updatedAt: isoOffset(6)
+  },
+  {
+    key: "BRD-3",
+    title: "Wire TypeScript notes router",
+    description: "Add hello endpoint and in-memory CRUD routes for notes.",
+    branch: "feature/notes-router",
+    jiraTicket: "DEMO-102",
+    status: "IN_PROGRESS",
+    priority: "HIGH",
+    dueAt: null,
+    createdAt: isoOffset(44),
+    updatedAt: isoOffset(3)
+  },
+  {
+    key: "BRD-4",
+    title: "Add basic input validation for notes",
+    description: "Reject blank note titles and return 422 responses.",
+    branch: "feature/notes-validation",
+    jiraTicket: null,
+    status: "BLOCKED",
+    priority: "LOW",
+    dueAt: null,
+    createdAt: isoOffset(38),
+    updatedAt: isoOffset(9)
+  },
+  {
+    key: "BRD-5",
+    title: "Build Python habits CRUD",
+    description: "Create `/habits` list/create/update/delete endpoints in FastAPI.",
+    branch: "feature/habits-crud",
+    jiraTicket: "DEMO-103",
+    status: "MANUAL_UI",
+    priority: "MEDIUM",
+    dueAt: null,
+    createdAt: isoOffset(34),
+    updatedAt: isoOffset(5)
+  },
+  {
+    key: "BRD-6",
+    title: "Document run commands for all sample repos",
+    description: "Add README quick-start commands for C#, TS, and Python samples.",
+    branch: "docs/sample-repos",
+    jiraTicket: null,
+    status: "DONE",
+    priority: "LOW",
+    dueAt: null,
+    createdAt: isoOffset(72),
+    updatedAt: isoOffset(12)
+  }
+] as const;
 
-const borodaProjectId = await getProjectId("boroda-product");
-const paymentsProjectId = await getProjectId("payments-api");
-const opsProjectId = await getProjectId("ops-terraform");
+db.transaction((tx) => {
+  tx.delete(ticketActivities).run();
+  tx.delete(workContexts).run();
+  tx.delete(ticketProjectLinks).run();
+  tx.delete(projectFolders).run();
+  tx.delete(tickets).run();
+  tx.delete(projects).run();
+  tx.delete(sequences).run();
+});
+
+const [
+  dotnetProject,
+  typescriptProject,
+  pythonProject
+] = db
+  .insert(projects)
+  .values(seedProjects)
+  .returning({ id: projects.id, slug: projects.slug })
+  .all();
 
 db.insert(projectFolders)
   .values([
     {
-      projectId: borodaProjectId,
-      label: "web app",
-      path: "/home/otzhora/projects/codex_projects/boroda/apps/web",
-      kind: "APP",
-      isPrimary: true,
-      existsOnDisk: true,
-      createdAt: isoOffset(70),
-      updatedAt: isoOffset(6)
-    },
-    {
-      projectId: paymentsProjectId,
-      label: "api service",
-      path: "/home/otzhora/projects/payments-api",
+      projectId: dotnetProject.id,
+      label: "api",
+      path: mockRepoPath("hello-contacts-dotnet"),
       kind: "BACKEND",
       isPrimary: true,
-      existsOnDisk: false,
-      createdAt: isoOffset(90),
-      updatedAt: isoOffset(12)
+      existsOnDisk: true,
+      createdAt: isoOffset(118),
+      updatedAt: isoOffset(4)
     },
     {
-      projectId: opsProjectId,
-      label: "terraform",
-      path: "/home/otzhora/projects/payments-terraform",
-      kind: "TERRAFORM",
+      projectId: typescriptProject.id,
+      label: "api",
+      path: mockRepoPath("task-notes-typescript"),
+      kind: "BACKEND",
       isPrimary: true,
-      existsOnDisk: false,
-      createdAt: isoOffset(110),
-      updatedAt: isoOffset(18)
-    }
-  ])
-  .run();
-
-db.insert(sequences).values({ name: "ticket", value: 4 }).run();
-
-db.insert(tickets)
-  .values([
+      existsOnDisk: true,
+      createdAt: isoOffset(94),
+      updatedAt: isoOffset(3)
+    },
     {
-      key: "BRD-1",
-      title: "Polish empty board experience",
-      description: "Add guided empty states, shortcuts, and an export action.",
-      status: "IN_PROGRESS",
-      priority: "HIGH",
-      dueAt: null,
-      createdAt: isoOffset(24),
+      projectId: pythonProject.id,
+      label: "api",
+      path: mockRepoPath("habit-tracker-python"),
+      kind: "BACKEND",
+      isPrimary: true,
+      existsOnDisk: true,
+      createdAt: isoOffset(82),
       updatedAt: isoOffset(2)
-    },
-    {
-      key: "BRD-2",
-      title: "Review payments webhook retry handling",
-      description: "Backend follow-up after failed staging replay.",
-      status: "READY",
-      priority: "CRITICAL",
-      dueAt: null,
-      createdAt: isoOffset(40),
-      updatedAt: isoOffset(5)
-    },
-    {
-      key: "BRD-3",
-      title: "Run Terraform drift check for nightly alarms",
-      description: "Needs manual AWS console verification after plan review.",
-      status: "MANUAL_UI",
-      priority: "MEDIUM",
-      dueAt: null,
-      createdAt: isoOffset(36),
-      updatedAt: isoOffset(8)
-    },
-    {
-      key: "BRD-4",
-      title: "Archive obsolete design notes",
-      description: "Close out the initial discovery thread.",
-      status: "DONE",
-      priority: "LOW",
-      dueAt: null,
-      createdAt: isoOffset(84),
-      updatedAt: isoOffset(20)
     }
   ])
   .run();
 
-const boardTicketId = await getTicketId("BRD-1");
-const paymentsTicketId = await getTicketId("BRD-2");
-const opsTicketId = await getTicketId("BRD-3");
-const doneTicketId = await getTicketId("BRD-4");
+db.insert(sequences).values({ name: "ticket", value: seedTickets.length }).onConflictDoUpdate({
+  target: sequences.name,
+  set: { value: seedTickets.length }
+}).run();
+
+const insertedTickets = db.insert(tickets)
+  .values(seedTickets)
+  .returning({ id: tickets.id, key: tickets.key })
+  .all();
+
+const ticketIdByKey = new Map(insertedTickets.map((ticket) => [ticket.key, ticket.id]));
 
 db.insert(ticketProjectLinks)
   .values([
     {
-      ticketId: boardTicketId,
-      projectId: borodaProjectId,
+      ticketId: ticketIdByKey.get("BRD-1")!,
+      projectId: dotnetProject.id,
       relationship: "PRIMARY",
-      createdAt: isoOffset(24)
+      createdAt: isoOffset(48)
     },
     {
-      ticketId: paymentsTicketId,
-      projectId: paymentsProjectId,
+      ticketId: ticketIdByKey.get("BRD-2")!,
+      projectId: dotnetProject.id,
       relationship: "PRIMARY",
-      createdAt: isoOffset(40)
+      createdAt: isoOffset(56)
     },
     {
-      ticketId: opsTicketId,
-      projectId: opsProjectId,
+      ticketId: ticketIdByKey.get("BRD-3")!,
+      projectId: typescriptProject.id,
       relationship: "PRIMARY",
-      createdAt: isoOffset(36)
+      createdAt: isoOffset(44)
     },
     {
-      ticketId: opsTicketId,
-      projectId: paymentsProjectId,
+      ticketId: ticketIdByKey.get("BRD-4")!,
+      projectId: typescriptProject.id,
+      relationship: "PRIMARY",
+      createdAt: isoOffset(38)
+    },
+    {
+      ticketId: ticketIdByKey.get("BRD-5")!,
+      projectId: pythonProject.id,
+      relationship: "PRIMARY",
+      createdAt: isoOffset(34)
+    },
+    {
+      ticketId: ticketIdByKey.get("BRD-6")!,
+      projectId: dotnetProject.id,
       relationship: "RELATED",
-      createdAt: isoOffset(35)
+      createdAt: isoOffset(72)
     },
     {
-      ticketId: doneTicketId,
-      projectId: borodaProjectId,
-      relationship: "PRIMARY",
-      createdAt: isoOffset(84)
+      ticketId: ticketIdByKey.get("BRD-6")!,
+      projectId: typescriptProject.id,
+      relationship: "RELATED",
+      createdAt: isoOffset(72)
+    },
+    {
+      ticketId: ticketIdByKey.get("BRD-6")!,
+      projectId: pythonProject.id,
+      relationship: "RELATED",
+      createdAt: isoOffset(72)
     }
   ])
   .run();
@@ -201,31 +247,31 @@ db.insert(ticketProjectLinks)
 db.insert(workContexts)
   .values([
     {
-      ticketId: boardTicketId,
+      ticketId: ticketIdByKey.get("BRD-1")!,
       type: "CODEX_SESSION",
-      label: "Board polish pass",
-      value: "codex://session/board-polish-pass",
-      metaJson: JSON.stringify({ tool: "codex", mode: "default" }),
-      createdAt: isoOffset(3),
+      label: "Contacts list endpoint session",
+      value: "codex://session/contacts-list",
+      metaJson: JSON.stringify({ repo: "hello-contacts-dotnet" }),
+      createdAt: isoOffset(8),
       updatedAt: isoOffset(2)
     },
     {
-      ticketId: paymentsTicketId,
+      ticketId: ticketIdByKey.get("BRD-3")!,
       type: "PR",
-      label: "Retry fix PR",
-      value: "https://github.com/example/payments-api/pull/128",
-      metaJson: JSON.stringify({ branch: "fix/webhook-retries" }),
-      createdAt: isoOffset(8),
-      updatedAt: isoOffset(5)
+      label: "Notes router draft PR",
+      value: "https://github.com/example/task-notes-typescript/pull/7",
+      metaJson: JSON.stringify({ branch: "feature/notes-router" }),
+      createdAt: isoOffset(10),
+      updatedAt: isoOffset(3)
     },
     {
-      ticketId: opsTicketId,
-      type: "AWS_CONSOLE",
-      label: "CloudWatch alarm review",
-      value: "Reviewed alarm thresholds in us-east-1",
-      metaJson: JSON.stringify({ region: "us-east-1" }),
-      createdAt: isoOffset(12),
-      updatedAt: isoOffset(8)
+      ticketId: ticketIdByKey.get("BRD-5")!,
+      type: "TERMINAL_COMMAND",
+      label: "FastAPI local run",
+      value: "uvicorn app:app --reload",
+      metaJson: JSON.stringify({ cwd: mockRepoPath("habit-tracker-python") }),
+      createdAt: isoOffset(6),
+      updatedAt: isoOffset(5)
     }
   ])
   .run();
@@ -233,41 +279,34 @@ db.insert(workContexts)
 db.insert(ticketActivities)
   .values([
     {
-      ticketId: boardTicketId,
+      ticketId: ticketIdByKey.get("BRD-1")!,
       type: "ticket.created",
-      message: "Ticket created for board polish",
+      message: "Created from local .NET sample planning",
       metaJson: "{}",
-      createdAt: isoOffset(24)
+      createdAt: isoOffset(48)
     },
     {
-      ticketId: boardTicketId,
-      type: "ticket.status.changed",
-      message: "Status changed from ready to in progress",
-      metaJson: JSON.stringify({ from: "READY", to: "IN_PROGRESS" }),
-      createdAt: isoOffset(2)
-    },
-    {
-      ticketId: paymentsTicketId,
+      ticketId: ticketIdByKey.get("BRD-3")!,
       type: "ticket.created",
-      message: "Ticket created from staging retry incident",
+      message: "Created for TypeScript integration smoke tests",
       metaJson: "{}",
-      createdAt: isoOffset(40)
+      createdAt: isoOffset(44)
     },
     {
-      ticketId: opsTicketId,
+      ticketId: ticketIdByKey.get("BRD-5")!,
       type: "ticket.created",
-      message: "Manual verification work captured for AWS console review",
+      message: "Created for Python CRUD and terminal integration",
       metaJson: "{}",
-      createdAt: isoOffset(36)
+      createdAt: isoOffset(34)
     },
     {
-      ticketId: doneTicketId,
+      ticketId: ticketIdByKey.get("BRD-6")!,
       type: "ticket.completed",
-      message: "Discovery notes archived and ticket closed",
+      message: "Cross-repo runbook docs completed",
       metaJson: "{}",
-      createdAt: isoOffset(20)
+      createdAt: isoOffset(12)
     }
   ])
   .run();
 
-console.log("Seed data applied: 3 projects, 4 tickets, and linked sample contexts.");
+console.log("Seed data applied: 3 projects, 6 tickets, and sample mock-repo contexts.");
