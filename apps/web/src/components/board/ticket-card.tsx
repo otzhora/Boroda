@@ -50,6 +50,24 @@ function TicketCardContent({ ticket }: { ticket: BoardTicket }) {
           ))}
         </div>
       ) : null}
+      {ticket.jiraIssues.length ? (
+        <div className="flex flex-wrap gap-2">
+          {ticket.jiraIssues.slice(0, 2).map((issue) => (
+            <span
+              className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[0.78rem] text-sky-100"
+              key={`${ticket.id}-${issue.key}`}
+              title={issue.summary ? `${issue.key} ${issue.summary}` : issue.key}
+            >
+              {issue.key}
+            </span>
+          ))}
+          {ticket.jiraIssues.length > 2 ? (
+            <span className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[0.78rem] text-ink-200">
+              +{ticket.jiraIssues.length - 2} Jira
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <p className="m-0 text-sm text-ink-300">{ticket.contextsCount} work contexts</p>
     </>
   );

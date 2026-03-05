@@ -2,14 +2,16 @@ import { createReadStream } from "node:fs";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import type { MultipartFile } from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 import { getConfig } from "../../config";
+import { getJiraIssuesByKeys } from "../integrations/jira/service";
 import {
   projects,
   sequences,
   ticketActivities,
+  ticketJiraIssueLinks,
   ticketProjectLinks,
   tickets,
   workContexts
@@ -178,6 +180,15 @@ function rethrowTicketConflict(error: unknown): never {
     throw new AppError(409, "TICKET_PROJECT_LINK_CONFLICT", "Project is already linked to this ticket");
   }
 
+  if (
+    isSqliteUniqueConstraintError(
+      error,
+      "ticket_jira_issue_links.ticket_id, ticket_jira_issue_links.issue_key"
+    )
+  ) {
+    throw new AppError(409, "TICKET_JIRA_LINK_CONFLICT", "Jira issue is already linked to this ticket");
+  }
+
   throw error;
 }
 
@@ -233,6 +244,38 @@ function serializeProjectLink(link: { projectId: number; relationship: string })
   return `${link.projectId}:${link.relationship}`;
 }
 
+function normalizeJiraIssueKey(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function normalizeJiraIssueSummary(value: string) {
+  return value.trim();
+}
+
+function assertUniqueJiraIssueLinks(jiraIssues: Array<{ key: string; summary: string }>) {
+  const issueKeys = new Set<string>();
+
+  for (const issue of jiraIssues) {
+    const normalizedKey = normalizeJiraIssueKey(issue.key);
+
+    if (!normalizedKey) {
+      throw new AppError(400, "TICKET_JIRA_KEY_REQUIRED", "Jira issue key is required");
+    }
+
+    if (issueKeys.has(normalizedKey)) {
+      throw new AppError(400, "TICKET_JIRA_DUPLICATE", "Each Jira issue can only be linked once", {
+        key: normalizedKey
+      });
+    }
+
+    issueKeys.add(normalizedKey);
+  }
+}
+
+function serializeJiraIssueLink(link: { key: string }) {
+  return normalizeJiraIssueKey(link.key);
+}
+
 async function ensureProjectsExist(app: FastifyInstance, projectIds: number[]) {
   const uniqueProjectIds = [...new Set(projectIds)];
 
@@ -265,6 +308,13 @@ async function loadTicketProjectLinks(app: FastifyInstance, ticketId: number) {
         }
       }
     }
+  });
+}
+
+async function loadTicketJiraIssueLinks(app: FastifyInstance, ticketId: number) {
+  return app.db.query.ticketJiraIssueLinks.findMany({
+    where: eq(ticketJiraIssueLinks.ticketId, ticketId),
+    orderBy: [asc(ticketJiraIssueLinks.id)]
   });
 }
 
@@ -302,6 +352,43 @@ function recordProjectLinkChanges(
   }
 }
 
+function formatJiraIssueLabel(issue: { key: string; summary?: string | null }) {
+  const summary = issue.summary?.trim();
+  return summary ? `${issue.key} ${summary}` : issue.key;
+}
+
+function recordJiraIssueLinkChanges(
+  app: FastifyInstance,
+  ticketId: number,
+  previousIssues: Array<{ key: string; summary: string }>,
+  nextIssues: Array<{ key: string; summary: string }>
+) {
+  const previousByKey = new Map(previousIssues.map((issue) => [serializeJiraIssueLink(issue), issue]));
+  const nextByKey = new Map(nextIssues.map((issue) => [serializeJiraIssueLink(issue), issue]));
+
+  for (const [key, issue] of nextByKey) {
+    if (!previousByKey.has(key)) {
+      recordActivity(
+        app,
+        ticketId,
+        "ticket.jira_issue_linked",
+        `${formatJiraIssueLabel(issue)} linked from Jira`
+      );
+    }
+  }
+
+  for (const [key, issue] of previousByKey) {
+    if (!nextByKey.has(key)) {
+      recordActivity(
+        app,
+        ticketId,
+        "ticket.jira_issue_unlinked",
+        `${formatJiraIssueLabel(issue)} removed from Jira links`
+      );
+    }
+  }
+}
+
 async function replaceProjectLinks(
   app: FastifyInstance,
   ticketId: number,
@@ -332,6 +419,32 @@ async function replaceProjectLinks(
     .run();
 }
 
+async function replaceJiraIssueLinks(
+  app: FastifyInstance,
+  ticketId: number,
+  jiraIssues: Array<{ key: string; summary: string }>
+) {
+  assertUniqueJiraIssueLinks(jiraIssues);
+  app.db.delete(ticketJiraIssueLinks).where(eq(ticketJiraIssueLinks.ticketId, ticketId)).run();
+
+  if (!jiraIssues.length) {
+    return;
+  }
+
+  const now = nowIso();
+  app.db
+    .insert(ticketJiraIssueLinks)
+    .values(
+      jiraIssues.map((issue) => ({
+        ticketId,
+        issueKey: normalizeJiraIssueKey(issue.key),
+        issueSummary: normalizeJiraIssueSummary(issue.summary),
+        createdAt: now
+      }))
+    )
+    .run();
+}
+
 export async function listTickets(
   app: FastifyInstance,
   filters: { status?: string; priority?: string; projectId?: number; q?: string }
@@ -347,7 +460,21 @@ export async function listTickets(
   }
 
   if (filters.q) {
-    queryFilters.push(or(like(tickets.title, `%${filters.q}%`), like(tickets.description, `%${filters.q}%`))!);
+    queryFilters.push(
+      sql`(
+        ${tickets.title} like ${`%${filters.q}%`}
+        or ${tickets.description} like ${`%${filters.q}%`}
+        or exists (
+          select 1
+          from ticket_jira_issue_links
+          where ticket_jira_issue_links.ticket_id = ${tickets.id}
+            and (
+              ticket_jira_issue_links.issue_key like ${`%${filters.q}%`}
+              or ticket_jira_issue_links.issue_summary like ${`%${filters.q}%`}
+            )
+        )
+      )`
+    );
   }
 
   if (filters.projectId) {
@@ -385,6 +512,7 @@ export async function getTicketOrThrow(app: FastifyInstance, id: number) {
   }
 
   const projectLinks = await loadTicketProjectLinks(app, id);
+  const jiraIssues = await loadTicketJiraIssueLinks(app, id);
 
   const relatedWorkContexts = app.db
     .select()
@@ -403,6 +531,13 @@ export async function getTicketOrThrow(app: FastifyInstance, id: number) {
   return {
     ...ticket,
     projectLinks,
+    jiraIssues: jiraIssues.map((issue) => ({
+      id: issue.id,
+      ticketId: issue.ticketId,
+      key: issue.issueKey,
+      summary: issue.issueSummary,
+      createdAt: issue.createdAt
+    })),
     workContexts: relatedWorkContexts,
     activities
   };
@@ -414,7 +549,7 @@ export async function createTicket(
     title: string;
     description: string;
     branch?: string | null;
-    jiraTicket?: string | null;
+    jiraIssues: Array<{ key: string; summary: string }>;
     status: string;
     priority: string;
     dueAt?: string | null;
@@ -424,6 +559,7 @@ export async function createTicket(
   const now = nowIso();
   const key = nextTicketKey(app);
   assertUniqueProjectLinks(input.projectLinks);
+  assertUniqueJiraIssueLinks(input.jiraIssues);
   await ensureProjectsExist(
     app,
     input.projectLinks.map((link) => link.projectId)
@@ -435,7 +571,6 @@ export async function createTicket(
       title: input.title,
       description: input.description,
       branch: input.branch ?? null,
-      jiraTicket: input.jiraTicket ?? null,
       status: input.status,
       priority: input.priority,
       dueAt: input.dueAt ?? null,
@@ -447,12 +582,15 @@ export async function createTicket(
 
   try {
     await replaceProjectLinks(app, ticket.id, input.projectLinks);
+    await replaceJiraIssueLinks(app, ticket.id, input.jiraIssues);
   } catch (error) {
     app.db.delete(tickets).where(eq(tickets.id, ticket.id)).run();
     rethrowTicketConflict(error);
   }
 
   recordActivity(app, ticket.id, "ticket.created", `Ticket ${ticket.key} created`);
+  recordProjectLinkChanges(app, ticket.id, [], await loadTicketProjectLinks(app, ticket.id));
+  recordJiraIssueLinkChanges(app, ticket.id, [], input.jiraIssues);
 
   return getTicketOrThrow(app, ticket.id);
 }
@@ -464,7 +602,7 @@ export async function updateTicket(
     title: string;
     description: string;
     branch: string | null;
-    jiraTicket: string | null;
+    jiraIssues: Array<{ key: string; summary: string }>;
     status: string;
     priority: string;
     dueAt: string | null;
@@ -480,7 +618,6 @@ export async function updateTicket(
       title: input.title ?? existing.title,
       description: input.description ?? existing.description,
       branch: input.branch === undefined ? existing.branch : input.branch,
-      jiraTicket: input.jiraTicket === undefined ? existing.jiraTicket : input.jiraTicket,
       status: input.status ?? existing.status,
       priority: input.priority ?? existing.priority,
       dueAt: input.dueAt === undefined ? existing.dueAt : input.dueAt,
@@ -496,6 +633,10 @@ export async function updateTicket(
       app,
       input.projectLinks.map((link) => link.projectId)
     );
+  }
+
+  if (input.jiraIssues) {
+    assertUniqueJiraIssueLinks(input.jiraIssues);
   }
 
   if (input.projectLinks) {
@@ -514,6 +655,24 @@ export async function updateTicket(
     recordProjectLinkChanges(app, id, previousLinks, nextLinks);
   }
 
+  if (input.jiraIssues) {
+    try {
+      await replaceJiraIssueLinks(app, id, input.jiraIssues);
+    } catch (error) {
+      rethrowTicketConflict(error);
+    }
+
+    const previousIssues = existing.jiraIssues.map((issue) => ({
+      key: issue.key,
+      summary: issue.summary
+    }));
+    const nextIssues = (await loadTicketJiraIssueLinks(app, id)).map((issue) => ({
+      key: issue.issueKey,
+      summary: issue.issueSummary
+    }));
+    recordJiraIssueLinkChanges(app, id, previousIssues, nextIssues);
+  }
+
   if (input.status && input.status !== existing.status) {
     recordActivity(app, id, "ticket.status.changed", `Status changed to ${input.status}`);
   }
@@ -527,6 +686,44 @@ export async function updateTicket(
   }
 
   return getTicketOrThrow(app, updated.id);
+}
+
+export async function refreshTicketJiraIssues(app: FastifyInstance, id: number) {
+  const existing = await getTicketOrThrow(app, id);
+
+  if (!existing.jiraIssues.length) {
+    return existing;
+  }
+
+  const refreshedIssues = await getJiraIssuesByKeys(
+    app,
+    existing.jiraIssues.map((issue) => issue.key)
+  );
+  const refreshedByKey = new Map(
+    refreshedIssues.map((issue) => [normalizeJiraIssueKey(issue.key), issue.summary.trim()])
+  );
+  const nextIssues = existing.jiraIssues.map((issue) => ({
+    key: issue.key,
+    summary: refreshedByKey.get(normalizeJiraIssueKey(issue.key)) ?? issue.summary
+  }));
+
+  await replaceJiraIssueLinks(app, id, nextIssues);
+
+  const changedCount = existing.jiraIssues.filter((issue) => {
+    const nextSummary = refreshedByKey.get(normalizeJiraIssueKey(issue.key));
+    return nextSummary !== undefined && nextSummary !== issue.summary;
+  }).length;
+
+  if (changedCount > 0) {
+    recordActivity(
+      app,
+      id,
+      "ticket.jira_issue_refreshed",
+      changedCount === 1 ? "Refreshed 1 Jira issue summary" : `Refreshed ${changedCount} Jira issue summaries`
+    );
+  }
+
+  return getTicketOrThrow(app, id);
 }
 
 export async function deleteTicket(app: FastifyInstance, id: number) {

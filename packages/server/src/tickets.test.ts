@@ -36,8 +36,10 @@ before(async () => {
 });
 
 beforeEach(() => {
+  app.db.delete(schema.jiraSettings).run();
   app.db.delete(schema.ticketActivities).run();
   app.db.delete(schema.workContexts).run();
+  app.db.delete(schema.ticketJiraIssueLinks).run();
   app.db.delete(schema.ticketProjectLinks).run();
   app.db.delete(schema.tickets).run();
   app.db.delete(schema.projectFolders).run();
@@ -78,7 +80,7 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
       title: "Finish backend refactor",
       description: "Need app repo changes and infra follow-up",
       branch: "feature/backend-refactor",
-      jiraTicket: "PAY-128",
+      jiraIssues: [{ key: "PAY-128", summary: "Backend refactor" }],
       status: "IN_PROGRESS",
       priority: "HIGH",
       projectLinks: [
@@ -92,9 +94,11 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   const createdTicket = createResponse.json();
   assert.equal(createdTicket.key, "BRD-1");
   assert.equal(createdTicket.branch, "feature/backend-refactor");
-  assert.equal(createdTicket.jiraTicket, "PAY-128");
+  assert.equal(createdTicket.jiraIssues.length, 1);
+  assert.equal(createdTicket.jiraIssues[0].key, "PAY-128");
+  assert.equal(createdTicket.jiraIssues[0].summary, "Backend refactor");
   assert.equal(createdTicket.projectLinks.length, 2);
-  assert.equal(createdTicket.activities[0].type, "ticket.created");
+  assert.ok(createdTicket.activities.some((activity: { type: string }) => activity.type === "ticket.created"));
 
   const filteredListResponse = await app.inject({
     method: "GET",
@@ -111,7 +115,7 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
     url: `/api/tickets/${createdTicket.id}`,
     payload: {
       branch: "release/backend-refactor",
-      jiraTicket: null,
+      jiraIssues: [],
       status: "DONE",
       priority: "CRITICAL",
       projectLinks: [{ projectId: relatedProject.id, relationship: "PRIMARY" }]
@@ -121,7 +125,7 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   assert.equal(updateResponse.statusCode, 200);
   const updatedTicket = updateResponse.json();
   assert.equal(updatedTicket.branch, "release/backend-refactor");
-  assert.equal(updatedTicket.jiraTicket, null);
+  assert.deepEqual(updatedTicket.jiraIssues, []);
   assert.equal(updatedTicket.status, "DONE");
   assert.equal(updatedTicket.priority, "CRITICAL");
   assert.deepEqual(
@@ -137,6 +141,8 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   assert.ok(activityTypes.includes("ticket.priority.changed"));
   assert.ok(activityTypes.includes("ticket.project_linked"));
   assert.ok(activityTypes.includes("ticket.project_unlinked"));
+  assert.ok(activityTypes.includes("ticket.jira_issue_linked"));
+  assert.ok(activityTypes.includes("ticket.jira_issue_unlinked"));
 });
 
 test("ticket-project link endpoints enforce duplicate and primary constraints", async () => {
@@ -235,6 +241,71 @@ test("ticket-project link endpoints enforce duplicate and primary constraints", 
 
   assert.equal(missingProjectResponse.statusCode, 404);
   assert.equal(missingProjectResponse.json().error.code, "PROJECT_NOT_FOUND");
+});
+
+test("refreshing linked Jira issues updates cached summaries", async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          issues: [
+            {
+              key: "PAY-128",
+              fields: {
+                summary: "Backend refactor renamed"
+              }
+            }
+          ],
+          total: 1
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json"
+          }
+        }
+      );
+
+    app.db.insert(schema.jiraSettings).values({
+      baseUrl: "https://jira.example.test",
+      email: "me@example.test",
+      apiToken: "secret-token"
+    }).run();
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/tickets",
+      payload: {
+        title: "Refresh linked Jira issue",
+        description: "",
+        jiraIssues: [{ key: "PAY-128", summary: "Old summary" }],
+        status: "READY",
+        priority: "MEDIUM",
+        projectLinks: []
+      }
+    });
+
+    assert.equal(createResponse.statusCode, 200);
+    const createdTicket = createResponse.json();
+
+    const refreshResponse = await app.inject({
+      method: "POST",
+      url: `/api/tickets/${createdTicket.id}/jira/refresh`
+    });
+
+    assert.equal(refreshResponse.statusCode, 200);
+    const refreshedTicket = refreshResponse.json();
+    assert.equal(refreshedTicket.jiraIssues[0].summary, "Backend refactor renamed");
+    assert.ok(
+      refreshedTicket.activities.some(
+        (activity: { type: string }) => activity.type === "ticket.jira_issue_refreshed"
+      )
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("ticket image uploads can be pasted and rendered back from local storage", async () => {

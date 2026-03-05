@@ -17,6 +17,7 @@ import type { Project, TicketPriority, TicketStatus } from "../../lib/types";
 import { ProjectLinkEditor } from "./project-link-editor";
 import { MarkdownDescription } from "./markdown-description";
 import type { TicketFormState } from "../../features/tickets/form";
+import { JiraIssueSelector } from "./jira-issue-selector";
 
 interface TicketTitleFieldProps {
   value: string;
@@ -385,22 +386,18 @@ export function TicketMetaFields({ form, onChange }: TicketMetaFieldsProps) {
         />
       </label>
 
-      <label className="grid gap-2">
-        <span className={labelClassName}>Jira ticket</span>
-        <input
-          className={inputClassName}
-          type="text"
-          inputMode="text"
-          placeholder="PROJ-123…"
-          value={form.jiraTicket}
-          onChange={(event) =>
+      <div className="grid gap-2">
+        <span className={labelClassName}>Jira issues</span>
+        <JiraIssueSelector
+          value={form.jiraIssues}
+          onChange={(jiraIssues) =>
             onChange((current) => ({
               ...current,
-              jiraTicket: event.target.value
+              jiraIssues
             }))
           }
         />
-      </label>
+      </div>
 
       <label className="grid gap-2">
         <span className={labelClassName}>Status</span>

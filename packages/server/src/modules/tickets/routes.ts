@@ -15,6 +15,7 @@ import {
   deleteTicketProjectLink,
   getTicketOrThrow,
   listTickets,
+  refreshTicketJiraIssues,
   saveTicketImage,
   streamTicketImage,
   updateTicket
@@ -75,6 +76,11 @@ export const ticketRoutes: FastifyPluginAsync = async (app) => {
     const params = ticketIdParamSchema.parse(request.params);
     const payload = createTicketProjectLinkSchema.parse(request.body);
     return addTicketProjectLink(app, params.id, payload);
+  });
+
+  app.post("/tickets/:id/jira/refresh", async (request) => {
+    const params = ticketIdParamSchema.parse(request.params);
+    return refreshTicketJiraIssues(app, params.id);
   });
 
   app.delete("/ticket-project-links/:id", async (request) => {

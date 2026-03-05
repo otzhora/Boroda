@@ -44,7 +44,6 @@ export const tickets = sqliteTable(
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
     branch: text("branch"),
-    jiraTicket: text("jira_ticket"),
     status: text("status").notNull(),
     priority: text("priority").notNull(),
     dueAt: text("due_at"),
@@ -78,6 +77,24 @@ export const ticketProjectLinks = sqliteTable(
     ticketIdIdx: index("idx_ticket_project_links_ticket_id").on(table.ticketId),
     projectIdIdx: index("idx_ticket_project_links_project_id").on(table.projectId),
     ticketProjectUnique: uniqueIndex("ticket_project_unique").on(table.ticketId, table.projectId)
+  })
+);
+
+export const ticketJiraIssueLinks = sqliteTable(
+  "ticket_jira_issue_links",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ticketId: integer("ticket_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+    issueKey: text("issue_key").notNull(),
+    issueSummary: text("issue_summary").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+  },
+  (table) => ({
+    ticketIdIdx: index("idx_ticket_jira_issue_links_ticket_id").on(table.ticketId),
+    issueKeyIdx: index("idx_ticket_jira_issue_links_issue_key").on(table.issueKey),
+    ticketIssueUnique: uniqueIndex("ticket_jira_issue_unique").on(table.ticketId, table.issueKey)
   })
 );
 
@@ -134,6 +151,7 @@ export const projectFolderRelations = relations(projectFolders, ({ one }) => ({
 
 export const ticketRelations = relations(tickets, ({ many }) => ({
   projectLinks: many(ticketProjectLinks),
+  jiraIssueLinks: many(ticketJiraIssueLinks),
   workContexts: many(workContexts),
   activities: many(ticketActivities)
 }));
@@ -146,6 +164,13 @@ export const ticketProjectLinkRelations = relations(ticketProjectLinks, ({ one }
   project: one(projects, {
     fields: [ticketProjectLinks.projectId],
     references: [projects.id]
+  })
+}));
+
+export const ticketJiraIssueLinkRelations = relations(ticketJiraIssueLinks, ({ one }) => ({
+  ticket: one(tickets, {
+    fields: [ticketJiraIssueLinks.ticketId],
+    references: [tickets.id]
   })
 }));
 

@@ -112,17 +112,29 @@ function getJiraErrorMessage(body: unknown) {
   return null;
 }
 
-export async function listAssignedJiraIssues(app: FastifyInstance) {
+async function getRequiredJiraSettings(app: FastifyInstance) {
   const settings = await getStoredJiraSettings(app);
 
   if (!settings) {
     throw new AppError(400, "JIRA_SETTINGS_MISSING", "Configure Jira settings before loading issues");
   }
 
+  return settings;
+}
+
+async function runJiraSearch(
+  app: FastifyInstance,
+  input: {
+    jql: string;
+    maxResults: number;
+  }
+) {
+  const settings = await getRequiredJiraSettings(app);
+
   const searchParams = new URLSearchParams({
-    jql: "assignee = currentUser() ORDER BY updated DESC",
+    jql: input.jql,
     fields: "summary",
-    maxResults: "100"
+    maxResults: String(input.maxResults)
   });
 
   const response = await fetch(`${sanitizeBaseUrl(settings.baseUrl)}/rest/api/3/search/jql?${searchParams.toString()}`, {
@@ -176,4 +188,27 @@ export async function listAssignedJiraIssues(app: FastifyInstance) {
       .filter((issue): issue is { key: string; summary: string } => issue !== null),
     total: typeof payload.total === "number" ? payload.total : issues.length
   };
+}
+
+export async function listAssignedJiraIssues(app: FastifyInstance) {
+  return runJiraSearch(app, {
+    jql: "assignee = currentUser() ORDER BY updated DESC",
+    maxResults: 200
+  });
+}
+
+export async function getJiraIssuesByKeys(app: FastifyInstance, issueKeys: string[]) {
+  const uniqueIssueKeys = [...new Set(issueKeys.map((issueKey) => issueKey.trim()).filter(Boolean))];
+
+  if (!uniqueIssueKeys.length) {
+    return [];
+  }
+
+  const quotedIssueKeys = uniqueIssueKeys.map((issueKey) => `"${issueKey.replace(/"/g, '\\"')}"`).join(",");
+  const result = await runJiraSearch(app, {
+    jql: `issuekey in (${quotedIssueKeys}) ORDER BY updated DESC`,
+    maxResults: uniqueIssueKeys.length
+  });
+
+  return result.issues;
 }

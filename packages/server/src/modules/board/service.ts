@@ -1,6 +1,6 @@
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { projects, ticketProjectLinks, tickets, workContexts } from "../../db/schema";
+import { projects, ticketJiraIssueLinks, ticketProjectLinks, tickets, workContexts } from "../../db/schema";
 
 const STATUS_ORDER = [
   "INBOX",
@@ -36,7 +36,19 @@ export async function getBoard(
 
       if (filters.q) {
         clauses.push(
-          sql`(${table.title} like ${`%${filters.q}%`} or ${table.description} like ${`%${filters.q}%`})`
+          sql`(
+            ${table.title} like ${`%${filters.q}%`}
+            or ${table.description} like ${`%${filters.q}%`}
+            or exists (
+              select 1
+              from ticket_jira_issue_links
+              where ticket_jira_issue_links.ticket_id = ${table.id}
+                and (
+                  ticket_jira_issue_links.issue_key like ${`%${filters.q}%`}
+                  or ticket_jira_issue_links.issue_summary like ${`%${filters.q}%`}
+                )
+            )
+          )`
         );
       }
 
@@ -78,6 +90,17 @@ export async function getBoard(
         .groupBy(workContexts.ticketId)
         .all()
     : [];
+  const jiraIssueLinks = ids.length
+    ? app.db
+        .select({
+          ticketId: ticketJiraIssueLinks.ticketId,
+          key: ticketJiraIssueLinks.issueKey,
+          summary: ticketJiraIssueLinks.issueSummary
+        })
+        .from(ticketJiraIssueLinks)
+        .where(inArray(ticketJiraIssueLinks.ticketId, ids))
+        .all()
+    : [];
 
   return {
     columns: STATUS_ORDER.map((status) => ({
@@ -99,6 +122,12 @@ export async function getBoard(
               id: link.projectId,
               name: link.projectName,
               relationship: link.relationship
+            })),
+          jiraIssues: jiraIssueLinks
+            .filter((issue) => issue.ticketId === ticket.id)
+            .map((issue) => ({
+              key: issue.key,
+              summary: issue.summary
             }))
         }))
     }))

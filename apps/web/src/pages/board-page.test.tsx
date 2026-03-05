@@ -13,7 +13,8 @@ const mocks = vi.hoisted(() => ({
   updateMutate: vi.fn(),
   deleteMutate: vi.fn(),
   moveMutate: vi.fn(),
-  openTerminalMutate: vi.fn()
+  openTerminalMutate: vi.fn(),
+  refreshJiraMutate: vi.fn()
 }));
 
 vi.mock("../features/board/queries", () => ({
@@ -51,6 +52,11 @@ vi.mock("../features/tickets/mutations", () => ({
   })),
   useOpenTicketInWindowsTerminalMutation: vi.fn(() => ({
     mutate: mocks.openTerminalMutate,
+    isPending: false,
+    error: null
+  })),
+  useRefreshTicketJiraLinksMutation: vi.fn(() => ({
+    mutate: mocks.refreshJiraMutate,
     isPending: false,
     error: null
   }))
@@ -138,6 +144,7 @@ describe("BoardPage", () => {
     mocks.deleteMutate.mockReset();
     mocks.moveMutate.mockReset();
     mocks.openTerminalMutate.mockReset();
+    mocks.refreshJiraMutate.mockReset();
 
     mocks.useBoardQuery.mockReturnValue({
       data: { columns: [] },
@@ -222,7 +229,7 @@ describe("BoardPage", () => {
       title: "Wire board filters",
       description: "",
       branch: null,
-      jiraTicket: null,
+      jiraIssues: [],
       status: "READY",
       priority: "HIGH",
       dueAt: null,
@@ -252,7 +259,8 @@ describe("BoardPage", () => {
                 priority: "MEDIUM",
                 contextsCount: 0,
                 updatedAt: "",
-                projectBadges: []
+                projectBadges: [],
+                jiraIssues: []
               }
             ]
           }

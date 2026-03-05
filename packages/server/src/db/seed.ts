@@ -6,6 +6,7 @@ import {
   projects,
   sequences,
   ticketActivities,
+  ticketJiraIssueLinks,
   ticketProjectLinks,
   tickets,
   workContexts
@@ -55,7 +56,6 @@ const seedTickets = [
     title: "Add list endpoint for contacts",
     description: "Expose `GET /contacts` and seed two sample records.",
     branch: "feature/contacts-list",
-    jiraTicket: "DEMO-101",
     status: "IN_PROGRESS",
     priority: "HIGH",
     dueAt: null,
@@ -67,7 +67,6 @@ const seedTickets = [
     title: "Implement create/update/delete contacts",
     description: "Finish core CRUD handlers in Program.cs for the .NET sample.",
     branch: "feature/contacts-crud",
-    jiraTicket: null,
     status: "READY",
     priority: "MEDIUM",
     dueAt: null,
@@ -79,7 +78,6 @@ const seedTickets = [
     title: "Wire TypeScript notes router",
     description: "Add hello endpoint and in-memory CRUD routes for notes.",
     branch: "feature/notes-router",
-    jiraTicket: "DEMO-102",
     status: "IN_PROGRESS",
     priority: "HIGH",
     dueAt: null,
@@ -91,7 +89,6 @@ const seedTickets = [
     title: "Add basic input validation for notes",
     description: "Reject blank note titles and return 422 responses.",
     branch: "feature/notes-validation",
-    jiraTicket: null,
     status: "BLOCKED",
     priority: "LOW",
     dueAt: null,
@@ -103,7 +100,6 @@ const seedTickets = [
     title: "Build Python habits CRUD",
     description: "Create `/habits` list/create/update/delete endpoints in FastAPI.",
     branch: "feature/habits-crud",
-    jiraTicket: "DEMO-103",
     status: "MANUAL_UI",
     priority: "MEDIUM",
     dueAt: null,
@@ -115,18 +111,18 @@ const seedTickets = [
     title: "Document run commands for all sample repos",
     description: "Add README quick-start commands for C#, TS, and Python samples.",
     branch: "docs/sample-repos",
-    jiraTicket: null,
     status: "DONE",
     priority: "LOW",
     dueAt: null,
     createdAt: isoOffset(72),
     updatedAt: isoOffset(12)
   }
-] as const;
+];
 
 db.transaction((tx) => {
   tx.delete(ticketActivities).run();
   tx.delete(workContexts).run();
+  tx.delete(ticketJiraIssueLinks).run();
   tx.delete(ticketProjectLinks).run();
   tx.delete(projectFolders).run();
   tx.delete(tickets).run();
@@ -240,6 +236,29 @@ db.insert(ticketProjectLinks)
       projectId: pythonProject.id,
       relationship: "RELATED",
       createdAt: isoOffset(72)
+    }
+  ])
+  .run();
+
+db.insert(ticketJiraIssueLinks)
+  .values([
+    {
+      ticketId: ticketIdByKey.get("BRD-1")!,
+      issueKey: "DEMO-101",
+      issueSummary: "Expose contacts list endpoint",
+      createdAt: isoOffset(48)
+    },
+    {
+      ticketId: ticketIdByKey.get("BRD-3")!,
+      issueKey: "DEMO-102",
+      issueSummary: "Wire notes router",
+      createdAt: isoOffset(44)
+    },
+    {
+      ticketId: ticketIdByKey.get("BRD-5")!,
+      issueKey: "DEMO-103",
+      issueSummary: "Build habits CRUD",
+      createdAt: isoOffset(34)
     }
   ])
   .run();

@@ -37,6 +37,7 @@ before(async () => {
 beforeEach(() => {
   app.db.delete(schema.ticketActivities).run();
   app.db.delete(schema.workContexts).run();
+  app.db.delete(schema.ticketJiraIssueLinks).run();
   app.db.delete(schema.ticketProjectLinks).run();
   app.db.delete(schema.tickets).run();
   app.db.delete(schema.projectFolders).run();

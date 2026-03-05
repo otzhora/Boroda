@@ -38,7 +38,14 @@ export const createTicketSchema = z.object({
   title: z.string().min(1),
   description: z.string().default(""),
   branch: optionalTicketTextField,
-  jiraTicket: optionalTicketTextField,
+  jiraIssues: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1),
+        summary: z.string().trim().default("")
+      })
+    )
+    .default([]),
   status: statusEnum.default("INBOX"),
   priority: priorityEnum.default("MEDIUM"),
   dueAt: z.string().datetime().optional().nullable(),

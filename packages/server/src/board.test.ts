@@ -37,6 +37,7 @@ before(async () => {
 beforeEach(() => {
   app.db.delete(schema.ticketActivities).run();
   app.db.delete(schema.workContexts).run();
+  app.db.delete(schema.ticketJiraIssueLinks).run();
   app.db.delete(schema.ticketProjectLinks).run();
   app.db.delete(schema.tickets).run();
   app.db.delete(schema.projectFolders).run();
@@ -71,6 +72,7 @@ async function createTicket(payload: {
   description: string;
   status: string;
   priority: string;
+  jiraIssues?: Array<{ key: string; summary: string }>;
   projectLinks: Array<{ projectId: number; relationship: string }>;
 }) {
   const response = await app.inject({
@@ -90,6 +92,10 @@ test("board endpoint groups tickets by status and includes context counts and pr
   const inboxTicket = await createTicket({
     title: "Wire board filters",
     description: "Search and project filtering",
+    jiraIssues: [
+      { key: "PAY-42", summary: "Board filter work" },
+      { key: "PAY-43", summary: "Board card polish" }
+    ],
     status: "INBOX",
     priority: "HIGH",
     projectLinks: [
@@ -137,6 +143,10 @@ test("board endpoint groups tickets by status and includes context counts and pr
   assert.equal(doneColumn.tickets.length, 1);
   assert.equal(inboxColumn.tickets[0].title, "Wire board filters");
   assert.equal(inboxColumn.tickets[0].contextsCount, 1);
+  assert.deepEqual(inboxColumn.tickets[0].jiraIssues, [
+    { key: "PAY-42", summary: "Board filter work" },
+    { key: "PAY-43", summary: "Board card polish" }
+  ]);
   assert.deepEqual(
     inboxColumn.tickets[0].projectBadges.map((badge: { name: string; relationship: string }) => ({
       name: badge.name,
@@ -157,6 +167,7 @@ test("board endpoint applies project, priority, and text filters together", asyn
   await createTicket({
     title: "Terraform drift fix",
     description: "Infra review and apply",
+    jiraIssues: [{ key: "OPS-12", summary: "Drift fix" }],
     status: "READY",
     priority: "HIGH",
     projectLinks: [{ projectId: infraProject.id, relationship: "PRIMARY" }]
@@ -180,7 +191,7 @@ test("board endpoint applies project, priority, and text filters together", asyn
 
   const boardResponse = await app.inject({
     method: "GET",
-    url: `/api/board?projectId=${infraProject.id}&priority=HIGH&q=Terraform`
+    url: `/api/board?projectId=${infraProject.id}&priority=HIGH&q=OPS-12`
   });
 
   assert.equal(boardResponse.statusCode, 200);
@@ -218,6 +229,7 @@ test("export endpoint returns a workspace snapshot with current records", async 
   assert.equal(snapshot.data.projects.length, 1);
   assert.equal(snapshot.data.tickets.length, 1);
   assert.equal(snapshot.data.ticketProjectLinks.length, 1);
+  assert.equal(snapshot.data.ticketJiraIssueLinks.length, 0);
   assert.equal(snapshot.data.projects[0].id, appProject.id);
   assert.equal(snapshot.data.tickets[0].id, ticket.id);
 });
@@ -273,6 +285,7 @@ test("import endpoint replaces workspace data from an exported snapshot", async 
 
   app.db.delete(schema.ticketActivities).run();
   app.db.delete(schema.workContexts).run();
+  app.db.delete(schema.ticketJiraIssueLinks).run();
   app.db.delete(schema.ticketProjectLinks).run();
   app.db.delete(schema.tickets).run();
   app.db.delete(schema.projectFolders).run();

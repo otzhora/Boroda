@@ -1,4 +1,5 @@
 import type {
+  JiraIssueLinkSummary,
   Ticket,
   TicketPriority,
   TicketProjectRelationship,
@@ -10,11 +11,13 @@ export interface TicketProjectLinkFormState {
   relationship: TicketProjectRelationship;
 }
 
+export interface TicketJiraIssueFormState extends JiraIssueLinkSummary {}
+
 export interface TicketFormState {
   title: string;
   description: string;
   branch: string;
-  jiraTicket: string;
+  jiraIssues: TicketJiraIssueFormState[];
   status: TicketStatus;
   priority: TicketPriority;
   dueAt: string;
@@ -26,7 +29,7 @@ export function createEmptyTicketForm(): TicketFormState {
     title: "",
     description: "",
     branch: "",
-    jiraTicket: "",
+    jiraIssues: [],
     status: "INBOX",
     priority: "MEDIUM",
     dueAt: "",
@@ -70,12 +73,30 @@ function toOptionalApiText(value: string) {
   return trimmedValue.length ? trimmedValue : null;
 }
 
+function dedupeJiraIssues(jiraIssues: TicketJiraIssueFormState[]) {
+  const seenKeys = new Set<string>();
+
+  return jiraIssues.filter((issue) => {
+    const key = issue.key.trim().toUpperCase();
+
+    if (!key || seenKeys.has(key)) {
+      return false;
+    }
+
+    seenKeys.add(key);
+    return true;
+  });
+}
+
 export function toTicketForm(ticket: Ticket): TicketFormState {
   return {
     title: ticket.title,
     description: ticket.description,
     branch: ticket.branch ?? "",
-    jiraTicket: ticket.jiraTicket ?? "",
+    jiraIssues: dedupeJiraIssues(ticket.jiraIssues.map((issue) => ({
+      key: issue.key,
+      summary: issue.summary
+    }))),
     status: ticket.status,
     priority: ticket.priority,
     dueAt: toDateTimeInput(ticket.dueAt),
@@ -91,7 +112,10 @@ export function toTicketPayload(form: TicketFormState) {
     title: form.title.trim(),
     description: form.description.trim(),
     branch: toOptionalApiText(form.branch),
-    jiraTicket: toOptionalApiText(form.jiraTicket),
+    jiraIssues: dedupeJiraIssues(form.jiraIssues).map((issue) => ({
+      key: issue.key.trim().toUpperCase(),
+      summary: issue.summary.trim()
+    })),
     status: form.status,
     priority: form.priority,
     dueAt: toApiDateTime(form.dueAt),

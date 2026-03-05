@@ -59,6 +59,7 @@ export interface BoardTicket {
     name: string;
     relationship: TicketProjectRelationship;
   }>;
+  jiraIssues: JiraIssueLinkSummary[];
 }
 
 export interface BoardColumn {
@@ -100,13 +101,23 @@ export interface WorkContext {
   updatedAt: string;
 }
 
+export interface JiraIssueLinkSummary {
+  key: string;
+  summary: string;
+}
+
+export interface TicketJiraIssueLink extends JiraIssueLinkSummary {
+  id: number;
+  ticketId: number;
+  createdAt: string;
+}
+
 export interface Ticket {
   id: number;
   key: string;
   title: string;
   description: string;
   branch: string | null;
-  jiraTicket: string | null;
   status: TicketStatus;
   priority: TicketPriority;
   dueAt: string | null;
@@ -114,6 +125,7 @@ export interface Ticket {
   updatedAt: string;
   archivedAt: string | null;
   projectLinks: TicketProjectLink[];
+  jiraIssues: TicketJiraIssueLink[];
   workContexts: WorkContext[];
   activities: TicketActivity[];
 }

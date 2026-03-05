@@ -28,13 +28,13 @@ const ticketSchema = z.object({
   title: z.string(),
   description: z.string(),
   branch: z.string().nullable(),
-  jiraTicket: z.string().nullable(),
   status: z.enum(["INBOX", "READY", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "MANUAL_UI", "DONE"]),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
   dueAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  archivedAt: z.string().nullable()
+  archivedAt: z.string().nullable(),
+  jiraTicket: z.string().nullable().optional()
 });
 
 const ticketProjectLinkSchema = z.object({
@@ -42,6 +42,14 @@ const ticketProjectLinkSchema = z.object({
   ticketId: z.number().int().positive(),
   projectId: z.number().int().positive(),
   relationship: z.enum(["PRIMARY", "RELATED", "DEPENDENCY"]),
+  createdAt: z.string()
+});
+
+const ticketJiraIssueLinkSchema = z.object({
+  id: z.number().int().positive(),
+  ticketId: z.number().int().positive(),
+  issueKey: z.string(),
+  issueSummary: z.string(),
   createdAt: z.string()
 });
 
@@ -90,6 +98,7 @@ export const importWorkspaceSchema = z.object({
       projectFolders: z.array(projectFolderSchema),
       tickets: z.array(ticketSchema),
       ticketProjectLinks: z.array(ticketProjectLinkSchema),
+      ticketJiraIssueLinks: z.array(ticketJiraIssueLinkSchema).default([]),
       workContexts: z.array(workContextSchema),
       ticketActivities: z.array(ticketActivitySchema)
     })

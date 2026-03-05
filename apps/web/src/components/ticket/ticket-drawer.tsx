@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as Reac
 import { statusLabelMap } from "../../lib/constants";
 import type { Project, Ticket } from "../../lib/types";
 import { toTicketForm, type TicketFormState } from "../../features/tickets/form";
+import { useJiraSettingsQuery } from "../../features/jira/queries";
 import { ModalDialog } from "../ui/modal-dialog";
 import {
   TicketActionBar,
@@ -24,10 +25,12 @@ interface TicketDrawerProps {
   saveSuccessCount: number;
   isDeleting: boolean;
   isOpeningInTerminal: boolean;
+  isRefreshingJira: boolean;
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
   onSave: () => void;
   onDelete: () => void;
   onOpenInTerminal: () => void;
+  onRefreshJira: () => void;
   onClose: () => void;
 }
 
@@ -35,6 +38,8 @@ const sectionClassName = "grid gap-3 border-b border-white/8 pb-4";
 const railSectionClassName = "grid min-w-0 gap-3 border-b border-white/8 pb-4 last:border-b-0 last:pb-0";
 const detailTabClassName =
   "inline-flex min-h-10 items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
+const sectionToggleButtonClassName =
+  "inline-flex min-h-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
 
 const detailTabs = [
   { id: "contexts", label: "Work contexts" },
@@ -59,12 +64,51 @@ function formatDateTime(value: string | null) {
   }).format(date);
 }
 
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
 function MetaRow(props: { label: string; value: string }) {
   return (
     <div className="grid gap-1 border-b border-white/8 pb-2.5 last:border-b-0 last:pb-0">
       <span className="text-[0.8rem] font-medium uppercase tracking-[0.12em] text-ink-300">{props.label}</span>
       <span className="text-sm font-medium text-ink-50">{props.value}</span>
     </div>
+  );
+}
+
+function RefreshIcon(props: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={props.className}
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
+  );
+}
+
+function ChevronIcon(props: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={props.className}
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
   );
 }
 
@@ -116,22 +160,32 @@ export function TicketDrawer(props: TicketDrawerProps) {
     saveSuccessCount,
     isDeleting,
     isOpeningInTerminal,
+    isRefreshingJira,
     onChange,
     onSave,
     onDelete,
     onOpenInTerminal,
+    onRefreshJira,
     onClose
   } = props;
   const [isEditing, setIsEditing] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState<DetailTabId>("contexts");
+  const [isJiraSectionExpanded, setIsJiraSectionExpanded] = useState(true);
+  const [isLinkedProjectsSectionExpanded, setIsLinkedProjectsSectionExpanded] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const detailTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const detailTabsId = useId();
+  const jiraSectionId = useId();
+  const linkedProjectsSectionId = useId();
   const preferredProjectFolder = getPreferredProjectFolder(ticket);
+  const jiraSettingsQuery = useJiraSettingsQuery();
+  const jiraBaseUrl = jiraSettingsQuery.data?.baseUrl ? trimTrailingSlash(jiraSettingsQuery.data.baseUrl) : "";
 
   useEffect(() => {
     setIsEditing(false);
     setActiveDetailTab("contexts");
+    setIsJiraSectionExpanded(true);
+    setIsLinkedProjectsSectionExpanded(false);
   }, [ticketId]);
 
   useEffect(() => {
@@ -148,12 +202,11 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const metadata = useMemo(
     () => [
       { label: "Branch", value: form.branch.trim() || "No branch" },
-      { label: "Jira ticket", value: form.jiraTicket.trim() || "No Jira ticket" },
       { label: "Status", value: statusLabelMap[form.status] },
       { label: "Priority", value: form.priority },
       { label: "Due at", value: formatDateTime(ticket?.dueAt ?? null) }
     ],
-    [form.branch, form.jiraTicket, form.priority, form.status, ticket?.dueAt]
+    [form.branch, form.priority, form.status, ticket?.dueAt]
   );
 
   const handleCancelEdit = () => {
@@ -369,6 +422,80 @@ export function TicketDrawer(props: TicketDrawerProps) {
                     {metadata.map((item) => (
                       <MetaRow key={item.label} label={item.label} value={item.value} />
                     ))}
+                    <div className="grid gap-2 border-b border-white/8 pb-2.5 last:border-b-0 last:pb-0">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[0.8rem] font-medium uppercase tracking-[0.12em] text-ink-300">Jira issues</span>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            className={sectionToggleButtonClassName}
+                            aria-expanded={isJiraSectionExpanded}
+                            aria-controls={jiraSectionId}
+                            aria-label={`${isJiraSectionExpanded ? "Hide" : "Show"} Jira issues`}
+                            onClick={() => {
+                              setIsJiraSectionExpanded((current) => !current);
+                            }}
+                          >
+                            <span>{isJiraSectionExpanded ? "Hide" : "Show"}</span>
+                            <ChevronIcon
+                              className={`ml-1.5 h-4 w-4 transition-transform ${
+                                isJiraSectionExpanded ? "" : "-rotate-90"
+                              }`}
+                            />
+                          </button>
+                          {ticket.jiraIssues.length ? (
+                            <button
+                              type="button"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50 disabled:cursor-progress disabled:opacity-70"
+                              onClick={onRefreshJira}
+                              disabled={isRefreshingJira}
+                              aria-label={isRefreshingJira ? "Refreshing Jira links" : "Refresh Jira links"}
+                              title={isRefreshingJira ? "Refreshing Jira links" : "Refresh Jira links"}
+                            >
+                              <RefreshIcon
+                                className={`h-4 w-4 ${isRefreshingJira ? "animate-spin motion-reduce:animate-none" : ""}`}
+                              />
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      {isJiraSectionExpanded ? (
+                        <div id={jiraSectionId}>
+                          {ticket.jiraIssues.length ? (
+                            <div className="grid gap-2">
+                              {ticket.jiraIssues.map((issue) => {
+                                const href = jiraBaseUrl ? `${jiraBaseUrl}/browse/${issue.key}` : null;
+
+                                return (
+                                  <div
+                                    key={issue.id}
+                                    className="min-w-0 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2"
+                                  >
+                                    {href ? (
+                                      <a
+                                        href={href}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-sm font-semibold text-ink-50 no-underline hover:text-white"
+                                      >
+                                        {issue.key}
+                                      </a>
+                                    ) : (
+                                      <span className="text-sm font-semibold text-ink-50">{issue.key}</span>
+                                    )}
+                                    <p className="m-0 mt-1 min-w-0 break-words text-sm text-ink-200">
+                                      {issue.summary || "No Jira summary cached."}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-sm font-medium text-ink-50">No Jira issues</span>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 )}
               </section>
@@ -376,51 +503,72 @@ export function TicketDrawer(props: TicketDrawerProps) {
               <section className={railSectionClassName}>
                 <div className="flex items-center justify-between gap-4">
                   <h4 className="m-0 text-base font-semibold text-ink-50">Linked projects</h4>
+                  <button
+                    type="button"
+                    className={sectionToggleButtonClassName}
+                    aria-expanded={isLinkedProjectsSectionExpanded}
+                    aria-controls={linkedProjectsSectionId}
+                    aria-label={`${isLinkedProjectsSectionExpanded ? "Hide" : "Show"} linked projects`}
+                    onClick={() => {
+                      setIsLinkedProjectsSectionExpanded((current) => !current);
+                    }}
+                  >
+                    <span>{isLinkedProjectsSectionExpanded ? "Hide" : "Show"}</span>
+                    <ChevronIcon
+                      className={`ml-1.5 h-4 w-4 transition-transform ${
+                        isLinkedProjectsSectionExpanded ? "" : "-rotate-90"
+                      }`}
+                    />
+                  </button>
                 </div>
 
-                {isEditing ? (
-                  <TicketProjectLinksField
-                    value={form.projectLinks}
-                    projects={projects}
-                    onChange={(projectLinks) =>
-                      onChange((current) => ({
-                        ...current,
-                        projectLinks
-                      }))
-                    }
-                  />
-                ) : ticket.projectLinks.length ? (
-                  <div className="grid min-w-0 gap-3">
-                    {ticket.projectLinks.map((link) => (
-                      <div className="grid min-w-0 gap-2 border-b border-white/8 pb-3 last:border-b-0 last:pb-0" key={link.id}>
-                        <div className="min-w-0">
-                          <p className="m-0 text-sm font-medium text-ink-50">
-                            {link.project.name} <span className="ml-2 text-[0.82rem] text-ink-300">{link.relationship}</span>
-                          </p>
-                          <p className="m-0 mt-1 text-sm text-ink-300">
-                            {link.project.description || "No project description."}
-                          </p>
-                        </div>
-                        <div className="grid min-w-0 gap-2">
-                          {link.project.folders.length ? (
-                            link.project.folders.map((folder) => (
-                              <div className="min-w-0" key={folder.id}>
-                                <strong className="text-sm font-semibold text-ink-50">{folder.label}</strong>
-                                <p className="m-0 mt-1 min-w-0 break-all font-mono text-[0.88rem] text-ink-300">
-                                  {folder.path}
-                                </p>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="m-0 text-sm text-ink-200">No folders attached to this project.</p>
-                          )}
-                        </div>
+                {isLinkedProjectsSectionExpanded ? (
+                  <div id={linkedProjectsSectionId}>
+                    {isEditing ? (
+                      <TicketProjectLinksField
+                        value={form.projectLinks}
+                        projects={projects}
+                        onChange={(projectLinks) =>
+                          onChange((current) => ({
+                            ...current,
+                            projectLinks
+                          }))
+                        }
+                      />
+                    ) : ticket.projectLinks.length ? (
+                      <div className="grid min-w-0 gap-3">
+                        {ticket.projectLinks.map((link) => (
+                          <div className="grid min-w-0 gap-2 border-b border-white/8 pb-3 last:border-b-0 last:pb-0" key={link.id}>
+                            <div className="min-w-0">
+                              <p className="m-0 text-sm font-medium text-ink-50">
+                                {link.project.name} <span className="ml-2 text-[0.82rem] text-ink-300">{link.relationship}</span>
+                              </p>
+                              <p className="m-0 mt-1 text-sm text-ink-300">
+                                {link.project.description || "No project description."}
+                              </p>
+                            </div>
+                            <div className="grid min-w-0 gap-2">
+                              {link.project.folders.length ? (
+                                link.project.folders.map((folder) => (
+                                  <div className="min-w-0" key={folder.id}>
+                                    <strong className="text-sm font-semibold text-ink-50">{folder.label}</strong>
+                                    <p className="m-0 mt-1 min-w-0 break-all font-mono text-[0.88rem] text-ink-300">
+                                      {folder.path}
+                                    </p>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="m-0 text-sm text-ink-200">No folders attached to this project.</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <p className="m-0 text-sm text-ink-200">No projects linked to this ticket.</p>
+                    )}
                   </div>
-                ) : (
-                  <p className="m-0 text-sm text-ink-200">No projects linked to this ticket.</p>
-                )}
+                ) : null}
               </section>
 
               {isEditing ? (

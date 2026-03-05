@@ -30,6 +30,27 @@ vi.mock("./work-context-editor", () => ({
   WorkContextEditor: () => <div>Work contexts</div>
 }));
 
+vi.mock("../../features/jira/queries", () => ({
+  useJiraSettingsQuery: () => ({
+    data: {
+      baseUrl: "https://jira.example.test",
+      email: "me@example.test",
+      hasApiToken: true
+    }
+  }),
+  useAssignedJiraIssuesQuery: () => ({
+    data: {
+      issues: [
+        { key: "BRD-321", summary: "Follow-up issue" },
+        { key: "BRD-322", summary: "Another linked task" }
+      ],
+      total: 2
+    },
+    isLoading: false,
+    error: null
+  })
+}));
+
 import { TicketDrawer } from "./ticket-drawer";
 
 const project: Project = {
@@ -49,7 +70,7 @@ const ticket: Ticket = {
   title: "Fix save state in drawer",
   description: "Saving should return the ticket drawer to read mode.",
   branch: null,
-  jiraTicket: null,
+  jiraIssues: [],
   status: "INBOX",
   priority: "HIGH",
   dueAt: null,
@@ -62,37 +83,59 @@ const ticket: Ticket = {
 };
 
 describe("TicketDrawer", () => {
-  it("renders branch and jira ticket metadata in read mode", () => {
+  it("renders branch and linked Jira issues in read mode", () => {
     render(
       <TicketDrawer
         ticketId={ticket.id}
         ticket={{
           ...ticket,
           branch: "feature/fix-save-state",
-          jiraTicket: "BRD-321"
+          jiraIssues: [
+            {
+              id: 9,
+              ticketId: ticket.id,
+              key: "BRD-321",
+              summary: "Follow-up issue",
+              createdAt: "2026-02-28T12:00:00.000Z"
+            }
+          ]
         }}
         isLoading={false}
         isError={false}
         form={toTicketForm({
           ...ticket,
           branch: "feature/fix-save-state",
-          jiraTicket: "BRD-321"
+          jiraIssues: [
+            {
+              id: 9,
+              ticketId: ticket.id,
+              key: "BRD-321",
+              summary: "Follow-up issue",
+              createdAt: "2026-02-28T12:00:00.000Z"
+            }
+          ]
         })}
         projects={[project]}
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
         isOpeningInTerminal={false}
+        isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
         onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
 
     expect(screen.getByText("feature/fix-save-state")).toBeInTheDocument();
-    expect(screen.getByText("BRD-321")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "BRD-321" })).toHaveAttribute(
+      "href",
+      "https://jira.example.test/browse/BRD-321"
+    );
+    expect(screen.getByText("Follow-up issue")).toBeInTheDocument();
   });
 
   it("renders markdown descriptions in read mode", () => {
@@ -114,16 +157,133 @@ describe("TicketDrawer", () => {
         saveSuccessCount={0}
         isDeleting={false}
         isOpeningInTerminal={false}
+        isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
         onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
 
     expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Architecture" })).toBeInTheDocument();
+  });
+
+  it("toggles Jira issues and linked projects in read mode", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          jiraIssues: [
+            {
+              id: 9,
+              ticketId: ticket.id,
+              key: "BRD-321",
+              summary: "Follow-up issue",
+              createdAt: "2026-02-28T12:00:00.000Z"
+            }
+          ],
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "RELATED",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "api",
+                    path: "/home/otzhora/projects/payments-backend",
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm({
+          ...ticket,
+          jiraIssues: [
+            {
+              id: 9,
+              ticketId: ticket.id,
+              key: "BRD-321",
+              summary: "Follow-up issue",
+              createdAt: "2026-02-28T12:00:00.000Z"
+            }
+          ],
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "RELATED",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "api",
+                    path: "/home/otzhora/projects/payments-backend",
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ]
+        })}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Follow-up issue")).toBeInTheDocument();
+    expect(screen.queryByText("Core payment services")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show linked projects" })).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(screen.getByRole("button", { name: "Show linked projects" }));
+
+    expect(screen.getByText("Core payment services")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Hide linked projects" })).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(screen.getByRole("button", { name: "Hide Jira issues" }));
+    await user.click(screen.getByRole("button", { name: "Hide linked projects" }));
+
+    expect(screen.queryByText("Follow-up issue")).not.toBeInTheDocument();
+    expect(screen.queryByText("Core payment services")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show Jira issues" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Show linked projects" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("leaves edit mode after a successful save", async () => {
@@ -143,10 +303,12 @@ describe("TicketDrawer", () => {
         saveSuccessCount={0}
         isDeleting={false}
         isOpeningInTerminal={false}
+        isRefreshingJira={false}
         onChange={handleChange}
         onSave={handleSave}
         onDelete={vi.fn()}
         onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
@@ -169,10 +331,12 @@ describe("TicketDrawer", () => {
         saveSuccessCount={1}
         isDeleting={false}
         isOpeningInTerminal={false}
+        isRefreshingJira={false}
         onChange={handleChange}
         onSave={handleSave}
         onDelete={vi.fn()}
         onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
@@ -198,10 +362,12 @@ describe("TicketDrawer", () => {
         saveSuccessCount={0}
         isDeleting={false}
         isOpeningInTerminal={false}
+        isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={handleSave}
         onDelete={vi.fn()}
         onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
         onClose={handleClose}
       />
     );
@@ -256,10 +422,12 @@ describe("TicketDrawer", () => {
         saveSuccessCount={0}
         isDeleting={false}
         isOpeningInTerminal={false}
+        isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
         onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
@@ -283,10 +451,12 @@ describe("TicketDrawer", () => {
         saveSuccessCount={0}
         isDeleting={false}
         isOpeningInTerminal={false}
+        isRefreshingJira={false}
         onChange={handleChange}
         onSave={vi.fn()}
         onDelete={vi.fn()}
         onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
@@ -320,12 +490,14 @@ describe("TicketDrawer", () => {
           saveSuccessCount={0}
           isDeleting={false}
           isOpeningInTerminal={false}
+          isRefreshingJira={false}
           onChange={(updater) => {
             setForm((current) => updater(current));
           }}
           onSave={vi.fn()}
           onDelete={vi.fn()}
           onOpenInTerminal={vi.fn()}
+          onRefreshJira={vi.fn()}
           onClose={vi.fn()}
         />
       );
@@ -378,12 +550,14 @@ describe("TicketDrawer", () => {
           saveSuccessCount={0}
           isDeleting={false}
           isOpeningInTerminal={false}
+          isRefreshingJira={false}
           onChange={(updater) => {
             setForm((current) => updater(current));
           }}
           onSave={vi.fn()}
           onDelete={vi.fn()}
           onOpenInTerminal={vi.fn()}
+          onRefreshJira={vi.fn()}
           onClose={vi.fn()}
         />
       );
@@ -438,10 +612,12 @@ describe("TicketDrawer", () => {
         saveSuccessCount={0}
         isDeleting={false}
         isOpeningInTerminal={false}
+        isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
         onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
@@ -474,10 +650,12 @@ describe("TicketDrawer", () => {
         saveSuccessCount={0}
         isDeleting={false}
         isOpeningInTerminal={false}
+        isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
         onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
@@ -485,5 +663,58 @@ describe("TicketDrawer", () => {
     await user.click(screen.getByRole("tab", { name: "Activity" }));
 
     expect(screen.getByRole("tabpanel")).toHaveAttribute("tabindex", "0");
+  });
+
+  it("shows a Jira refresh icon button and calls refresh", async () => {
+    const user = userEvent.setup();
+    const handleRefreshJira = vi.fn();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          jiraIssues: [
+            {
+              id: 11,
+              ticketId: ticket.id,
+              key: "BRD-321",
+              summary: "Follow-up issue",
+              createdAt: "2026-02-28T12:00:00.000Z"
+            }
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm({
+          ...ticket,
+          jiraIssues: [
+            {
+              id: 11,
+              ticketId: ticket.id,
+              key: "BRD-321",
+              summary: "Follow-up issue",
+              createdAt: "2026-02-28T12:00:00.000Z"
+            }
+          ]
+        })}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onRefreshJira={handleRefreshJira}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Refresh Jira links" }));
+
+    expect(handleRefreshJira).toHaveBeenCalledTimes(1);
   });
 });

@@ -23,6 +23,7 @@ import {
   useDeleteTicketMutation,
   useMoveTicketStatusMutation,
   useOpenTicketInWindowsTerminalMutation,
+  useRefreshTicketJiraLinksMutation,
   useUpdateTicketMutation
 } from "../features/tickets/mutations";
 import { useTicketQuery } from "../features/tickets/queries";
@@ -63,7 +64,7 @@ function toQuickCreatePayload(form: QuickTicketFormState) {
     title: form.title.trim(),
     description: "",
     branch: null,
-    jiraTicket: null,
+    jiraIssues: [],
     status: form.status,
     priority: form.priority,
     dueAt: null,
@@ -146,12 +147,14 @@ export function BoardPage() {
     }
   });
   const openTicketInWindowsTerminalMutation = useOpenTicketInWindowsTerminalMutation(selectedTicketId);
+  const refreshTicketJiraLinksMutation = useRefreshTicketJiraLinksMutation(selectedTicketId);
 
   const actionError =
     createTicketMutation.error?.message ??
     updateTicketMutation.error?.message ??
     deleteTicketMutation.error?.message ??
     openTicketInWindowsTerminalMutation.error?.message ??
+    refreshTicketJiraLinksMutation.error?.message ??
     moveTicketStatusMutation.error?.message;
 
   const columns = boardQuery.data?.columns ?? [];
@@ -400,6 +403,7 @@ export function BoardPage() {
         saveSuccessCount={ticketSaveSuccessCount}
         isDeleting={deleteTicketMutation.isPending}
         isOpeningInTerminal={openTicketInWindowsTerminalMutation.isPending}
+        isRefreshingJira={refreshTicketJiraLinksMutation.isPending}
         onChange={(updater) => {
           setEditForm((current) => updater(current));
         }}
@@ -411,6 +415,9 @@ export function BoardPage() {
         }}
         onOpenInTerminal={() => {
           openTicketInWindowsTerminalMutation.mutate();
+        }}
+        onRefreshJira={() => {
+          refreshTicketJiraLinksMutation.mutate();
         }}
         onClose={() => {
           setSelectedTicketId(null);

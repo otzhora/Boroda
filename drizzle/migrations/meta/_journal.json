@@ -29,6 +29,13 @@
       "when": 1772292507716,
       "tag": "0004_add_jira_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1772292507717,
+      "tag": "0005_add_ticket_jira_issue_links",
+      "breakpoints": true
     }
   ]
 }

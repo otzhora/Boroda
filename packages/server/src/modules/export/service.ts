@@ -1,14 +1,19 @@
 import type { FastifyInstance } from "fastify";
+import type { z } from "zod";
 import {
   projectFolders,
   projects,
   sequences,
   ticketActivities,
+  ticketJiraIssueLinks,
   ticketProjectLinks,
   tickets,
   workContexts
 } from "../../db/schema";
 import { AppError } from "../../shared/errors";
+import { importWorkspaceSchema } from "./schemas";
+
+type ImportWorkspacePayload = z.infer<typeof importWorkspaceSchema>;
 
 export async function exportWorkspace(app: FastifyInstance) {
   return {
@@ -19,6 +24,7 @@ export async function exportWorkspace(app: FastifyInstance) {
       projectFolders: app.db.select().from(projectFolders).all(),
       tickets: app.db.select().from(tickets).all(),
       ticketProjectLinks: app.db.select().from(ticketProjectLinks).all(),
+      ticketJiraIssueLinks: app.db.select().from(ticketJiraIssueLinks).all(),
       workContexts: app.db.select().from(workContexts).all(),
       ticketActivities: app.db.select().from(ticketActivities).all()
     }
@@ -34,10 +40,7 @@ function workspaceHasData(app: FastifyInstance) {
 
 export async function importWorkspace(
   app: FastifyInstance,
-  payload: {
-    replaceExisting: boolean;
-    snapshot: Awaited<ReturnType<typeof exportWorkspace>>;
-  }
+  payload: ImportWorkspacePayload
 ) {
   if (!payload.replaceExisting && workspaceHasData(app)) {
     throw new AppError(
@@ -48,10 +51,14 @@ export async function importWorkspace(
   }
 
   const { data } = payload.snapshot;
+  const importedTicketJiraIssueLinks =
+    data.ticketJiraIssueLinks.length ||
+    data.tickets.filter((ticket) => Boolean(ticket.jiraTicket?.trim())).length;
 
   app.db.transaction((tx) => {
     tx.delete(ticketActivities).run();
     tx.delete(workContexts).run();
+    tx.delete(ticketJiraIssueLinks).run();
     tx.delete(ticketProjectLinks).run();
     tx.delete(tickets).run();
     tx.delete(projectFolders).run();
@@ -71,11 +78,55 @@ export async function importWorkspace(
     }
 
     if (data.tickets.length) {
-      tx.insert(tickets).values(data.tickets).run();
+      tx.insert(tickets)
+        .values(
+          data.tickets.map((ticket) => ({
+            id: ticket.id,
+            key: ticket.key,
+            title: ticket.title,
+            description: ticket.description,
+            branch: ticket.branch,
+            status: ticket.status,
+            priority: ticket.priority,
+            dueAt: ticket.dueAt,
+            createdAt: ticket.createdAt,
+            updatedAt: ticket.updatedAt,
+            archivedAt: ticket.archivedAt
+          }))
+        )
+        .run();
     }
 
     if (data.ticketProjectLinks.length) {
       tx.insert(ticketProjectLinks).values(data.ticketProjectLinks).run();
+    }
+
+    if (data.ticketJiraIssueLinks.length) {
+      tx.insert(ticketJiraIssueLinks).values(data.ticketJiraIssueLinks).run();
+    } else {
+      const legacyLinks = data.tickets
+        .map((ticket) => {
+          const legacyKey = ticket.jiraTicket?.trim();
+
+          if (!legacyKey) {
+            return null;
+          }
+
+          return {
+            ticketId: ticket.id,
+            issueKey: legacyKey,
+            issueSummary: "",
+            createdAt: ticket.updatedAt
+          };
+        })
+        .filter(
+          (link): link is { ticketId: number; issueKey: string; issueSummary: string; createdAt: string } =>
+            link !== null
+        );
+
+      if (legacyLinks.length) {
+        tx.insert(ticketJiraIssueLinks).values(legacyLinks).run();
+      }
     }
 
     if (data.workContexts.length) {
@@ -96,6 +147,7 @@ export async function importWorkspace(
       projectFolders: data.projectFolders.length,
       tickets: data.tickets.length,
       ticketProjectLinks: data.ticketProjectLinks.length,
+      ticketJiraIssueLinks: importedTicketJiraIssueLinks,
       workContexts: data.workContexts.length,
       ticketActivities: data.ticketActivities.length
     }

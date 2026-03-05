@@ -9,7 +9,10 @@ interface TicketPayload {
   title: string;
   description: string;
   branch: string | null;
-  jiraTicket: string | null;
+  jiraIssues: Array<{
+    key: string;
+    summary: string;
+  }>;
   status: string;
   priority: string;
   dueAt: string | null;
@@ -196,6 +199,26 @@ export function useOpenTicketInWindowsTerminalMutation(ticketId: number | null) 
       return apiClient<{ ok: true; directory: string }>(`/api/integrations/windows-terminal/tickets/${ticketId}/open`, {
         method: "POST"
       });
+    }
+  });
+}
+
+export function useRefreshTicketJiraLinksMutation(ticketId: number | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => {
+      if (ticketId === null) {
+        throw new Error("No ticket selected");
+      }
+
+      return apiClient<Ticket>(`/api/tickets/${ticketId}/jira/refresh`, {
+        method: "POST"
+      });
+    },
+    onSuccess: (ticket) => {
+      void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: ticketQueryKey(ticket.id) });
     }
   });
 }
