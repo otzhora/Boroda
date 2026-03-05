@@ -625,6 +625,79 @@ describe("TicketDrawer", () => {
     expect(screen.getByRole("region", { name: "Ticket description" })).not.toHaveAttribute("tabindex");
   });
 
+  it("keeps the drawer layout content-sized instead of stretching columns", () => {
+    const { container } = render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project
+            },
+            {
+              id: 2,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "RELATED",
+              createdAt: "2026-02-28T12:05:00.000Z",
+              project
+            }
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm({
+          ...ticket,
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project
+            },
+            {
+              id: 2,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "RELATED",
+              createdAt: "2026-02-28T12:05:00.000Z",
+              project
+            }
+          ]
+        })}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    const layout = container.querySelector("div.grid.w-full.items-start");
+    const additionalDetailsSection = screen.getByRole("heading", { name: "Additional details" }).closest("section");
+    const linkedProjectsAside = screen.getByRole("heading", { name: "Linked projects" }).closest("aside");
+
+    expect(layout).toBeInTheDocument();
+    expect(layout?.firstElementChild).toHaveClass("content-start");
+    expect(additionalDetailsSection).toHaveClass("content-start");
+    expect(linkedProjectsAside).not.toHaveClass("xl:self-stretch");
+  });
+
   it("keeps long activity lists in a bounded tab panel", async () => {
     const user = userEvent.setup();
 

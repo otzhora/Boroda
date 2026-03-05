@@ -301,8 +301,8 @@ export function TicketDrawer(props: TicketDrawerProps) {
           Ticket details could not be loaded. Select it again or refresh the board.
         </p>
       ) : (
-        <div className="grid w-full gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(17rem,20rem)] xl:gap-8">
-          <div className="grid min-w-0 gap-6">
+        <div className="grid w-full items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(17rem,20rem)] xl:gap-8">
+          <div className="grid min-w-0 content-start gap-6">
             <section
               className={sectionClassName}
               onDoubleClick={() => {
@@ -341,7 +341,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
               )}
             </section>
 
-            <section className="grid gap-4">
+            <section className="grid content-start gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 pb-3">
                 <h4 className="m-0 text-base font-semibold text-ink-50">Additional details</h4>
                 <div
@@ -408,7 +408,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
             </section>
           </div>
 
-          <aside className="grid min-w-0 content-start xl:self-stretch xl:border-l xl:border-white/8 xl:pl-6">
+          <aside className="grid min-w-0 content-start xl:border-l xl:border-white/8 xl:pl-6">
             <div className="grid min-w-0 gap-4">
               <section className={railSectionClassName}>
                 <div className="flex min-w-0 items-center justify-between gap-4">
