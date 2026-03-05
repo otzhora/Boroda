@@ -72,6 +72,7 @@ export async function getBoard(
           ticketId: ticketProjectLinks.ticketId,
           projectId: projects.id,
           projectName: projects.name,
+          projectColor: projects.color,
           relationship: ticketProjectLinks.relationship
         })
         .from(ticketProjectLinks)
@@ -121,6 +122,7 @@ export async function getBoard(
             .map((link) => ({
               id: link.projectId,
               name: link.projectName,
+              color: link.projectColor,
               relationship: link.relationship
             })),
           jiraIssues: jiraIssueLinks

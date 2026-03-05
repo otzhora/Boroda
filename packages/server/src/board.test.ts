@@ -148,13 +148,16 @@ test("board endpoint groups tickets by status and includes context counts and pr
     { key: "PAY-43", summary: "Board card polish" }
   ]);
   assert.deepEqual(
-    inboxColumn.tickets[0].projectBadges.map((badge: { name: string; relationship: string }) => ({
+    inboxColumn.tickets[0].projectBadges.map(
+      (badge: { name: string; color: string; relationship: string }) => ({
       name: badge.name,
+      color: badge.color,
       relationship: badge.relationship
-    })),
+      })
+    ),
     [
-      { name: "Payments Backend", relationship: "PRIMARY" },
-      { name: "Payments Infra", relationship: "RELATED" }
+      { name: "Payments Backend", color: "#355c7d", relationship: "PRIMARY" },
+      { name: "Payments Infra", color: "#355c7d", relationship: "RELATED" }
     ]
   );
   assert.equal(doneColumn.tickets[0].id, doneTicket.id);

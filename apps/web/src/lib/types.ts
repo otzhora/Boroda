@@ -57,6 +57,7 @@ export interface BoardTicket {
   projectBadges: Array<{
     id: number;
     name: string;
+    color: string;
     relationship: TicketProjectRelationship;
   }>;
   jiraIssues: JiraIssueLinkSummary[];
