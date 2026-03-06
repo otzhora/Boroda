@@ -19,6 +19,21 @@ const optionalTicketTextField = z
   .nullable()
   .optional();
 
+const workspaceRoleField = z
+  .string()
+  .trim()
+  .min(1)
+  .max(48)
+  .default("primary");
+
+const workspaceSchema = z.object({
+  id: z.number().int().positive().optional(),
+  projectFolderId: z.number().int().positive(),
+  branchName: z.string().trim().min(1),
+  baseBranch: optionalTicketTextField,
+  role: workspaceRoleField
+});
+
 export const ticketIdParamSchema = z.object({
   id: z.coerce.number().int().positive()
 });
@@ -38,6 +53,7 @@ export const createTicketSchema = z.object({
   title: z.string().min(1),
   description: z.string().default(""),
   branch: optionalTicketTextField,
+  workspaces: z.array(workspaceSchema).default([]),
   jiraIssues: z
     .array(
       z.object({

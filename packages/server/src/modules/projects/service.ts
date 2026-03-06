@@ -113,7 +113,7 @@ export async function deleteProject(app: FastifyInstance, id: number) {
 export async function createProjectFolder(
   app: FastifyInstance,
   projectId: number,
-  input: { label: string; path: string; kind: string; isPrimary: boolean }
+  input: { label: string; path: string; defaultBranch?: string | null; kind: string; isPrimary: boolean }
 ) {
   await getProjectOrThrow(app, projectId);
   const pathInfo = await resolvePathInfo(input.path);
@@ -134,6 +134,7 @@ export async function createProjectFolder(
         projectId,
         label: input.label,
         path: normalizeWslPath(input.path),
+        defaultBranch: input.defaultBranch?.trim() || null,
         kind: input.kind,
         isPrimary: input.isPrimary,
         existsOnDisk: pathInfo.exists,
@@ -155,7 +156,7 @@ export async function createProjectFolder(
 export async function updateProjectFolder(
   app: FastifyInstance,
   id: number,
-  input: Partial<{ label: string; path: string; kind: string; isPrimary: boolean }>
+  input: Partial<{ label: string; path: string; defaultBranch: string | null; kind: string; isPrimary: boolean }>
 ) {
   const existing = app.db
     .select()
@@ -193,6 +194,7 @@ export async function updateProjectFolder(
       .set({
         ...input,
         path: normalizedPath,
+        defaultBranch: input.defaultBranch === undefined ? existing.defaultBranch : input.defaultBranch?.trim() || null,
         existsOnDisk: pathInfo?.exists ?? existing.existsOnDisk,
         updatedAt: now
       })

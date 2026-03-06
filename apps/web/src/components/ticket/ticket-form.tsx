@@ -16,7 +16,7 @@ import { useUploadTicketImageMutation } from "../../features/tickets/mutations";
 import type { Project, TicketPriority, TicketStatus } from "../../lib/types";
 import { ProjectLinkEditor } from "./project-link-editor";
 import { MarkdownDescription } from "./markdown-description";
-import type { TicketFormState } from "../../features/tickets/form";
+import type { TicketFormState, TicketWorkspaceFormState } from "../../features/tickets/form";
 import { JiraIssueSelector } from "./jira-issue-selector";
 
 interface TicketTitleFieldProps {
@@ -44,6 +44,7 @@ interface TicketDescriptionFieldProps {
 
 interface TicketMetaFieldsProps {
   form: TicketFormState;
+  projects: Project[];
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
 }
 
@@ -51,6 +52,13 @@ interface TicketProjectLinksFieldProps {
   value: TicketFormState["projectLinks"];
   projects: Project[];
   onChange: (projectLinks: TicketFormState["projectLinks"]) => void;
+}
+
+interface TicketWorkspaceFieldProps {
+  value: TicketWorkspaceFormState[];
+  projects: Project[];
+  projectLinks: TicketFormState["projectLinks"];
+  onChange: (workspaces: TicketWorkspaceFormState[]) => void;
 }
 
 interface TicketActionBarProps {
@@ -366,25 +374,145 @@ export function TicketDescriptionField({
   );
 }
 
-export function TicketMetaFields({ form, onChange }: TicketMetaFieldsProps) {
+function createWorkspaceDraft(): TicketWorkspaceFormState {
+  return {
+    projectFolderId: "",
+    branchName: "",
+    baseBranch: "",
+    role: "primary"
+  };
+}
+
+function getWorkspaceFolderOptions(projects: Project[], projectLinks: TicketFormState["projectLinks"]) {
+  const linkedProjectIds = new Set(
+    projectLinks
+      .map((link) => Number(link.projectId))
+      .filter((projectId) => Number.isInteger(projectId) && projectId > 0)
+  );
+
+  return projects
+    .filter((project) => linkedProjectIds.has(project.id))
+    .flatMap((project) =>
+      project.folders.map((folder) => ({
+        id: String(folder.id),
+        label: `${project.name} · ${folder.label}`,
+        hint: folder.defaultBranch ? `Default: ${folder.defaultBranch}` : "Default branch not set"
+      }))
+    );
+}
+
+export function TicketWorkspaceFields({ value, projects, projectLinks, onChange }: TicketWorkspaceFieldProps) {
+  const folderOptions = getWorkspaceFolderOptions(projects, projectLinks);
+
+  return (
+    <div className="grid gap-3">
+      {value.length ? (
+        value.map((workspace, index) => (
+          <div key={workspace.id ?? `${workspace.projectFolderId}-${index}`} className="grid gap-3 rounded-xl border border-white/8 bg-black/10 p-3">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+              <label className="grid gap-2">
+                <span className={labelClassName}>Folder</span>
+                <select
+                  className={inputClassName}
+                  value={workspace.projectFolderId}
+                  onChange={(event) =>
+                    onChange(
+                      value.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, projectFolderId: event.target.value } : item
+                      )
+                    )
+                  }
+                >
+                  <option value="">Choose folder…</option>
+                  {folderOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-2">
+                <span className={labelClassName}>Role</span>
+                <input
+                  className={inputClassName}
+                  value={workspace.role}
+                  onChange={(event) =>
+                    onChange(value.map((item, itemIndex) => (itemIndex === index ? { ...item, role: event.target.value } : item)))
+                  }
+                  placeholder="primary"
+                />
+              </label>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <label className="grid gap-2">
+                <span className={labelClassName}>Branch</span>
+                <input
+                  className={inputClassName}
+                  value={workspace.branchName}
+                  onChange={(event) =>
+                    onChange(value.map((item, itemIndex) => (itemIndex === index ? { ...item, branchName: event.target.value } : item)))
+                  }
+                  placeholder="feature/ticket-context…"
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className={labelClassName}>Base branch</span>
+                <input
+                  className={inputClassName}
+                  value={workspace.baseBranch}
+                  onChange={(event) =>
+                    onChange(value.map((item, itemIndex) => (itemIndex === index ? { ...item, baseBranch: event.target.value } : item)))
+                  }
+                  placeholder="Uses folder default branch"
+                />
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  className={secondaryButtonClassName}
+                  onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+            {workspace.projectFolderId ? (
+              <p className="m-0 text-sm text-ink-300">
+                {folderOptions.find((option) => option.id === workspace.projectFolderId)?.hint ?? "Folder not available"}
+              </p>
+            ) : null}
+          </div>
+        ))
+      ) : (
+        <p className="m-0 text-sm text-ink-300">No workspaces yet.</p>
+      )}
+      <div>
+        <button type="button" className={secondaryButtonClassName} onClick={() => onChange([...value, createWorkspaceDraft()])}>
+          Add workspace
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function TicketMetaFields({ form, projects, onChange }: TicketMetaFieldsProps) {
   return (
     <div className="grid gap-4">
-      <label className="grid gap-2">
-        <span className={labelClassName}>Branch</span>
-        <input
-          className={inputClassName}
-          type="text"
-          inputMode="text"
-          placeholder="feature/ticket-context…"
-          value={form.branch}
-          onChange={(event) =>
+      <div className="grid gap-2">
+        <span className={labelClassName}>Workspaces</span>
+        <TicketWorkspaceFields
+          value={form.workspaces}
+          projects={projects}
+          projectLinks={form.projectLinks}
+          onChange={(workspaces) =>
             onChange((current) => ({
               ...current,
-              branch: event.target.value
+              workspaces,
+              branch: workspaces[0]?.branchName ?? current.branch
             }))
           }
         />
-      </label>
+      </div>
 
       <div className="grid gap-2">
         <span className={labelClassName}>Jira issues</span>

@@ -70,6 +70,7 @@ const ticket: Ticket = {
   title: "Fix save state in drawer",
   description: "Saving should return the ticket drawer to read mode.",
   branch: null,
+  workspaces: [],
   jiraIssues: [],
   status: "INBOX",
   priority: "HIGH",
@@ -203,6 +204,7 @@ describe("TicketDrawer", () => {
                     projectId: project.id,
                     label: "api",
                     path: "/home/otzhora/projects/payments-backend",
+                    defaultBranch: null,
                     kind: "APP",
                     isPrimary: true,
                     existsOnDisk: true,
@@ -242,6 +244,7 @@ describe("TicketDrawer", () => {
                     projectId: project.id,
                     label: "api",
                     path: "/home/otzhora/projects/payments-backend",
+                    defaultBranch: null,
                     kind: "APP",
                     isPrimary: true,
                     existsOnDisk: true,
@@ -448,10 +451,10 @@ describe("TicketDrawer", () => {
 
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Edit ticket branch" }));
+    await user.click(screen.getByRole("button", { name: "Edit ticket workspaces" }));
 
     expect(screen.getByDisplayValue("feature/existing-branch")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit ticket status" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit ticket priority" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit ticket due date" })).toBeInTheDocument();
@@ -478,6 +481,7 @@ describe("TicketDrawer", () => {
                     projectId: project.id,
                     label: "workspace",
                     path: "/home/otzhora/projects/payments",
+                    defaultBranch: null,
                     kind: "APP",
                     isPrimary: true,
                     existsOnDisk: true,
@@ -535,6 +539,7 @@ describe("TicketDrawer", () => {
                     projectId: project.id,
                     label: "workspace",
                     path: "/home/otzhora/projects/payments",
+                    defaultBranch: null,
                     kind: "APP",
                     isPrimary: true,
                     existsOnDisk: true,
@@ -561,6 +566,7 @@ describe("TicketDrawer", () => {
                     projectId: 2,
                     label: "frontend",
                     path: "/home/otzhora/projects/admin",
+                    defaultBranch: null,
                     kind: "APP",
                     isPrimary: true,
                     existsOnDisk: true,
@@ -610,7 +616,7 @@ describe("TicketDrawer", () => {
 
     await user.click(adminOptionButton!);
 
-    expect(handleOpenInApp).toHaveBeenCalledWith("explorer", 77);
+    expect(handleOpenInApp).toHaveBeenCalledWith("explorer", 77, undefined);
   });
 
   it("opens the app picker upward when the trigger is near the viewport bottom", async () => {
@@ -636,6 +642,7 @@ describe("TicketDrawer", () => {
                     projectId: project.id,
                     label: "workspace",
                     path: "/home/otzhora/projects/payments",
+                    defaultBranch: null,
                     kind: "APP",
                     isPrimary: true,
                     existsOnDisk: true,

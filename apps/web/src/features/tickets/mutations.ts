@@ -10,6 +10,12 @@ interface TicketPayload {
   title: string;
   description: string;
   branch: string | null;
+  workspaces: Array<{
+    projectFolderId: number;
+    branchName: string;
+    baseBranch: string | null;
+    role: string;
+  }>;
   jiraIssues: Array<{
     key: string;
     summary: string;
@@ -198,7 +204,7 @@ export function useMoveTicketStatusMutation(options: {
 
 export function useOpenTicketInAppMutation(ticketId: number | null) {
   return useMutation({
-    mutationFn: (input: { target: OpenInTarget; folderId?: number }) => {
+    mutationFn: (input: { target: OpenInTarget; folderId?: number; workspaceId?: number }) => {
       if (ticketId === null) {
         throw new Error("No ticket selected");
       }

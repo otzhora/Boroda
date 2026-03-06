@@ -8,15 +8,18 @@ import type { FastifyInstance } from "fastify";
 import { getConfig } from "../../config";
 import { getJiraIssuesByKeys } from "../integrations/jira/service";
 import {
+  projectFolders,
   projects,
   sequences,
   ticketActivities,
   ticketJiraIssueLinks,
   ticketProjectLinks,
+  ticketWorkspaces,
   tickets,
   workContexts
 } from "../../db/schema";
 import { AppError } from "../../shared/errors";
+import { isWorkspaceDirty, removeWorkspaceWorktree } from "../integrations/open-in/git-workspaces";
 
 const supportedTicketImageMimeTypes = new Map([
   ["image/png", "png"],
@@ -318,6 +321,155 @@ async function loadTicketJiraIssueLinks(app: FastifyInstance, ticketId: number) 
   });
 }
 
+async function loadTicketWorkspaces(app: FastifyInstance, ticketId: number) {
+  return app.db.query.ticketWorkspaces.findMany({
+    where: eq(ticketWorkspaces.ticketId, ticketId),
+    with: {
+      projectFolder: {
+        with: {
+          project: true
+        }
+      }
+    },
+    orderBy: [asc(ticketWorkspaces.id)]
+  });
+}
+
+function normalizeWorkspaceRole(role: string | undefined) {
+  const normalized = role?.trim().toLowerCase();
+  return normalized && normalized.length ? normalized : "primary";
+}
+
+function normalizeWorkspaceBranch(branchName: string) {
+  return branchName.trim();
+}
+
+function deriveLegacyBranch(
+  workspaces: Array<{ branchName: string; role?: string | null }>,
+  fallbackBranch?: string | null
+) {
+  const preferredWorkspace =
+    workspaces.find((workspace) => normalizeWorkspaceRole(workspace.role ?? undefined) === "primary") ?? workspaces[0];
+
+  return preferredWorkspace?.branchName ?? fallbackBranch ?? null;
+}
+
+async function ensureWorkspaceFoldersExist(
+  app: FastifyInstance,
+  projectLinks: Array<{ projectId: number }>,
+  workspaces: Array<{ projectFolderId: number }>
+) {
+  if (!workspaces.length) {
+    return [];
+  }
+
+  const folderIds = [...new Set(workspaces.map((workspace) => workspace.projectFolderId))];
+  const existingFolders = app.db.query.projectFolders.findMany({
+    where: inArray(projectFolders.id, folderIds),
+    with: {
+      project: true
+    }
+  });
+
+  const folders = await existingFolders;
+  if (folders.length !== folderIds.length) {
+    const existingFolderIds = new Set(folders.map((folder) => folder.id));
+    const missingFolderId = folderIds.find((folderId) => !existingFolderIds.has(folderId));
+    throw new AppError(404, "PROJECT_FOLDER_NOT_FOUND", "Project folder not found", {
+      projectFolderId: missingFolderId
+    });
+  }
+
+  const linkedProjectIds = new Set(projectLinks.map((link) => link.projectId));
+  const unlinkedFolder = folders.find((folder) => !linkedProjectIds.has(folder.projectId));
+  if (unlinkedFolder) {
+    throw new AppError(400, "WORKSPACE_PROJECT_FOLDER_NOT_LINKED", "Workspace folder must belong to a project linked to the ticket", {
+      projectFolderId: unlinkedFolder.id,
+      projectId: unlinkedFolder.projectId
+    });
+  }
+
+  return folders;
+}
+
+async function replaceWorkspaces(
+  app: FastifyInstance,
+  ticketId: number,
+  projectLinks: Array<{ projectId: number }>,
+  workspaces: Array<{ projectFolderId: number; branchName: string; baseBranch?: string | null; role?: string }>
+) {
+  const normalizedWorkspaces = workspaces
+    .map((workspace) => ({
+      projectFolderId: workspace.projectFolderId,
+      branchName: normalizeWorkspaceBranch(workspace.branchName),
+      baseBranch: workspace.baseBranch?.trim() || null,
+      role: normalizeWorkspaceRole(workspace.role)
+    }))
+    .filter((workspace) => workspace.branchName.length > 0);
+
+  const uniqueKeys = new Set<string>();
+  for (const workspace of normalizedWorkspaces) {
+    const key = `${workspace.projectFolderId}:${workspace.branchName.toLowerCase()}`;
+    if (uniqueKeys.has(key)) {
+      throw new AppError(400, "TICKET_WORKSPACE_DUPLICATE", "Each workspace branch can only be linked once per folder", {
+        projectFolderId: workspace.projectFolderId,
+        branchName: workspace.branchName
+      });
+    }
+    uniqueKeys.add(key);
+  }
+
+  await ensureWorkspaceFoldersExist(app, projectLinks, normalizedWorkspaces);
+  app.db.delete(ticketWorkspaces).where(eq(ticketWorkspaces.ticketId, ticketId)).run();
+
+  if (!normalizedWorkspaces.length) {
+    return;
+  }
+
+  const now = nowIso();
+  app.db
+    .insert(ticketWorkspaces)
+    .values(
+      normalizedWorkspaces.map((workspace) => ({
+        ticketId,
+        projectFolderId: workspace.projectFolderId,
+        branchName: workspace.branchName,
+        baseBranch: workspace.baseBranch,
+        role: workspace.role,
+        createdByBoroda: true,
+        createdAt: now,
+        updatedAt: now
+      }))
+    )
+    .run();
+}
+
+async function cleanupTicketWorkspaces(app: FastifyInstance, ticketId: number) {
+  const workspaces = await loadTicketWorkspaces(app, ticketId);
+  const dirtyWorkspaces = workspaces.filter(
+    (workspace) => workspace.createdByBoroda && workspace.worktreePath && isWorkspaceDirty(workspace.worktreePath)
+  );
+
+  if (dirtyWorkspaces.length) {
+    throw new AppError(409, "TICKET_WORKSPACES_DIRTY", "One or more managed workspaces have uncommitted changes", {
+      workspaces: dirtyWorkspaces.map((workspace) => ({
+        id: workspace.id,
+        branchName: workspace.branchName,
+        worktreePath: workspace.worktreePath,
+        projectFolderId: workspace.projectFolderId
+      }))
+    });
+  }
+
+  for (const workspace of workspaces) {
+    if (!workspace.createdByBoroda || !workspace.worktreePath) {
+      continue;
+    }
+
+    removeWorkspaceWorktree(workspace.worktreePath);
+  }
+}
+
 function recordProjectLinkChanges(
   app: FastifyInstance,
   ticketId: number,
@@ -513,6 +665,7 @@ export async function getTicketOrThrow(app: FastifyInstance, id: number) {
 
   const projectLinks = await loadTicketProjectLinks(app, id);
   const jiraIssues = await loadTicketJiraIssueLinks(app, id);
+  const relatedWorkspaces = await loadTicketWorkspaces(app, id);
 
   const relatedWorkContexts = app.db
     .select()
@@ -538,6 +691,7 @@ export async function getTicketOrThrow(app: FastifyInstance, id: number) {
       summary: issue.issueSummary,
       createdAt: issue.createdAt
     })),
+    workspaces: relatedWorkspaces,
     workContexts: relatedWorkContexts,
     activities
   };
@@ -549,6 +703,12 @@ export async function createTicket(
     title: string;
     description: string;
     branch?: string | null;
+    workspaces?: Array<{
+      projectFolderId: number;
+      branchName: string;
+      baseBranch?: string | null;
+      role?: string;
+    }>;
     jiraIssues: Array<{ key: string; summary: string }>;
     status: string;
     priority: string;
@@ -570,7 +730,7 @@ export async function createTicket(
       key,
       title: input.title,
       description: input.description,
-      branch: input.branch ?? null,
+      branch: deriveLegacyBranch(input.workspaces ?? [], input.branch ?? null),
       status: input.status,
       priority: input.priority,
       dueAt: input.dueAt ?? null,
@@ -582,6 +742,7 @@ export async function createTicket(
 
   try {
     await replaceProjectLinks(app, ticket.id, input.projectLinks);
+    await replaceWorkspaces(app, ticket.id, input.projectLinks, input.workspaces ?? []);
     await replaceJiraIssueLinks(app, ticket.id, input.jiraIssues);
   } catch (error) {
     app.db.delete(tickets).where(eq(tickets.id, ticket.id)).run();
@@ -602,6 +763,12 @@ export async function updateTicket(
     title: string;
     description: string;
     branch: string | null;
+    workspaces: Array<{
+      projectFolderId: number;
+      branchName: string;
+      baseBranch?: string | null;
+      role?: string;
+    }>;
     jiraIssues: Array<{ key: string; summary: string }>;
     status: string;
     priority: string;
@@ -611,13 +778,19 @@ export async function updateTicket(
 ) {
   const existing = await getTicketOrThrow(app, id);
   const nextUpdatedAt = nowIso();
+  const nextLegacyBranch =
+    input.workspaces === undefined
+      ? input.branch === undefined
+        ? existing.branch
+        : input.branch
+      : deriveLegacyBranch(input.workspaces, input.branch === undefined ? existing.branch : input.branch);
 
   const updated = app.db
     .update(tickets)
     .set({
       title: input.title ?? existing.title,
       description: input.description ?? existing.description,
-      branch: input.branch === undefined ? existing.branch : input.branch,
+      branch: nextLegacyBranch,
       status: input.status ?? existing.status,
       priority: input.priority ?? existing.priority,
       dueAt: input.dueAt === undefined ? existing.dueAt : input.dueAt,
@@ -639,6 +812,10 @@ export async function updateTicket(
     assertUniqueJiraIssueLinks(input.jiraIssues);
   }
 
+  if (input.workspaces) {
+    await ensureWorkspaceFoldersExist(app, input.projectLinks ?? existing.projectLinks, input.workspaces);
+  }
+
   if (input.projectLinks) {
     try {
       await replaceProjectLinks(app, id, input.projectLinks);
@@ -653,6 +830,10 @@ export async function updateTicket(
     }));
     const nextLinks = await loadTicketProjectLinks(app, id);
     recordProjectLinkChanges(app, id, previousLinks, nextLinks);
+  }
+
+  if (input.workspaces) {
+    await replaceWorkspaces(app, id, input.projectLinks ?? existing.projectLinks, input.workspaces);
   }
 
   if (input.jiraIssues) {
@@ -728,6 +909,7 @@ export async function refreshTicketJiraIssues(app: FastifyInstance, id: number) 
 
 export async function deleteTicket(app: FastifyInstance, id: number) {
   await getTicketOrThrow(app, id);
+  await cleanupTicketWorkspaces(app, id);
   app.db.delete(tickets).where(eq(tickets.id, id)).run();
   await removeTicketImageDirectory(app, id);
   return { ok: true };

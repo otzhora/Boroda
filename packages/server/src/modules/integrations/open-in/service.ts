@@ -1,10 +1,19 @@
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { mkdir } from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
+import { eq } from "drizzle-orm";
 import { getConfig } from "../../../config";
+import { ticketWorkspaces } from "../../../db/schema";
 import { AppError } from "../../../shared/errors";
 import { getTicketOrThrow } from "../../tickets/service";
+import {
+  detectRemoteDefaultBranch,
+  ensureGitRepo,
+  ensureWorkspaceWorktree,
+  validateWorkspaceWorktree
+} from "./git-workspaces";
 
 export type OpenInTarget = "explorer" | "vscode" | "cursor" | "terminal";
 
@@ -23,6 +32,7 @@ interface LauncherSpec {
 interface OpenTicketInAppInput {
   target: OpenInTarget;
   folderId?: number;
+  workspaceId?: number;
 }
 
 interface PreferredFolderCandidate {
@@ -35,6 +45,30 @@ interface PreferredFolderCandidate {
       isPrimary: boolean;
       existsOnDisk: boolean;
     }>;
+  };
+}
+
+interface TicketWorkspaceCandidate {
+  id: number;
+  ticketId: number;
+  projectFolderId: number;
+  branchName: string;
+  baseBranch: string | null;
+  role: string;
+  worktreePath: string | null;
+  createdByBoroda: boolean;
+  lastOpenedAt: string | null;
+  projectFolder: {
+    id: number;
+    projectId: number;
+    label: string;
+    path: string;
+    defaultBranch: string | null;
+    project: {
+      id: number;
+      name: string;
+      slug: string;
+    };
   };
 }
 
@@ -88,6 +122,35 @@ function findLinkedProjectFolder(links: PreferredFolderCandidate[], folderId: nu
   }
 
   return null;
+}
+
+function slugifyPathSegment(input: string) {
+  const normalized = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return normalized || "workspace";
+}
+
+function getManagedWorkspacePath(params: {
+  ticketKey: string;
+  projectSlug: string;
+  folderLabel: string;
+  branchName: string;
+}) {
+  return path.resolve(
+    getConfig().worktreesPath,
+    params.ticketKey,
+    slugifyPathSegment(params.projectSlug),
+    slugifyPathSegment(params.folderLabel),
+    slugifyPathSegment(params.branchName)
+  );
+}
+
+function findWorkspacesForFolder(workspaces: TicketWorkspaceCandidate[], folderId: number) {
+  return workspaces.filter((workspace) => workspace.projectFolderId === folderId);
 }
 
 function isWslEnvironment() {
@@ -298,6 +361,61 @@ export async function openInApp(input: OpenInAppInput) {
   };
 }
 
+async function resolveWorkspaceDirectory(
+  app: FastifyInstance,
+  ticket: Awaited<ReturnType<typeof getTicketOrThrow>>,
+  folderId: number,
+  workspace: TicketWorkspaceCandidate
+) {
+  const repoRoot = ensureGitRepo(workspace.projectFolder.path);
+  const folderDefaultBranch = workspace.projectFolder.defaultBranch?.trim() || null;
+  const detectedDefaultBranch = detectRemoteDefaultBranch(repoRoot);
+  const baseBranch = workspace.baseBranch?.trim() || folderDefaultBranch;
+
+  if (folderDefaultBranch && detectedDefaultBranch && folderDefaultBranch !== detectedDefaultBranch) {
+    throw new AppError(409, "WORKSPACE_DEFAULT_BRANCH_INVALID", "The configured default branch does not match the repository default branch", {
+      projectFolderId: folderId,
+      configuredDefaultBranch: folderDefaultBranch,
+      detectedDefaultBranch
+    });
+  }
+
+  const worktreePath =
+    workspace.worktreePath ??
+    getManagedWorkspacePath({
+      ticketKey: ticket.key,
+      projectSlug: workspace.projectFolder.project.slug,
+      folderLabel: workspace.projectFolder.label,
+      branchName: workspace.branchName
+    });
+  await mkdir(path.dirname(worktreePath), { recursive: true });
+
+  const ensuredPath = workspace.worktreePath
+    ? validateWorkspaceWorktree({
+        worktreePath,
+        expectedBranch: workspace.branchName
+      })
+    : await ensureWorkspaceWorktree({
+        repoPath: repoRoot,
+        worktreePath,
+        branchName: workspace.branchName,
+        baseBranch
+      });
+
+  const now = new Date().toISOString();
+  app.db
+    .update(ticketWorkspaces)
+    .set({
+      worktreePath: ensuredPath,
+      updatedAt: now,
+      lastOpenedAt: now
+    })
+    .where(eq(ticketWorkspaces.id, workspace.id))
+    .run();
+
+  return ensuredPath;
+}
+
 export async function openTicketInApp(app: FastifyInstance, ticketId: number, input: OpenTicketInAppInput) {
   const ticket = await getTicketOrThrow(app, ticketId);
   const selectedFolder =
@@ -317,8 +435,38 @@ export async function openTicketInApp(app: FastifyInstance, ticketId: number, in
     );
   }
 
+  const matchingWorkspaces = findWorkspacesForFolder(ticket.workspaces ?? [], selectedFolder.id);
+  let selectedWorkspace: TicketWorkspaceCandidate | null = null;
+
+  if (input.workspaceId !== undefined) {
+    selectedWorkspace = matchingWorkspaces.find((workspace) => workspace.id === input.workspaceId) ?? null;
+
+    if (!selectedWorkspace) {
+      throw new AppError(409, "TICKET_WORKSPACE_NOT_AVAILABLE", "The selected workspace is not available for this folder", {
+        folderId: selectedFolder.id,
+        workspaceId: input.workspaceId
+      });
+    }
+  } else if (matchingWorkspaces.length > 1) {
+    throw new AppError(409, "TICKET_WORKSPACE_SELECTION_REQUIRED", "Choose which ticket workspace to open for this folder", {
+      folderId: selectedFolder.id,
+      workspaces: matchingWorkspaces.map((workspace) => ({
+        id: workspace.id,
+        branchName: workspace.branchName,
+        role: workspace.role,
+        projectFolderId: workspace.projectFolderId
+      }))
+    });
+  } else {
+    selectedWorkspace = matchingWorkspaces[0] ?? null;
+  }
+
+  const directory = selectedWorkspace
+    ? await resolveWorkspaceDirectory(app, ticket, selectedFolder.id, selectedWorkspace)
+    : selectedFolder.path;
+
   return openInApp({
-    directory: selectedFolder.path,
+    directory,
     target: input.target
   });
 }

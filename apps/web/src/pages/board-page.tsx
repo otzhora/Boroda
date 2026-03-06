@@ -64,6 +64,7 @@ function toQuickCreatePayload(form: QuickTicketFormState) {
     title: form.title.trim(),
     description: "",
     branch: null,
+    workspaces: [],
     jiraIssues: [],
     status: form.status,
     priority: form.priority,

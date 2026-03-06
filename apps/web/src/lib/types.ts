@@ -25,6 +25,7 @@ export interface ProjectFolder {
   projectId: number;
   label: string;
   path: string;
+  defaultBranch: string | null;
   kind: ProjectFolderKind;
   isPrimary: boolean;
   existsOnDisk: boolean;
@@ -120,6 +121,7 @@ export interface Ticket {
   title: string;
   description: string;
   branch: string | null;
+  workspaces: TicketWorkspace[];
   status: TicketStatus;
   priority: TicketPriority;
   dueAt: string | null;
@@ -144,4 +146,21 @@ export interface TicketListItem {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+}
+
+export interface TicketWorkspace {
+  id: number;
+  ticketId: number;
+  projectFolderId: number;
+  branchName: string;
+  baseBranch: string | null;
+  role: string;
+  worktreePath: string | null;
+  createdByBoroda: boolean;
+  lastOpenedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  projectFolder: ProjectFolder & {
+    project: Pick<Project, "id" | "name" | "slug" | "color" | "description" | "createdAt" | "updatedAt">;
+  };
 }

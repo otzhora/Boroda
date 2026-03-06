@@ -58,6 +58,7 @@ function toQuickCreatePayload(issue: { key: string; summary: string }, form: Qui
     title: form.title.trim(),
     description: "",
     branch: null,
+    workspaces: [],
     jiraIssues: [
       {
         key: issue.key.trim().toUpperCase(),

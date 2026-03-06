@@ -14,7 +14,14 @@ import type { OpenInTarget, Project, Ticket } from "../../lib/types";
 import type { TicketFormState } from "../../features/tickets/form";
 import { useJiraSettingsQuery } from "../../features/jira/queries";
 import { ModalDialog } from "../ui/modal-dialog";
-import { TicketDescriptionField, TicketProjectLinksField, TicketTitleField, inputClassName, labelClassName } from "./ticket-form";
+import {
+  TicketDescriptionField,
+  TicketProjectLinksField,
+  TicketTitleField,
+  TicketWorkspaceFields,
+  inputClassName,
+  labelClassName
+} from "./ticket-form";
 import { JiraIssueSelector } from "./jira-issue-selector";
 import { MarkdownDescription } from "./markdown-description";
 import { WorkContextEditor } from "./work-context-editor";
@@ -34,7 +41,7 @@ interface TicketDrawerProps {
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
   onSave: () => void;
   onDelete: () => void;
-  onOpenInApp: (target: OpenInTarget, folderId?: number) => void;
+  onOpenInApp: (target: OpenInTarget, folderId?: number, workspaceId?: number) => void;
   onRefreshJira: () => void;
   onClose: () => void;
 }
@@ -301,6 +308,15 @@ interface TerminalFolderOption {
   isPrimaryFolder: boolean;
 }
 
+interface WorkspaceOption {
+  id: number;
+  folderId: number;
+  branchName: string;
+  role: string;
+  projectName: string;
+  folderLabel: string;
+}
+
 const openInTargets: Array<{
   id: OpenInTarget;
   label: string;
@@ -371,6 +387,23 @@ function getAvailableTerminalFolders(ticket: Ticket | undefined): TerminalFolder
     );
 }
 
+function getWorkspaceOptions(ticket: Ticket | undefined, folderId: number | null): WorkspaceOption[] {
+  if (!ticket || folderId === null) {
+    return [];
+  }
+
+  return ticket.workspaces
+    .filter((workspace) => workspace.projectFolderId === folderId)
+    .map((workspace) => ({
+      id: workspace.id,
+      folderId,
+      branchName: workspace.branchName,
+      role: workspace.role,
+      projectName: workspace.projectFolder.project.name,
+      folderLabel: workspace.projectFolder.label
+    }));
+}
+
 export function TicketDrawer(props: TicketDrawerProps) {
   const {
     ticketId,
@@ -400,6 +433,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const [openInMenuMaxHeight, setOpenInMenuMaxHeight] = useState<number>(320);
   const [selectedOpenTarget, setSelectedOpenTarget] = useState<OpenInTarget>("vscode");
   const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
+  const [workspacePickerFolderId, setWorkspacePickerFolderId] = useState<number | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
   const detailTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -414,12 +448,17 @@ export function TicketDrawer(props: TicketDrawerProps) {
     terminal: null
   });
   const firstFolderOptionRef = useRef<HTMLButtonElement>(null);
+  const firstWorkspaceOptionRef = useRef<HTMLButtonElement>(null);
   const detailTabsId = useId();
   const jiraSectionId = useId();
   const linkedProjectsSectionId = useId();
   const openInMenuId = useId();
   const preferredProjectFolder = getPreferredProjectFolder(ticket);
   const availableTerminalFolders = useMemo(() => getAvailableTerminalFolders(ticket), [ticket]);
+  const availableWorkspaceOptions = useMemo(
+    () => getWorkspaceOptions(ticket, workspacePickerFolderId),
+    [ticket, workspacePickerFolderId]
+  );
   const jiraSettingsQuery = useJiraSettingsQuery();
   const jiraBaseUrl = jiraSettingsQuery.data?.baseUrl ? trimTrailingSlash(jiraSettingsQuery.data.baseUrl) : "";
 
@@ -431,6 +470,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
     setIsOpenInMenuOpen(false);
     setSelectedOpenTarget("vscode");
     setIsFolderPickerOpen(false);
+    setWorkspacePickerFolderId(null);
   }, [ticketId]);
 
   useEffect(() => {
@@ -473,6 +513,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
     if (!availableTerminalFolders.length) {
       setIsOpenInMenuOpen(false);
       setIsFolderPickerOpen(false);
+      setWorkspacePickerFolderId(null);
     }
   }, [availableTerminalFolders.length]);
 
@@ -543,6 +584,19 @@ export function TicketDrawer(props: TicketDrawerProps) {
     window.setTimeout(() => {
       openInToggleButtonRef.current?.focus();
     }, 0);
+  };
+
+  const handleOpenInSelection = (folderId?: number) => {
+    const targetFolderId = folderId ?? preferredProjectFolder?.id;
+    const matchingWorkspaces = getWorkspaceOptions(ticket, targetFolderId ?? null);
+
+    if (targetFolderId && matchingWorkspaces.length > 1) {
+      setIsFolderPickerOpen(false);
+      setWorkspacePickerFolderId(targetFolderId);
+      return;
+    }
+
+    onOpenInApp(selectedOpenTarget, targetFolderId, matchingWorkspaces[0]?.id);
   };
 
   useEffect(() => {
@@ -624,12 +678,15 @@ export function TicketDrawer(props: TicketDrawerProps) {
 
   const metadata = useMemo(
     () => ({
-      branch: form.branch.trim() || "No branch",
+      branch:
+        form.workspaces[0]?.branchName.trim() ||
+        form.branch.trim() ||
+        "No workspace branch",
       status: statusLabelMap[form.status],
       priority: form.priority,
       dueAt: formatDateTime(ticket?.dueAt ?? null)
     }),
-    [form.branch, form.priority, form.status, ticket?.dueAt]
+    [form.branch, form.priority, form.status, form.workspaces, ticket?.dueAt]
   );
 
   const openEditor = (section: EditableSectionId) => {
@@ -937,25 +994,24 @@ export function TicketDrawer(props: TicketDrawerProps) {
                       editorRootRefs.current.branch = element;
                     }}
                   >
-                    <MetaFieldEditor label="Branch">
-                      <input
-                        className={inputClassName}
-                        type="text"
-                        inputMode="text"
-                        placeholder="feature/ticket-context…"
-                        value={form.branch}
-                        onChange={(event) =>
+                    <MetaFieldEditor label="Workspaces">
+                      <TicketWorkspaceFields
+                        value={form.workspaces}
+                        projects={projects}
+                        projectLinks={form.projectLinks}
+                        onChange={(workspaces) =>
                           onChange((current) => ({
                             ...current,
-                            branch: event.target.value
+                            workspaces,
+                            branch: workspaces[0]?.branchName ?? current.branch
                           }))
                         }
                       />
                     </MetaFieldEditor>
                   </div>
                 ) : (
-                  <EditableReadRegion label="Edit ticket branch" onActivate={() => openEditor("branch")} className="p-0">
-                    <MetaRow label="Branch" value={metadata.branch} />
+                  <EditableReadRegion label="Edit ticket workspaces" onActivate={() => openEditor("branch")} className="p-0">
+                    <MetaRow label="Workspace branch" value={metadata.branch} />
                   </EditableReadRegion>
                 )}
 
@@ -1247,7 +1303,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                               return;
                             }
 
-                            onOpenInApp(selectedOpenTarget, preferredProjectFolder?.id);
+                            handleOpenInSelection(preferredProjectFolder?.id);
                           }}
                           disabled={isOpeningInApp}
                           aria-label={isOpeningInApp ? "Opening" : openInButtonLabel}
@@ -1368,7 +1424,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
               className="grid min-w-0 gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
               onClick={() => {
                 setIsFolderPickerOpen(false);
-                onOpenInApp(selectedOpenTarget, folder.folderId);
+                handleOpenInSelection(folder.folderId);
               }}
             >
               <span className="min-w-0 text-sm font-semibold text-ink-50">
@@ -1380,6 +1436,38 @@ export function TicketDrawer(props: TicketDrawerProps) {
               </span>
               <span className="text-sm text-ink-200">{folder.folderLabel}</span>
               <span className="min-w-0 break-all font-mono text-[0.88rem] text-ink-300">{folder.path}</span>
+            </button>
+          ))}
+        </div>
+      </ModalDialog>
+
+      <ModalDialog
+        open={workspacePickerFolderId !== null}
+        title="Choose workspace"
+        description={`Pick which ticket workspace to open in ${selectedOpenTargetLabel}.`}
+        onClose={() => {
+          setWorkspacePickerFolderId(null);
+        }}
+        initialFocusRef={firstWorkspaceOptionRef}
+      >
+        <div className="grid min-w-0 gap-2">
+          {availableWorkspaceOptions.map((workspace, index) => (
+            <button
+              key={workspace.id}
+              ref={index === 0 ? firstWorkspaceOptionRef : undefined}
+              type="button"
+              className="grid min-w-0 gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+              onClick={() => {
+                setWorkspacePickerFolderId(null);
+                onOpenInApp(selectedOpenTarget, workspace.folderId, workspace.id);
+              }}
+            >
+              <span className="min-w-0 text-sm font-semibold text-ink-50">
+                {workspace.projectName}
+                <span className="ml-2 text-[0.82rem] font-medium text-ink-300">{workspace.folderLabel}</span>
+              </span>
+              <span className="text-sm text-ink-200">{workspace.branchName}</span>
+              <span className="text-[0.82rem] text-ink-300">{workspace.role}</span>
             </button>
           ))}
         </div>

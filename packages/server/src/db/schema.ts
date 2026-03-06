@@ -25,6 +25,7 @@ export const projectFolders = sqliteTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     label: text("label").notNull(),
     path: text("path").notNull().unique(),
+    defaultBranch: text("default_branch"),
     kind: text("kind").notNull(),
     isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
     existsOnDisk: integer("exists_on_disk", { mode: "boolean" }).notNull().default(true),
@@ -77,6 +78,36 @@ export const ticketProjectLinks = sqliteTable(
     ticketIdIdx: index("idx_ticket_project_links_ticket_id").on(table.ticketId),
     projectIdIdx: index("idx_ticket_project_links_project_id").on(table.projectId),
     ticketProjectUnique: uniqueIndex("ticket_project_unique").on(table.ticketId, table.projectId)
+  })
+);
+
+export const ticketWorkspaces = sqliteTable(
+  "ticket_workspaces",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ticketId: integer("ticket_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+    projectFolderId: integer("project_folder_id")
+      .notNull()
+      .references(() => projectFolders.id, { onDelete: "cascade" }),
+    branchName: text("branch_name").notNull(),
+    baseBranch: text("base_branch"),
+    role: text("role").notNull().default("primary"),
+    worktreePath: text("worktree_path"),
+    createdByBoroda: integer("created_by_boroda", { mode: "boolean" }).notNull().default(true),
+    lastOpenedAt: text("last_opened_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+  },
+  (table) => ({
+    ticketIdIdx: index("idx_ticket_workspaces_ticket_id").on(table.ticketId),
+    projectFolderIdIdx: index("idx_ticket_workspaces_project_folder_id").on(table.projectFolderId),
+    ticketFolderBranchUnique: uniqueIndex("ticket_workspace_unique").on(
+      table.ticketId,
+      table.projectFolderId,
+      table.branchName
+    )
   })
 );
 
@@ -151,6 +182,7 @@ export const projectFolderRelations = relations(projectFolders, ({ one }) => ({
 
 export const ticketRelations = relations(tickets, ({ many }) => ({
   projectLinks: many(ticketProjectLinks),
+  workspaces: many(ticketWorkspaces),
   jiraIssueLinks: many(ticketJiraIssueLinks),
   workContexts: many(workContexts),
   activities: many(ticketActivities)
@@ -171,6 +203,17 @@ export const ticketJiraIssueLinkRelations = relations(ticketJiraIssueLinks, ({ o
   ticket: one(tickets, {
     fields: [ticketJiraIssueLinks.ticketId],
     references: [tickets.id]
+  })
+}));
+
+export const ticketWorkspaceRelations = relations(ticketWorkspaces, ({ one }) => ({
+  ticket: one(tickets, {
+    fields: [ticketWorkspaces.ticketId],
+    references: [tickets.id]
+  }),
+  projectFolder: one(projectFolders, {
+    fields: [ticketWorkspaces.projectFolderId],
+    references: [projectFolders.id]
   })
 }));
 

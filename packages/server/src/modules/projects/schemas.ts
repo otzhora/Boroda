@@ -23,6 +23,12 @@ export const updateProjectSchema = createProjectSchema.partial().refine(
 export const createProjectFolderSchema = z.object({
   label: z.string().min(1),
   path: z.string().min(1),
+  defaultBranch: z
+    .string()
+    .trim()
+    .transform((value) => (value.length ? value : null))
+    .nullable()
+    .optional(),
   kind: z.enum(["APP", "BACKEND", "TERRAFORM", "INFRA", "DOCS", "OTHER"]),
   isPrimary: z.boolean().default(false)
 });
@@ -31,4 +37,3 @@ export const updateProjectFolderSchema = createProjectFolderSchema.partial().ref
   (value) => Object.keys(value).length > 0,
   "At least one field must be provided"
 );
-

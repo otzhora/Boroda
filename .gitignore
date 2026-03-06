@@ -6,4 +6,4 @@ dist
 data/*.sqlite
 data/*.sqlite-*
 data/uploads/*
-
+data/worktrees/*

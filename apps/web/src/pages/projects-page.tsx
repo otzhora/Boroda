@@ -23,6 +23,7 @@ interface ProjectFormState {
 interface FolderFormState {
   label: string;
   path: string;
+  defaultBranch: string;
   kind: ProjectFolder["kind"];
   isPrimary: boolean;
 }
@@ -179,6 +180,7 @@ function createFolderFormState(folder?: ProjectFolder): FolderFormState {
     return {
       label: "",
       path: "",
+      defaultBranch: "",
       kind: "APP",
       isPrimary: false
     };
@@ -187,6 +189,7 @@ function createFolderFormState(folder?: ProjectFolder): FolderFormState {
   return {
     label: folder.label,
     path: folder.path,
+    defaultBranch: folder.defaultBranch ?? "",
     kind: folder.kind,
     isPrimary: folder.isPrimary
   };
@@ -411,6 +414,7 @@ export function ProjectsPage() {
         projectId,
         label: payload.label,
         path: payload.path,
+        defaultBranch: payload.defaultBranch.trim() || null,
         kind: payload.kind,
         isPrimary: payload.isPrimary,
         existsOnDisk: false,
@@ -1195,6 +1199,9 @@ export function ProjectsPage() {
                                     <p className="m-0 mt-2 break-words font-mono text-[0.84rem] text-ink-200">
                                       {folder.path}
                                     </p>
+                                    <p className="m-0 mt-1 text-sm text-ink-300">
+                                      Default branch: {folder.defaultBranch || "Not set"}
+                                    </p>
                                   </div>
 
                                   <div className="text-sm text-ink-300 md:text-right">
@@ -1254,6 +1261,20 @@ export function ProjectsPage() {
                                             updateFolderEditForm(folder, { path: event.target.value })
                                           }
                                           required
+                                        />
+                                      </label>
+                                      <label className={`${compactFieldClassName} min-w-[11rem] flex-[1_1_12rem]`}>
+                                        <span className={labelClassName}>Default branch</span>
+                                        <input
+                                          className={inputClassName}
+                                          name={`folderDefaultBranch-${folder.id}`}
+                                          autoComplete="off"
+                                          spellCheck={false}
+                                          value={folderEditForm.defaultBranch}
+                                          onChange={(event) =>
+                                            updateFolderEditForm(folder, { defaultBranch: event.target.value })
+                                          }
+                                          placeholder="main"
                                         />
                                       </label>
                                       <label className={compactCheckboxLabelClassName}>
@@ -1351,6 +1372,20 @@ export function ProjectsPage() {
                             }
                             placeholder="/home/otzhora/projects/payments-terraform"
                             required
+                          />
+                        </label>
+                        <label className={`${compactFieldClassName} min-w-[11rem] flex-[1_1_12rem]`}>
+                          <span className={labelClassName}>Default branch</span>
+                          <input
+                            className={inputClassName}
+                            name={`newFolderDefaultBranch-${project.id}`}
+                            autoComplete="off"
+                            spellCheck={false}
+                            value={folderCreateForm.defaultBranch}
+                            onChange={(event) =>
+                              updateFolderCreateForm(project.id, { defaultBranch: event.target.value })
+                            }
+                            placeholder="main"
                           />
                         </label>
                         <label className={compactCheckboxLabelClassName}>

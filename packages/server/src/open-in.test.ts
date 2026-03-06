@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,17 +16,21 @@ let ticketsTable: (typeof import("./db/schema"))["tickets"];
 let ticketProjectLinksTable: (typeof import("./db/schema"))["ticketProjectLinks"];
 let tempRoot = "";
 let existingFolderPath = "";
+let gitRepoFolderPath = "";
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const previousWslDistroName = process.env.WSL_DISTRO_NAME;
 const previousExplorerBin = process.env.BORODA_EXPLORER_BIN;
 const previousVscodeBin = process.env.BORODA_VSCODE_BIN;
 const previousCursorBin = process.env.BORODA_CURSOR_BIN;
 const previousTerminalBin = process.env.BORODA_TERMINAL_BIN;
+const previousWorktreesPath = process.env.BORODA_WORKTREES_PATH;
 
 before(async () => {
   tempRoot = await mkdtemp(path.join(os.tmpdir(), "boroda-open-in-tests-"));
   existingFolderPath = path.join(tempRoot, "workspace-folder");
+  gitRepoFolderPath = path.join(tempRoot, "git-workspace-folder");
   await mkdir(existingFolderPath, { recursive: true });
+  await mkdir(gitRepoFolderPath, { recursive: true });
 
   process.env.BORODA_DB_PATH = path.join(tempRoot, "test.sqlite");
   process.env.WSL_DISTRO_NAME = "boroda-test";
@@ -33,6 +38,7 @@ before(async () => {
   process.env.BORODA_VSCODE_BIN = "/bin/true";
   process.env.BORODA_CURSOR_BIN = "/bin/true";
   process.env.BORODA_TERMINAL_BIN = "/bin/true";
+  process.env.BORODA_WORKTREES_PATH = path.join(tempRoot, "managed-worktrees");
 
   const [{ buildApp }, dbClient, schema] = await Promise.all([
     import("./app"),
@@ -64,6 +70,7 @@ beforeEach(() => {
   process.env.BORODA_VSCODE_BIN = "/bin/true";
   process.env.BORODA_CURSOR_BIN = "/bin/true";
   process.env.BORODA_TERMINAL_BIN = "/bin/true";
+  process.env.BORODA_WORKTREES_PATH = path.join(tempRoot, "managed-worktrees");
 });
 
 after(async () => {
@@ -95,6 +102,12 @@ after(async () => {
     delete process.env.BORODA_TERMINAL_BIN;
   } else {
     process.env.BORODA_TERMINAL_BIN = previousTerminalBin;
+  }
+
+  if (previousWorktreesPath === undefined) {
+    delete process.env.BORODA_WORKTREES_PATH;
+  } else {
+    process.env.BORODA_WORKTREES_PATH = previousWorktreesPath;
   }
 
   await app.close();
@@ -146,6 +159,24 @@ async function createTicketWithFolder(projectName: string) {
   const ticket = ticketResponse.json();
 
   return { project, folder, ticket };
+}
+
+function git(cwd: string, ...args: string[]) {
+  execFileSync("git", args, {
+    cwd,
+    stdio: "pipe"
+  });
+}
+
+async function createGitWorkspaceRepo() {
+  await rm(gitRepoFolderPath, { recursive: true, force: true });
+  await mkdir(gitRepoFolderPath, { recursive: true });
+  git(gitRepoFolderPath, "init", "--initial-branch=main");
+  git(gitRepoFolderPath, "config", "user.email", "boroda@example.test");
+  git(gitRepoFolderPath, "config", "user.name", "Boroda Tests");
+  await writeFile(path.join(gitRepoFolderPath, "README.md"), "main\n");
+  git(gitRepoFolderPath, "add", "README.md");
+  git(gitRepoFolderPath, "commit", "-m", "init");
 }
 
 test("opens VS Code for the primary linked project folder", async () => {
@@ -345,4 +376,151 @@ test("returns 501 when the selected target app is unavailable", async () => {
       details: {}
     }
   });
+});
+
+test("opens a Boroda-managed worktree when the ticket has one workspace for the selected folder", async () => {
+  await createGitWorkspaceRepo();
+  git(gitRepoFolderPath, "checkout", "-b", "feature/existing-worktree");
+  await writeFile(path.join(gitRepoFolderPath, "feature.txt"), "workspace\n");
+  git(gitRepoFolderPath, "add", "feature.txt");
+  git(gitRepoFolderPath, "commit", "-m", "workspace branch");
+  git(gitRepoFolderPath, "checkout", "main");
+
+  const projectResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Managed Repo",
+      slug: "managed-repo",
+      description: "",
+      color: "#355c7d"
+    }
+  });
+  const project = projectResponse.json();
+
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: gitRepoFolderPath,
+      defaultBranch: "main",
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+  const folder = folderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Open managed workspace",
+      description: "",
+      branch: "feature/existing-worktree",
+      workspaces: [
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/existing-worktree",
+          role: "primary"
+        }
+      ],
+      status: "READY",
+      priority: "HIGH",
+      projectLinks: [
+        {
+          projectId: project.id,
+          relationship: "PRIMARY"
+        }
+      ]
+    }
+  });
+  const ticket = ticketResponse.json();
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "vscode"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json();
+  assert.equal(payload.target, "vscode");
+  assert.notEqual(payload.directory, folder.path);
+  assert.equal(
+    payload.directory,
+    path.join(tempRoot, "managed-worktrees", ticket.key, "managed-repo", "workspace", "feature-existing-worktree")
+  );
+});
+
+test("returns 409 when multiple workspaces exist for the selected folder and no workspace is chosen", async () => {
+  await createGitWorkspaceRepo();
+  const projectResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Conflict Repo",
+      slug: "conflict-repo",
+      description: "",
+      color: "#355c7d"
+    }
+  });
+  const project = projectResponse.json();
+
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: gitRepoFolderPath,
+      defaultBranch: "main",
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+  const folder = folderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Open conflicting workspace",
+      description: "",
+      workspaces: [
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/one",
+          role: "primary"
+        },
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/two",
+          role: "secondary"
+        }
+      ],
+      status: "READY",
+      priority: "HIGH",
+      projectLinks: [
+        {
+          projectId: project.id,
+          relationship: "PRIMARY"
+        }
+      ]
+    }
+  });
+  const ticket = ticketResponse.json();
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "vscode"
+    }
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error.code, "TICKET_WORKSPACE_SELECTION_REQUIRED");
+  assert.equal(response.json().error.details.workspaces.length, 2);
 });

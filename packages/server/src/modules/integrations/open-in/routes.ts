@@ -5,7 +5,8 @@ import { openTicketInApp } from "./service";
 
 const openTicketInAppBodySchema = z.object({
   target: z.enum(["explorer", "vscode", "cursor", "terminal"]),
-  folderId: z.number().int().positive().optional()
+  folderId: z.number().int().positive().optional(),
+  workspaceId: z.number().int().positive().optional()
 });
 
 export const openInRoutes: FastifyPluginAsync = async (app) => {

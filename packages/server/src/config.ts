@@ -12,6 +12,7 @@ export function getConfig() {
     port: Number(process.env.PORT ?? 3000),
     databasePath: process.env.BORODA_DB_PATH ?? path.resolve(repoRoot, "data/boroda.sqlite"),
     uploadsPath: process.env.BORODA_UPLOADS_PATH ?? path.resolve(repoRoot, "data/uploads"),
+    worktreesPath: process.env.BORODA_WORKTREES_PATH ?? path.resolve(repoRoot, "data/worktrees"),
     webDistPath: path.resolve(repoRoot, "apps/web/dist"),
     migrationsPath: path.resolve(repoRoot, "drizzle/migrations"),
     explorerBinary: process.env.BORODA_EXPLORER_BIN ?? "explorer.exe",
