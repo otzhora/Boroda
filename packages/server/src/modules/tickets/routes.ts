@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { AppError } from "../../shared/errors";
 import {
+  createTicketJiraIssueLinkSchema,
   createTicketProjectLinkSchema,
   createTicketSchema,
   ticketIdParamSchema,
@@ -9,6 +10,7 @@ import {
   updateTicketSchema
 } from "./schemas";
 import {
+  addTicketJiraIssueLink,
   addTicketProjectLink,
   createTicket,
   deleteTicket,
@@ -76,6 +78,12 @@ export const ticketRoutes: FastifyPluginAsync = async (app) => {
     const params = ticketIdParamSchema.parse(request.params);
     const payload = createTicketProjectLinkSchema.parse(request.body);
     return addTicketProjectLink(app, params.id, payload);
+  });
+
+  app.post("/tickets/:id/jira-links", async (request) => {
+    const params = ticketIdParamSchema.parse(request.params);
+    const payload = createTicketJiraIssueLinkSchema.parse(request.body);
+    return addTicketJiraIssueLink(app, params.id, payload);
   });
 
   app.post("/tickets/:id/jira/refresh", async (request) => {

@@ -407,6 +407,56 @@ test("assigned Jira issues include linked Boroda tickets", async () => {
   }
 });
 
+test("ticket jira-link endpoint appends a Jira issue to an existing Boroda ticket", async () => {
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Link an existing ticket",
+      description: "",
+      status: "READY",
+      priority: "MEDIUM",
+      projectLinks: []
+    }
+  });
+
+  assert.equal(createResponse.statusCode, 200);
+  const ticket = createResponse.json();
+
+  const linkResponse = await app.inject({
+    method: "POST",
+    url: `/api/tickets/${ticket.id}/jira-links`,
+    payload: {
+      key: "OPS-42",
+      summary: "Ops cleanup"
+    }
+  });
+
+  assert.equal(linkResponse.statusCode, 200);
+  assert.equal(linkResponse.json().key, "OPS-42");
+
+  const getTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(getTicketResponse.statusCode, 200);
+  const linkedTicket = getTicketResponse.json();
+  assert.deepEqual(
+    linkedTicket.jiraIssues.map((issue: { key: string; summary: string }) => ({
+      key: issue.key,
+      summary: issue.summary
+    })),
+    [{ key: "OPS-42", summary: "Ops cleanup" }]
+  );
+  assert.ok(
+    linkedTicket.activities.some(
+      (activity: { type: string; message: string }) =>
+        activity.type === "ticket.jira_issue_linked" && activity.message.includes("OPS-42")
+    )
+  );
+});
+
 test("ticket image uploads can be pasted and rendered back from local storage", async () => {
   const ticketResponse = await app.inject({
     method: "POST",

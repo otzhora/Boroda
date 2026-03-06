@@ -64,6 +64,11 @@ export const createTicketProjectLinkSchema = z.object({
   relationship: relationshipEnum
 });
 
+export const createTicketJiraIssueLinkSchema = z.object({
+  key: z.string().trim().min(1),
+  summary: z.string().trim().default("")
+});
+
 export const updateTicketSchema = createTicketSchema
   .omit({ projectLinks: true })
   .partial()

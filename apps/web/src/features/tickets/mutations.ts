@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { BoardResponse, Ticket, TicketStatus } from "../../lib/types";
+import type { BoardResponse, Ticket, TicketJiraIssueLink, TicketStatus } from "../../lib/types";
 import { boardQueryKey, type BoardFilters } from "../board/queries";
 import { assignedJiraIssueLinksQueryKey, assignedJiraIssuesQueryKey } from "../jira/queries";
-import { ticketQueryKey } from "./queries";
+import { ticketQueryKey, ticketsQueryKey } from "./queries";
 import { createEmptyTicketForm, toTicketForm, type TicketFormState } from "./form";
 
 interface TicketPayload {
@@ -245,6 +245,28 @@ export function useUploadTicketImageMutation(ticketId: number | null) {
         method: "POST",
         body: formData
       });
+    }
+  });
+}
+
+export function useAddTicketJiraLinkMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: { ticketId: number; key: string; summary: string }) =>
+      apiClient<TicketJiraIssueLink>(`/api/tickets/${payload.ticketId}/jira-links`, {
+        method: "POST",
+        body: JSON.stringify({
+          key: payload.key,
+          summary: payload.summary
+        })
+      }),
+    onSuccess: (_jiraLink, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: ticketsQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: ticketQueryKey(variables.ticketId) });
     }
   });
 }

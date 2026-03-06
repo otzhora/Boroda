@@ -845,6 +845,62 @@ export async function addTicketProjectLink(
   }
 }
 
+export async function addTicketJiraIssueLink(
+  app: FastifyInstance,
+  ticketId: number,
+  input: { key: string; summary: string }
+) {
+  const existing = await getTicketOrThrow(app, ticketId);
+  const nextIssues = [
+    ...existing.jiraIssues.map((issue) => ({
+      key: issue.key,
+      summary: issue.summary
+    })),
+    input
+  ];
+
+  assertUniqueJiraIssueLinks(nextIssues);
+
+  try {
+    const created = app.db
+      .insert(ticketJiraIssueLinks)
+      .values({
+        ticketId,
+        issueKey: normalizeJiraIssueKey(input.key),
+        issueSummary: normalizeJiraIssueSummary(input.summary),
+        createdAt: nowIso()
+      })
+      .returning()
+      .get();
+
+    app.db
+      .update(tickets)
+      .set({ updatedAt: nowIso() })
+      .where(eq(tickets.id, ticketId))
+      .run();
+
+    recordActivity(
+      app,
+      ticketId,
+      "ticket.jira_issue_linked",
+      `${formatJiraIssueLabel({
+        key: normalizeJiraIssueKey(input.key),
+        summary: normalizeJiraIssueSummary(input.summary)
+      })} linked from Jira`
+    );
+
+    return {
+      id: created.id,
+      ticketId: created.ticketId,
+      key: created.issueKey,
+      summary: created.issueSummary,
+      createdAt: created.createdAt
+    };
+  } catch (error) {
+    rethrowTicketConflict(error);
+  }
+}
+
 export async function deleteTicketProjectLink(app: FastifyInstance, id: number) {
   const existing = await app.db.query.ticketProjectLinks.findFirst({
     where: eq(ticketProjectLinks.id, id),

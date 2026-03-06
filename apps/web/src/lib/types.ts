@@ -130,3 +130,17 @@ export interface Ticket {
   workContexts: WorkContext[];
   activities: TicketActivity[];
 }
+
+export interface TicketListItem {
+  id: number;
+  key: string;
+  title: string;
+  description: string;
+  branch: string | null;
+  status: TicketStatus;
+  priority: TicketPriority;
+  dueAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+}
