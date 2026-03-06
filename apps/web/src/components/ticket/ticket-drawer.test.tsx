@@ -613,6 +613,132 @@ describe("TicketDrawer", () => {
     expect(handleOpenInApp).toHaveBeenCalledWith("explorer", 77);
   });
 
+  it("opens the app picker upward when the trigger is near the viewport bottom", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "workspace",
+                    path: "/home/otzhora/projects/payments",
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInApp={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInApp={vi.fn()}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    const toggleButton = screen.getByRole("button", { name: "Choose open-in app" });
+    const originalGetBoundingClientRect = toggleButton.getBoundingClientRect.bind(toggleButton);
+    const originalInnerHeight = window.innerHeight;
+    const originalGetComputedStyle = window.getComputedStyle.bind(window);
+    let scrollContainer: HTMLElement | null = toggleButton.parentElement;
+
+    while (scrollContainer && !String(scrollContainer.className).includes("overflow-y-auto")) {
+      scrollContainer = scrollContainer.parentElement;
+    }
+
+    vi.spyOn(toggleButton, "getBoundingClientRect").mockImplementation(
+      () =>
+        ({
+          ...originalGetBoundingClientRect(),
+          top: 720,
+          bottom: 760,
+          left: 0,
+          right: 44,
+          width: 44,
+          height: 40,
+          x: 0,
+          y: 720,
+          toJSON: () => ({})
+        }) as DOMRect
+    );
+
+    if (scrollContainer) {
+      vi.spyOn(scrollContainer, "getBoundingClientRect").mockImplementation(
+        () =>
+          ({
+            top: 80,
+            bottom: 776,
+            left: 0,
+            right: 900,
+            width: 900,
+            height: 696,
+            x: 0,
+            y: 80,
+            toJSON: () => ({})
+          }) as DOMRect
+      );
+    }
+
+    vi.spyOn(window, "getComputedStyle").mockImplementation((element) => {
+      if (scrollContainer && element === scrollContainer) {
+        return {
+          ...originalGetComputedStyle(element),
+          overflowY: "auto"
+        } as CSSStyleDeclaration;
+      }
+
+      return originalGetComputedStyle(element);
+    });
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 800
+    });
+
+    await user.click(toggleButton);
+
+    const appPicker = screen.getByRole("dialog", { name: "Open in" });
+
+    expect(appPicker).toHaveAttribute("data-side", "top");
+    expect(appPicker).toHaveStyle({ maxHeight: "616px" });
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: originalInnerHeight
+    });
+  });
+
   it("keeps focus in the description field while typing", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();

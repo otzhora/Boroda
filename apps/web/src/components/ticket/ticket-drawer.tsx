@@ -86,6 +86,24 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
 
+function getClosestScrollContainer(element: HTMLElement | null) {
+  let current = element?.parentElement ?? null;
+
+  while (current) {
+    const styles = window.getComputedStyle(current);
+    const overflowY = styles.overflowY;
+    const isScrollable = overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay";
+
+    if (isScrollable) {
+      return current;
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
 function MetaRow(props: { label: string; value: string }) {
   return (
     <div className="grid gap-1 border-b border-white/8 pb-2.5 last:border-b-0 last:pb-0">
@@ -378,6 +396,8 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const [isJiraSectionExpanded, setIsJiraSectionExpanded] = useState(true);
   const [isLinkedProjectsSectionExpanded, setIsLinkedProjectsSectionExpanded] = useState(false);
   const [isOpenInMenuOpen, setIsOpenInMenuOpen] = useState(false);
+  const [openInMenuSide, setOpenInMenuSide] = useState<"top" | "bottom">("bottom");
+  const [openInMenuMaxHeight, setOpenInMenuMaxHeight] = useState<number>(320);
   const [selectedOpenTarget, setSelectedOpenTarget] = useState<OpenInTarget>("vscode");
   const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -455,6 +475,53 @@ export function TicketDrawer(props: TicketDrawerProps) {
       setIsFolderPickerOpen(false);
     }
   }, [availableTerminalFolders.length]);
+
+  useEffect(() => {
+    if (!isOpenInMenuOpen) {
+      return;
+    }
+
+    const viewportPadding = 16;
+    const menuGap = 8;
+    const minimumMenuHeight = 96;
+    const preferredMenuHeight = 220;
+
+    const updateOpenInMenuLayout = () => {
+      const toggleButton = openInToggleButtonRef.current;
+      if (!toggleButton) {
+        return;
+      }
+
+      const toggleRect = toggleButton.getBoundingClientRect();
+      const scrollContainer = getClosestScrollContainer(toggleButton);
+      const scrollContainerRect = scrollContainer?.getBoundingClientRect();
+      const visibleTop = Math.max(viewportPadding, (scrollContainerRect?.top ?? viewportPadding) + viewportPadding);
+      const visibleBottom = Math.min(
+        window.innerHeight - viewportPadding,
+        (scrollContainerRect?.bottom ?? window.innerHeight - viewportPadding) - viewportPadding
+      );
+      const spaceBelow = visibleBottom - toggleRect.bottom - menuGap;
+      const spaceAbove = toggleRect.top - visibleTop - menuGap;
+      const shouldOpenUpward = spaceBelow < preferredMenuHeight && spaceAbove > spaceBelow;
+
+      setOpenInMenuSide((current) => (current === (shouldOpenUpward ? "top" : "bottom") ? current : shouldOpenUpward ? "top" : "bottom"));
+      setOpenInMenuMaxHeight((current) => {
+        const availableSpace = shouldOpenUpward ? spaceAbove : spaceBelow;
+        const nextValue = Math.max(minimumMenuHeight, Math.floor(availableSpace));
+        return current === nextValue ? current : nextValue;
+      });
+    };
+
+    updateOpenInMenuLayout();
+
+    window.addEventListener("resize", updateOpenInMenuLayout);
+    document.addEventListener("scroll", updateOpenInMenuLayout, true);
+
+    return () => {
+      window.removeEventListener("resize", updateOpenInMenuLayout);
+      document.removeEventListener("scroll", updateOpenInMenuLayout, true);
+    };
+  }, [isOpenInMenuOpen]);
 
   const selectedOpenTargetLabel =
     openInTargets.find((target) => target.id === selectedOpenTarget)?.label ?? "selected app";
@@ -1218,9 +1285,13 @@ export function TicketDrawer(props: TicketDrawerProps) {
                         <div
                           id={openInMenuId}
                           ref={openInMenuRef}
-                          className="absolute right-0 top-[calc(100%+0.45rem)] z-20 grid w-[min(23rem,calc(100vw-4rem))] gap-1 rounded-[18px] border border-white/10 bg-canvas-900 p-2 shadow-[0_24px_72px_rgba(0,0,0,0.42)]"
+                          data-side={openInMenuSide}
+                          className={`absolute right-0 z-20 grid w-[min(23rem,calc(100vw-4rem))] gap-1 overflow-y-auto rounded-[18px] border border-white/10 bg-canvas-900 p-2 shadow-[0_24px_72px_rgba(0,0,0,0.42)] ${
+                            openInMenuSide === "top" ? "bottom-[calc(100%+0.45rem)]" : "top-[calc(100%+0.45rem)]"
+                          }`}
                           role="dialog"
                           aria-label="Open in"
+                          style={{ maxHeight: `${openInMenuMaxHeight}px` }}
                           onBlur={handleOpenInMenuBlur}
                           onKeyDown={handleOpenInMenuKeyDown}
                         >
