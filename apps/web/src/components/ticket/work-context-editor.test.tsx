@@ -81,7 +81,7 @@ describe("WorkContextEditor", () => {
     await user.type(screen.getByLabelText("Label"), "Backend PR");
     const valueField = screen.getByLabelText("PR URL or branch");
     await user.type(valueField, "https://example.test/pr/42");
-    fireEvent.submit(valueField.closest("form")!);
+    await user.click(screen.getByRole("button", { name: "Save context" }));
 
     expect(mocks.createMutate).toHaveBeenCalledWith({
       type: "PR",
@@ -98,7 +98,7 @@ describe("WorkContextEditor", () => {
     await user.selectOptions(screen.getByLabelText("Type"), "PR");
     const valueField = screen.getByLabelText("PR URL or branch");
     await user.type(valueField, "https://example.test/pr/42");
-    fireEvent.submit(valueField.closest("form")!);
+    await user.click(screen.getByRole("button", { name: "Save context" }));
 
     expect(mocks.createMutate).toHaveBeenCalledWith({
       type: "PR",
@@ -134,7 +134,7 @@ describe("WorkContextEditor", () => {
       }
     ]);
 
-    await user.dblClick(screen.getByText("Reference"));
+    await user.click(screen.getByText("Reference"));
 
     expect(screen.queryByRole("option", { name: "Codex session" })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Claude session" })).not.toBeInTheDocument();
@@ -158,7 +158,7 @@ describe("WorkContextEditor", () => {
       }
     ]);
 
-    await user.dblClick(screen.getByText("Legacy session"));
+    await user.click(screen.getByText("Legacy session"));
     const existingContextForm = screen.getByRole("button", { name: "Save changes" }).closest("form");
     expect(existingContextForm).not.toBeNull();
 
@@ -186,7 +186,7 @@ describe("WorkContextEditor", () => {
     ]);
 
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
-    await user.dblClick(screen.getByText("Session"));
+    await user.click(screen.getByText("Session"));
 
     const existingContextForm = screen.getByRole("button", { name: "Save changes" }).closest("form");
     expect(existingContextForm).not.toBeNull();
@@ -205,7 +205,40 @@ describe("WorkContextEditor", () => {
     });
   });
 
-  it("exits edit mode with escape and restores the view state", async () => {
+  it("shows save and cancel actions for new work contexts", async () => {
+    const user = userEvent.setup();
+
+    renderEditor([]);
+
+    const saveButton = screen.getByRole("button", { name: "Save context" });
+    const cancelButton = screen.getByRole("button", { name: "Cancel" });
+
+    expect(saveButton).toBeDisabled();
+    expect(cancelButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Label"), "Draft context");
+    await user.type(screen.getByLabelText("Note"), "Draft value");
+
+    expect(saveButton).toBeEnabled();
+    expect(cancelButton).toBeEnabled();
+  });
+
+  it("cancels the new work context draft", async () => {
+    const user = userEvent.setup();
+
+    renderEditor([]);
+
+    await user.type(screen.getByLabelText("Label"), "Draft context");
+    await user.type(screen.getByLabelText("Note"), "Draft value");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByLabelText("Type")).toHaveValue("NOTE");
+    expect(screen.getByLabelText("Label")).toHaveValue("");
+    expect(screen.getByLabelText("Note")).toHaveValue("");
+    expect(mocks.createMutate).not.toHaveBeenCalled();
+  });
+
+  it("saves and exits edit mode with escape", async () => {
     const user = userEvent.setup();
 
     renderEditor([
@@ -221,7 +254,7 @@ describe("WorkContextEditor", () => {
       }
     ]);
 
-    await user.dblClick(screen.getByText("Release notes"));
+    await user.click(screen.getByText("Release notes"));
     const existingContextForm = screen.getByRole("button", { name: "Save changes" }).closest("form");
     expect(existingContextForm).not.toBeNull();
 
@@ -230,8 +263,74 @@ describe("WorkContextEditor", () => {
     await user.keyboard("{Escape}");
 
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    expect(mocks.updateMutate).toHaveBeenCalledWith({
+      id: 9,
+      type: "LINK",
+      label: "Changed",
+      value: "https://example.test/release"
+    });
+  });
+
+  it("cancels editing with the cancel button and restores the view state", async () => {
+    const user = userEvent.setup();
+
+    renderEditor([
+      {
+        id: 10,
+        ticketId: 7,
+        type: "LINK",
+        label: "Release notes",
+        value: "https://example.test/release",
+        metaJson: "{}",
+        createdAt: "",
+        updatedAt: ""
+      }
+    ]);
+
+    await user.click(screen.getByText("Release notes"));
+    const existingContextForm = screen.getByRole("button", { name: "Save changes" }).closest("form");
+    expect(existingContextForm).not.toBeNull();
+
+    await user.clear(within(existingContextForm!).getByLabelText("Label"));
+    await user.type(within(existingContextForm!).getByLabelText("Label"), "Changed");
+    await user.click(within(existingContextForm!).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
     expect(screen.getByText("Release notes")).toBeInTheDocument();
     expect(mocks.updateMutate).not.toHaveBeenCalled();
+  });
+
+  it("saves and exits edit mode when clicking outside", async () => {
+    const user = userEvent.setup();
+
+    renderEditor([
+      {
+        id: 13,
+        ticketId: 7,
+        type: "LINK",
+        label: "Release notes",
+        value: "https://example.test/release",
+        metaJson: "{}",
+        createdAt: "",
+        updatedAt: ""
+      }
+    ]);
+
+    await user.click(screen.getByText("Release notes"));
+    const existingContextForm = screen.getByRole("button", { name: "Save changes" }).closest("form");
+    expect(existingContextForm).not.toBeNull();
+
+    await user.clear(within(existingContextForm!).getByLabelText("Label"));
+    await user.type(within(existingContextForm!).getByLabelText("Label"), "Changed outside");
+    await user.click(screen.getByRole("heading", { name: "Work contexts" }));
+
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
+    expect(mocks.updateMutate).toHaveBeenCalledWith({
+      id: 13,
+      type: "LINK",
+      label: "Changed outside",
+      value: "https://example.test/release"
+    });
   });
 
   it("renders note work contexts as markdown in view mode", () => {
@@ -282,7 +381,10 @@ describe("WorkContextEditor", () => {
       }
     ]);
 
-    const headings = screen.getAllByRole("heading", { level: 5 });
+    const headings = screen.getAllByRole("heading", { level: 5 }).filter((heading) =>
+      ["Newest context", "Older context"].includes(heading.textContent ?? "")
+    );
+
     expect(headings[0]).toHaveTextContent("Newest context");
     expect(headings[1]).toHaveTextContent("Older context");
   });
@@ -359,7 +461,25 @@ describe("WorkContextEditor", () => {
     await user.selectOptions(screen.getByLabelText("Type"), "NOTE");
     const noteField = screen.getByLabelText("Note");
     await user.type(noteField, "Plain note body");
-    fireEvent.submit(noteField.closest("form")!);
+    await user.click(screen.getByRole("button", { name: "Save context" }));
+
+    expect(mocks.createMutate).toHaveBeenCalledWith({
+      type: "NOTE",
+      label: "",
+      value: "Plain note body"
+    });
+  });
+
+  it("submits a new note with ctrl-enter", async () => {
+    const user = userEvent.setup();
+
+    renderEditor([]);
+
+    await user.selectOptions(screen.getByLabelText("Type"), "NOTE");
+    const noteField = screen.getByLabelText("Note");
+    await user.click(noteField);
+    await user.keyboard("Plain note body");
+    await user.keyboard("{Control>}{Enter}{/Control}");
 
     expect(mocks.createMutate).toHaveBeenCalledWith({
       type: "NOTE",

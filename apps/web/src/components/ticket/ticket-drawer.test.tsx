@@ -268,25 +268,25 @@ describe("TicketDrawer", () => {
       />
     );
 
-    expect(screen.getByRole("heading", { name: "Jira issues" })).toBeInTheDocument();
+    expect(screen.getByText("Jira issues")).toBeInTheDocument();
     expect(screen.getByText("Follow-up issue")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Refresh Jira links" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh linked issues" })).toBeInTheDocument();
     expect(screen.queryByText("Core payment services")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show linked projects" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Expand Linked projects" })).toHaveAttribute("aria-expanded", "false");
 
-    await user.click(screen.getByRole("button", { name: "Show linked projects" }));
+    await user.click(screen.getByRole("button", { name: "Expand Linked projects" }));
 
     expect(screen.getByText("Core payment services")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Hide linked projects" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Collapse Linked projects" })).toHaveAttribute("aria-expanded", "true");
 
-    await user.click(screen.getByRole("button", { name: "Hide Jira issues" }));
-    expect(screen.queryByRole("button", { name: "Refresh Jira links" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Hide linked projects" }));
+    await user.click(screen.getByRole("button", { name: "Collapse Jira issues" }));
+    expect(screen.queryByRole("button", { name: "Refresh linked issues" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Collapse Linked projects" }));
 
     expect(screen.queryByText("Follow-up issue")).not.toBeInTheDocument();
     expect(screen.queryByText("Core payment services")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show Jira issues" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByRole("button", { name: "Show linked projects" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Expand Jira issues" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Expand Linked projects" })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("leaves edit mode after a successful save", async () => {
@@ -316,10 +316,10 @@ describe("TicketDrawer", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Edit ticket" }));
-    expect(screen.getByRole("button", { name: "Save ticket" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Edit ticket title" }));
+    expect(screen.getByRole("textbox", { name: "Title" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Save ticket" }));
+    await user.keyboard("{Escape}");
     expect(handleSave).toHaveBeenCalledTimes(1);
 
     rerender(
@@ -344,8 +344,8 @@ describe("TicketDrawer", () => {
       />
     );
 
-    expect(screen.queryByRole("button", { name: "Save ticket" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit ticket" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Title" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit ticket title" })).toBeInTheDocument();
   });
 
   it("triggers save instead of closing when escape is pressed during edit mode", async () => {
@@ -375,14 +375,86 @@ describe("TicketDrawer", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Edit ticket" }));
-    expect(screen.getByRole("button", { name: "Save ticket" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Edit ticket title" }));
+    expect(screen.getByRole("textbox", { name: "Title" })).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
 
     expect(handleSave).toHaveBeenCalledTimes(1);
     expect(handleClose).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Save ticket" })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Title" })).not.toBeInTheDocument();
+  });
+
+  it("saves the active editor when clicking into another editable section", async () => {
+    const user = userEvent.setup();
+    const handleSave = vi.fn();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={ticket}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={handleSave}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit ticket title" }));
+    expect(screen.getByRole("textbox", { name: "Title" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit ticket description" }));
+
+    expect(handleSave).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("textbox", { name: "Title" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Description")).toBeInTheDocument();
+  });
+
+  it("edits sidebar fields one at a time", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{ ...ticket, branch: "feature/existing-branch" }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm({ ...ticket, branch: "feature/existing-branch" })}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={vi.fn()}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit ticket branch" }));
+
+    expect(screen.getByDisplayValue("feature/existing-branch")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit ticket status" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit ticket priority" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit ticket due date" })).toBeInTheDocument();
   });
 
   it("shows the terminal action when a linked project has an available folder", () => {
@@ -464,7 +536,7 @@ describe("TicketDrawer", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Edit ticket" }));
+    await user.click(screen.getByRole("button", { name: "Edit ticket description" }));
 
     const descriptionField = screen.getByLabelText("Description");
     await user.click(descriptionField);
@@ -508,7 +580,7 @@ describe("TicketDrawer", () => {
 
     render(<DrawerHarness />);
 
-    await user.click(screen.getByRole("button", { name: "Edit ticket" }));
+    await user.click(screen.getByRole("button", { name: "Edit ticket description" }));
 
     const descriptionField = screen.getByLabelText("Description");
     const pastedImage = new File(["image-data"], "pasted-image.png", { type: "image/png" });
@@ -568,11 +640,13 @@ describe("TicketDrawer", () => {
 
     render(<DrawerHarness />);
 
-    await user.click(screen.getByRole("button", { name: "Edit ticket" }));
+    await user.click(screen.getByRole("button", { name: "Edit ticket description" }));
 
     const descriptionField = screen.getByLabelText("Description");
     const dropZone = screen.getByRole("tabpanel", { name: "Write" });
     const droppedImage = new File(["image-data"], "dropped-image.png", { type: "image/png" });
+
+    await user.click(descriptionField);
 
     fireEvent.dragOver(dropZone, {
       dataTransfer: {
@@ -693,7 +767,7 @@ describe("TicketDrawer", () => {
 
     const layout = container.querySelector("div.grid.w-full.items-start");
     const additionalDetailsSection = screen.getByRole("heading", { name: "Additional details" }).closest("section");
-    const linkedProjectsAside = screen.getByRole("heading", { name: "Linked projects" }).closest("aside");
+    const linkedProjectsAside = screen.getByRole("button", { name: "Expand Linked projects" }).closest("aside");
 
     expect(layout).toBeInTheDocument();
     expect(layout?.firstElementChild).toHaveClass("content-start");
@@ -789,8 +863,8 @@ describe("TicketDrawer", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "Refresh Jira links" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Refresh Jira links" }));
+    expect(screen.getByRole("button", { name: "Refresh linked issues" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Refresh linked issues" }));
 
     expect(handleRefreshJira).toHaveBeenCalledTimes(1);
   });
