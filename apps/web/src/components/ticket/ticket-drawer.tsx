@@ -34,7 +34,7 @@ interface TicketDrawerProps {
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
   onSave: () => void;
   onDelete: () => void;
-  onOpenInTerminal: () => void;
+  onOpenInTerminal: (folderId?: number) => void;
   onRefreshJira: () => void;
   onClose: () => void;
 }
@@ -241,6 +241,59 @@ function getPreferredProjectFolder(ticket: Ticket | undefined) {
   return null;
 }
 
+interface TerminalFolderOption {
+  folderId: number;
+  projectId: number;
+  projectName: string;
+  relationship: string;
+  folderLabel: string;
+  path: string;
+  isPrimaryFolder: boolean;
+}
+
+function getAvailableTerminalFolders(ticket: Ticket | undefined): TerminalFolderOption[] {
+  if (!ticket) {
+    return [];
+  }
+
+  return [...ticket.projectLinks]
+    .sort((left, right) => {
+      if (left.relationship === right.relationship) {
+        return left.projectId - right.projectId;
+      }
+
+      if (left.relationship === "PRIMARY") {
+        return -1;
+      }
+
+      if (right.relationship === "PRIMARY") {
+        return 1;
+      }
+
+      return left.projectId - right.projectId;
+    })
+    .flatMap((link) =>
+      link.project.folders
+        .filter((folder) => folder.existsOnDisk)
+        .sort((left, right) => {
+          if (left.isPrimary === right.isPrimary) {
+            return left.id - right.id;
+          }
+
+          return left.isPrimary ? -1 : 1;
+        })
+        .map((folder) => ({
+          folderId: folder.id,
+          projectId: link.projectId,
+          projectName: link.project.name,
+          relationship: link.relationship,
+          folderLabel: folder.label,
+          path: folder.path,
+          isPrimaryFolder: folder.isPrimary
+        }))
+    );
+}
+
 export function TicketDrawer(props: TicketDrawerProps) {
   const {
     ticketId,
@@ -265,14 +318,17 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const [activeDetailTab, setActiveDetailTab] = useState<DetailTabId>("contexts");
   const [isJiraSectionExpanded, setIsJiraSectionExpanded] = useState(true);
   const [isLinkedProjectsSectionExpanded, setIsLinkedProjectsSectionExpanded] = useState(false);
+  const [isTerminalPickerOpen, setIsTerminalPickerOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
   const detailTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const editorRootRefs = useRef<Partial<Record<EditableSectionId, HTMLElement | null>>>({});
+  const firstTerminalOptionRef = useRef<HTMLButtonElement>(null);
   const detailTabsId = useId();
   const jiraSectionId = useId();
   const linkedProjectsSectionId = useId();
   const preferredProjectFolder = getPreferredProjectFolder(ticket);
+  const availableTerminalFolders = useMemo(() => getAvailableTerminalFolders(ticket), [ticket]);
   const jiraSettingsQuery = useJiraSettingsQuery();
   const jiraBaseUrl = jiraSettingsQuery.data?.baseUrl ? trimTrailingSlash(jiraSettingsQuery.data.baseUrl) : "";
 
@@ -281,6 +337,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
     setActiveDetailTab("contexts");
     setIsJiraSectionExpanded(true);
     setIsLinkedProjectsSectionExpanded(false);
+    setIsTerminalPickerOpen(false);
   }, [ticketId]);
 
   useEffect(() => {
@@ -318,6 +375,23 @@ export function TicketDrawer(props: TicketDrawerProps) {
   useEffect(() => {
     setActiveEditor(null);
   }, [saveSuccessCount]);
+
+  useEffect(() => {
+    if (!availableTerminalFolders.length) {
+      setIsTerminalPickerOpen(false);
+    }
+  }, [availableTerminalFolders.length]);
+
+  const openInTerminalButtonLabel = availableTerminalFolders.length > 1 ? "Open in Terminal…" : "Open in Terminal";
+
+  const handleOpenInTerminal = () => {
+    if (availableTerminalFolders.length <= 1) {
+      onOpenInTerminal(preferredProjectFolder?.id);
+      return;
+    }
+
+    setIsTerminalPickerOpen(true);
+  };
 
   useEffect(() => {
     if (!activeEditor) {
@@ -908,13 +982,13 @@ export function TicketDrawer(props: TicketDrawerProps) {
               <section className={railSectionClassName}>
                 <h4 className="m-0 text-base font-semibold text-ink-50">Actions</h4>
                 <div className="grid min-w-0 gap-2.5">
-                  {preferredProjectFolder ? (
+                  {availableTerminalFolders.length ? (
                     <button
                       type="button"
                       className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.10] px-3 py-1.5 text-sm font-medium text-ink-50 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
-                      onClick={onOpenInTerminal}
+                      onClick={handleOpenInTerminal}
                       disabled={isOpeningInTerminal}
-                      aria-label={isOpeningInTerminal ? "Opening terminal" : "Open in Terminal"}
+                      aria-label={isOpeningInTerminal ? "Opening terminal" : openInTerminalButtonLabel}
                     >
                       {isOpeningInTerminal ? (
                         <span
@@ -922,7 +996,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                           aria-hidden="true"
                         />
                       ) : null}
-                      Open in Terminal
+                      {isOpeningInTerminal ? "Opening…" : openInTerminalButtonLabel}
                     </button>
                   ) : null}
                   <button
@@ -946,6 +1020,41 @@ export function TicketDrawer(props: TicketDrawerProps) {
           </aside>
         </div>
       )}
+
+      <ModalDialog
+        open={isTerminalPickerOpen}
+        title="Choose terminal path"
+        description="Pick which linked project folder to open for this ticket."
+        onClose={() => {
+          setIsTerminalPickerOpen(false);
+        }}
+        initialFocusRef={firstTerminalOptionRef}
+      >
+        <div className="grid min-w-0 gap-2">
+          {availableTerminalFolders.map((folder, index) => (
+            <button
+              key={folder.folderId}
+              ref={index === 0 ? firstTerminalOptionRef : undefined}
+              type="button"
+              className="grid min-w-0 gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+              onClick={() => {
+                setIsTerminalPickerOpen(false);
+                onOpenInTerminal(folder.folderId);
+              }}
+            >
+              <span className="min-w-0 text-sm font-semibold text-ink-50">
+                {folder.projectName}
+                <span className="ml-2 text-[0.82rem] font-medium text-ink-300">{folder.relationship}</span>
+                {folder.isPrimaryFolder ? (
+                  <span className="ml-2 text-[0.82rem] font-medium text-amber-200">Primary folder</span>
+                ) : null}
+              </span>
+              <span className="text-sm text-ink-200">{folder.folderLabel}</span>
+              <span className="min-w-0 break-all font-mono text-[0.88rem] text-ink-300">{folder.path}</span>
+            </button>
+          ))}
+        </div>
+      </ModalDialog>
     </ModalDialog>
   );
 }

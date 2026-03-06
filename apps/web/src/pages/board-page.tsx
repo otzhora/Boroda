@@ -446,8 +446,8 @@ export function BoardPage() {
         onDelete={() => {
           deleteTicketMutation.mutate();
         }}
-        onOpenInTerminal={() => {
-          openTicketInWindowsTerminalMutation.mutate();
+        onOpenInTerminal={(folderId) => {
+          openTicketInWindowsTerminalMutation.mutate(folderId === undefined ? undefined : { folderId });
         }}
         onRefreshJira={() => {
           refreshTicketJiraLinksMutation.mutate();

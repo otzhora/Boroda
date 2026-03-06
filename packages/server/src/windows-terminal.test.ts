@@ -130,6 +130,93 @@ test("opens Windows Terminal for the primary linked project folder", async () =>
   });
 });
 
+test("opens Windows Terminal for the selected linked project folder", async () => {
+  const projectOneResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Payments Backend",
+      slug: "payments-backend",
+      description: "",
+      color: "#355c7d"
+    }
+  });
+  const projectOne = projectOneResponse.json();
+
+  const projectTwoResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Admin Dashboard",
+      slug: "admin-dashboard",
+      description: "",
+      color: "#4f6d7a"
+    }
+  });
+  const projectTwo = projectTwoResponse.json();
+
+  await app.inject({
+    method: "POST",
+    url: `/api/projects/${projectOne.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: existingFolderPath,
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+
+  const secondaryFolderPath = path.join(tempRoot, "secondary-folder");
+  await mkdir(secondaryFolderPath, { recursive: true });
+  const secondFolderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${projectTwo.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: secondaryFolderPath,
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+  const secondFolder = secondFolderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Open selected terminal",
+      description: "",
+      status: "READY",
+      priority: "HIGH",
+      projectLinks: [
+        {
+          projectId: projectOne.id,
+          relationship: "PRIMARY"
+        },
+        {
+          projectId: projectTwo.id,
+          relationship: "RELATED"
+        }
+      ]
+    }
+  });
+  const ticket = ticketResponse.json();
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/integrations/windows-terminal/tickets/${ticket.id}/open`,
+    payload: {
+      folderId: secondFolder.id
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    ok: true,
+    directory: secondFolder.path
+  });
+});
+
 test("returns 409 when the ticket has no available linked project folder", async () => {
   const projectResponse = await app.inject({
     method: "POST",

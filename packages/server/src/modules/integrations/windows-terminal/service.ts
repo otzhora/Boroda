@@ -10,6 +10,10 @@ interface LaunchWindowsTerminalInput {
   directory: string;
 }
 
+interface OpenTicketInWindowsTerminalInput {
+  folderId?: number;
+}
+
 interface PreferredFolderCandidate {
   projectId: number;
   relationship: string;
@@ -58,6 +62,20 @@ function pickPreferredFolder(links: PreferredFolderCandidate[]) {
     const firstExistingFolder = link.project.folders.find((folder) => folder.existsOnDisk);
     if (firstExistingFolder) {
       return firstExistingFolder;
+    }
+  }
+
+  return null;
+}
+
+function findLinkedProjectFolder(
+  links: PreferredFolderCandidate[],
+  folderId: number
+) {
+  for (const link of links) {
+    const folder = link.project.folders.find((candidate) => candidate.id === folderId);
+    if (folder) {
+      return folder;
     }
   }
 
@@ -234,19 +252,34 @@ export async function openWindowsTerminal(input: LaunchWindowsTerminalInput) {
   };
 }
 
-export async function openTicketInWindowsTerminal(app: FastifyInstance, ticketId: number) {
+export async function openTicketInWindowsTerminal(
+  app: FastifyInstance,
+  ticketId: number,
+  input: OpenTicketInWindowsTerminalInput = {}
+) {
   const ticket = await getTicketOrThrow(app, ticketId);
-  const preferredFolder = pickPreferredFolder(ticket.projectLinks);
+  const selectedFolder =
+    input.folderId === undefined ? pickPreferredFolder(ticket.projectLinks) : findLinkedProjectFolder(ticket.projectLinks, input.folderId);
 
-  if (!preferredFolder) {
+  if (input.folderId !== undefined && !selectedFolder) {
     throw new AppError(
       409,
       "TICKET_PROJECT_FOLDER_NOT_AVAILABLE",
-      "No linked project folder is available for this ticket"
+      "The selected project folder is not available for this ticket"
+    );
+  }
+
+  if (!selectedFolder?.existsOnDisk) {
+    throw new AppError(
+      409,
+      "TICKET_PROJECT_FOLDER_NOT_AVAILABLE",
+      input.folderId === undefined
+        ? "No linked project folder is available for this ticket"
+        : "The selected project folder is not available for this ticket"
     );
   }
 
   return openWindowsTerminal({
-    directory: preferredFolder.path
+    directory: selectedFolder.path
   });
 }

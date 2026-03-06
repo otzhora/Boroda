@@ -198,13 +198,14 @@ export function useMoveTicketStatusMutation(options: {
 
 export function useOpenTicketInWindowsTerminalMutation(ticketId: number | null) {
   return useMutation({
-    mutationFn: () => {
+    mutationFn: (input?: { folderId?: number }) => {
       if (ticketId === null) {
         throw new Error("No ticket selected");
       }
 
       return apiClient<{ ok: true; directory: string }>(`/api/integrations/windows-terminal/tickets/${ticketId}/open`, {
-        method: "POST"
+        method: "POST",
+        body: JSON.stringify(input ?? {})
       });
     }
   });

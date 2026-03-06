@@ -510,6 +510,98 @@ describe("TicketDrawer", () => {
     expect(screen.getByRole("button", { name: "Open in Terminal" })).toBeInTheDocument();
   });
 
+  it("lets the user choose which linked project path to open in terminal", async () => {
+    const user = userEvent.setup();
+    const handleOpenInTerminal = vi.fn();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "workspace",
+                    path: "/home/otzhora/projects/payments",
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            },
+            {
+              id: 2,
+              ticketId: ticket.id,
+              projectId: 2,
+              relationship: "RELATED",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                id: 2,
+                name: "Admin Dashboard",
+                slug: "admin-dashboard",
+                folders: [
+                  {
+                    id: 77,
+                    projectId: 2,
+                    label: "frontend",
+                    path: "/home/otzhora/projects/admin",
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInTerminal={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInTerminal={handleOpenInTerminal}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open in Terminal…" }));
+    const terminalPicker = screen.getByRole("dialog", { name: "Choose terminal path" });
+    const adminOptionLabel = screen.getByText("Admin Dashboard", { selector: "span" });
+    const adminOptionButton = adminOptionLabel.closest("button");
+
+    expect(terminalPicker).toContainElement(adminOptionButton);
+    expect(adminOptionButton).not.toBeNull();
+
+    await user.click(adminOptionButton!);
+
+    expect(handleOpenInTerminal).toHaveBeenCalledWith(77);
+  });
+
   it("keeps focus in the description field while typing", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();
