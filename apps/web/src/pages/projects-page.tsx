@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import type { CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -31,17 +32,16 @@ interface MutationContext {
 }
 
 const PROJECTS_QUERY_KEY = ["projects"] as const;
-const toolbarClassName = "sticky top-0 z-30 border-b border-white/8 bg-canvas-975 py-2";
 const panelClassName = "grid gap-4 rounded-[16px] border border-white/8 bg-canvas-900/96 px-4 py-4";
 const insetPanelClassName = "grid gap-4 border-t border-white/8 pt-4";
 const projectListClassName =
-  "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-white/8 bg-canvas-900/96";
-const projectArticleClassName = "grid gap-0 border-t border-white/8 first:border-t-0";
-const projectRowClassName =
-  "grid items-center gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto]";
+  "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-white/8 bg-canvas-900/96 py-2";
+const projectArticleClassName =
+  "grid gap-0 border-t border-white/8 px-4 transition-colors first:border-t-0";
+const projectRowClassName = "grid items-center gap-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto]";
 const projectBodyClassName = "grid gap-4 px-4 pb-4";
 const rowClassName =
-  "grid gap-3 rounded-[12px] border border-white/7 bg-white/[0.02] px-3 py-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]";
+  "grid gap-3 border-t border-white/8 py-3 first:border-t-0 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]";
 const sectionTitleClassName = "m-0 text-sm font-semibold uppercase tracking-[0.14em] text-ink-200";
 const labelClassName = "m-0 text-[0.78rem] font-medium uppercase tracking-[0.12em] text-ink-300";
 const fieldClassName = "grid gap-1.5";
@@ -67,6 +67,8 @@ const checkboxLabelClassName =
   "flex min-h-10 items-center gap-3 rounded-[10px] border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-ink-50";
 const chipClassName =
   "inline-flex min-h-7 items-center rounded-[999px] border px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em]";
+const rowToggleButtonClassName =
+  "flex min-h-[5.25rem] min-w-0 items-start gap-3 rounded-[12px] px-1 py-1 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
 
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -87,6 +89,55 @@ function nowIso() {
 
 function formatDateTime(value: string) {
   return dateTimeFormatter.format(new Date(value));
+}
+
+function normalizeHexColor(color: string) {
+  const value = color.trim();
+
+  if (!/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
+    return null;
+  }
+
+  if (value.length === 4) {
+    return `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
+  }
+
+  return value;
+}
+
+function hexToRgb(color: string) {
+  const normalized = normalizeHexColor(color);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const value = normalized.slice(1);
+  return {
+    r: Number.parseInt(value.slice(0, 2), 16),
+    g: Number.parseInt(value.slice(2, 4), 16),
+    b: Number.parseInt(value.slice(4, 6), 16)
+  };
+}
+
+function mixChannel(base: number, target: number, ratio: number) {
+  return Math.round(base * (1 - ratio) + target * ratio);
+}
+
+function getProjectBadgeStyle(color: string): CSSProperties | undefined {
+  const rgb = hexToRgb(color);
+
+  if (!rgb) {
+    return undefined;
+  }
+
+  const textColor = `rgb(${mixChannel(rgb.r, 255, 0.74)} ${mixChannel(rgb.g, 255, 0.74)} ${mixChannel(rgb.b, 255, 0.74)})`;
+
+  return {
+    backgroundColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.16)`,
+    borderColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.34)`,
+    color: textColor
+  };
 }
 
 function describePathInfo(pathInfo: PathInfo) {
@@ -933,27 +984,29 @@ export function ProjectsPage() {
         </form>
       </ModalDialog>
 
-      <section className="flex h-full min-h-0 min-w-0 flex-col gap-3 pb-2">
-        <section className={toolbarClassName}>
-          <div className="flex min-h-10 items-center justify-end gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-wrap items-center gap-2 text-sm text-ink-300">
-                <span>{sortedProjects.length} projects</span>
-                <span aria-hidden="true">/</span>
-                <span>
-                  {sortedProjects.reduce((count, project) => count + project.folders.length, 0)} folders
-                </span>
-              </div>
-              <button
-                type="button"
-                className={secondaryButtonClassName}
-                onClick={() => setIsCreateProjectOpen(true)}
-              >
-                New project
-              </button>
-            </div>
+      <section className="mx-auto flex h-full w-full min-h-0 min-w-0 max-w-6xl flex-col gap-3 pb-2">
+        <div className="flex min-h-12 flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-3">
+          <div className="min-w-0">
+            <h1 className="m-0 text-base font-semibold text-ink-50">Projects</h1>
+            <p className="m-0 mt-1 text-sm text-ink-200">Project records and folders stay together in one rail.</p>
           </div>
-        </section>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-ink-300">
+              <span>{sortedProjects.length} projects</span>
+              <span aria-hidden="true">/</span>
+              <span>
+                {sortedProjects.reduce((count, project) => count + project.folders.length, 0)} folders
+              </span>
+            </div>
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={() => setIsCreateProjectOpen(true)}
+            >
+              New project
+            </button>
+          </div>
+        </div>
 
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
           {projectsQuery.isLoading ? (
@@ -978,7 +1031,7 @@ export function ProjectsPage() {
                 <div className={projectRowClassName}>
                   <button
                     type="button"
-                    className="flex min-h-[4.75rem] max-h-[4.75rem] min-w-0 items-start gap-3 overflow-hidden text-left"
+                    className={`${rowToggleButtonClassName} ${isExpandedProject ? "bg-white/[0.04]" : ""}`}
                     aria-expanded={isExpandedProject}
                     onClick={() => toggleProjectExpansion(project.id)}
                   >
@@ -988,8 +1041,11 @@ export function ProjectsPage() {
                     />
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <h3 className="m-0 text-[1.02rem] font-semibold text-ink-50">{project.name}</h3>
-                        <span className={`${chipClassName} border-white/10 bg-white/[0.04] text-ink-200`}>
+                        <h3 className="m-0 text-[0.95rem] font-semibold leading-6 text-ink-100">{project.name}</h3>
+                        <span
+                          className="inline-flex min-h-7 items-center rounded-[999px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-ink-50"
+                          style={getProjectBadgeStyle(project.color)}
+                        >
                           {project.slug}
                         </span>
                       </div>
@@ -999,7 +1055,7 @@ export function ProjectsPage() {
                         <span>Updated {formatDateTime(project.updatedAt)}</span>
                       </div>
                       {project.description ? (
-                        <p className="m-0 mt-1.5 line-clamp-1 break-words text-sm text-ink-200">
+                        <p className="m-0 mt-2 break-words text-[0.95rem] leading-6 text-ink-100">
                           {project.description}
                         </p>
                       ) : null}
@@ -1007,15 +1063,6 @@ export function ProjectsPage() {
                   </button>
 
                   <div className="flex flex-wrap gap-2 lg:justify-end">
-                    <button
-                      type="button"
-                      className={secondaryButtonClassName}
-                      onClick={() =>
-                        isEditingProject ? cancelProjectEdit(project.id) : beginProjectEdit(project)
-                      }
-                    >
-                      {isEditingProject ? "Close editor" : "Edit"}
-                    </button>
                     <button
                       type="button"
                       className={dangerButtonClassName}
@@ -1029,6 +1076,18 @@ export function ProjectsPage() {
 
                 {isExpandedProject ? (
                   <div className={projectBodyClassName}>
+                    {!isEditingProject ? (
+                      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/8 pt-4">
+                        <button
+                          type="button"
+                          className={secondaryButtonClassName}
+                          onClick={() => beginProjectEdit(project)}
+                        >
+                          Edit project
+                        </button>
+                      </div>
+                    ) : null}
+
                     {isEditingProject ? (
                       <form className={insetPanelClassName} onSubmit={(event) => void handleUpdateProject(event, project.id)}>
                         <div className="grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
@@ -1112,7 +1171,7 @@ export function ProjectsPage() {
                       </div>
 
                       {project.folders.length ? (
-                        <ul className="grid gap-3 p-0" role="list">
+                        <ul className="grid p-0" role="list">
                           {sortFolders(project.folders).map((folder) => {
                             const isEditingFolder = editingFolderIds[folder.id] ?? false;
                             const folderEditForm = folderEditForms[folder.id] ?? createFolderFormState(folder);
@@ -1143,7 +1202,7 @@ export function ProjectsPage() {
                                     <p className="m-0 mt-1">{formatDateTime(folder.updatedAt)}</p>
                                   </div>
 
-                                  <div className="flex flex-wrap gap-2 md:justify-end">
+                                  <div className="flex flex-wrap gap-2 md:justify-end md:self-start">
                                     <button
                                       type="button"
                                       className={secondaryButtonClassName}

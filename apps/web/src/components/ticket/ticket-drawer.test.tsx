@@ -268,7 +268,9 @@ describe("TicketDrawer", () => {
       />
     );
 
+    expect(screen.getByRole("heading", { name: "Jira issues" })).toBeInTheDocument();
     expect(screen.getByText("Follow-up issue")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh Jira links" })).toBeInTheDocument();
     expect(screen.queryByText("Core payment services")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show linked projects" })).toHaveAttribute("aria-expanded", "false");
 
@@ -278,6 +280,7 @@ describe("TicketDrawer", () => {
     expect(screen.getByRole("button", { name: "Hide linked projects" })).toHaveAttribute("aria-expanded", "true");
 
     await user.click(screen.getByRole("button", { name: "Hide Jira issues" }));
+    expect(screen.queryByRole("button", { name: "Refresh Jira links" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Hide linked projects" }));
 
     expect(screen.queryByText("Follow-up issue")).not.toBeInTheDocument();
@@ -786,6 +789,7 @@ describe("TicketDrawer", () => {
       />
     );
 
+    expect(screen.getByRole("button", { name: "Refresh Jira links" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Refresh Jira links" }));
 
     expect(handleRefreshJira).toHaveBeenCalledTimes(1);

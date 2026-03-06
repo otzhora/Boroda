@@ -422,10 +422,24 @@ export function TicketDrawer(props: TicketDrawerProps) {
                     {metadata.map((item) => (
                       <MetaRow key={item.label} label={item.label} value={item.value} />
                     ))}
-                    <div className="grid gap-2 border-b border-white/8 pb-2.5 last:border-b-0 last:pb-0">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-[0.8rem] font-medium uppercase tracking-[0.12em] text-ink-300">Jira issues</span>
+                    <div className="grid gap-3 border-b border-white/8 pb-4 last:border-b-0 last:pb-0">
+                      <div className="flex items-center justify-between gap-4">
+                        <h4 className="m-0 text-base font-semibold text-ink-50">Jira issues</h4>
                         <div className="flex flex-wrap items-center justify-end gap-2">
+                          {isJiraSectionExpanded && ticket.jiraIssues.length ? (
+                            <button
+                              type="button"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50 disabled:cursor-progress disabled:opacity-70"
+                              onClick={onRefreshJira}
+                              disabled={isRefreshingJira}
+                              aria-label={isRefreshingJira ? "Refreshing Jira links" : "Refresh Jira links"}
+                              title={isRefreshingJira ? "Refreshing Jira links" : "Refresh Jira links"}
+                            >
+                              <RefreshIcon
+                                className={`h-4 w-4 ${isRefreshingJira ? "animate-spin motion-reduce:animate-none" : ""}`}
+                              />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className={sectionToggleButtonClassName}
@@ -443,20 +457,6 @@ export function TicketDrawer(props: TicketDrawerProps) {
                               }`}
                             />
                           </button>
-                          {ticket.jiraIssues.length ? (
-                            <button
-                              type="button"
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50 disabled:cursor-progress disabled:opacity-70"
-                              onClick={onRefreshJira}
-                              disabled={isRefreshingJira}
-                              aria-label={isRefreshingJira ? "Refreshing Jira links" : "Refresh Jira links"}
-                              title={isRefreshingJira ? "Refreshing Jira links" : "Refresh Jira links"}
-                            >
-                              <RefreshIcon
-                                className={`h-4 w-4 ${isRefreshingJira ? "animate-spin motion-reduce:animate-none" : ""}`}
-                              />
-                            </button>
-                          ) : null}
                         </div>
                       </div>
                       {isJiraSectionExpanded ? (

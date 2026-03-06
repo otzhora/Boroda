@@ -21,13 +21,13 @@ const createButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-ink-50 px-3 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-white disabled:cursor-progress disabled:opacity-70";
 const issueListClassName =
   "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-white/8 bg-canvas-900/96";
-const issueArticleClassName = "grid gap-0 border-t border-white/8 first:border-t-0";
-const issueRowClassName =
-  "grid items-center gap-3 px-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto]";
+const issueArticleClassName =
+  "grid gap-0 border-t border-white/8 px-4 transition-colors first:border-t-0";
+const issueRowClassName = "grid items-center gap-4 py-4";
 const issueBodyClassName = "grid gap-4 px-4 pb-4";
-const issueInsetPanelClassName = "grid gap-3 border-t border-white/8 pt-4";
+const issueInsetPanelClassName = "grid gap-4 border-t border-white/8 pt-4";
 const rowToggleButtonClassName =
-  "flex min-h-[4.75rem] min-w-0 items-start gap-3 text-left";
+  "flex min-h-[5.25rem] min-w-0 items-start gap-3 rounded-[12px] px-1 py-1 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
 const spinnerClassName = "h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent";
 const emptyPanelClassName = "border border-white/8 bg-canvas-900/96 px-4 py-4";
 
@@ -278,7 +278,7 @@ export function JiraPage() {
 
       {issues.length > 0 ? (
         <section className={issueListClassName}>
-          <ul className="m-0 list-none p-0">
+          <ul className="m-0 list-none px-0 py-2">
             {issues.map((issue) => {
               const jiraHref = baseUrl ? `${baseUrl}/browse/${issue.key}` : null;
               const isExpanded = expandedIssueKeys.includes(issue.key);
@@ -295,7 +295,7 @@ export function JiraPage() {
                   <div className={issueRowClassName}>
                     <button
                       type="button"
-                      className={rowToggleButtonClassName}
+                      className={`${rowToggleButtonClassName} ${isExpanded ? "bg-white/[0.04]" : ""}`}
                       aria-expanded={isExpanded}
                       aria-controls={panelId}
                       aria-label={`${isExpanded ? "Hide links" : "Show links"} for ${issue.key}`}
@@ -315,7 +315,7 @@ export function JiraPage() {
                               href={jiraHref}
                               target="_blank"
                               rel="noreferrer"
-                              className="relative z-10 inline-flex min-h-7 items-center rounded-[999px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-ink-50 transition-colors hover:border-white/16 hover:bg-white/[0.08]"
+                              className="relative z-10 inline-flex min-h-7 items-center rounded-[999px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-ink-50 transition-colors hover:border-white/16 hover:bg-white/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
                               aria-label={`Open Jira issue ${issue.key}`}
                               onClick={(event) => {
                                 event.stopPropagation();
@@ -344,18 +344,6 @@ export function JiraPage() {
                         <p className="m-0 mt-2 break-words text-[0.95rem] leading-6 text-ink-100">{issue.summary}</p>
                       </div>
                     </button>
-
-                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <button
-                        type="button"
-                        className={topBarButtonClassName}
-                        onClick={() => {
-                          toggleIssueExpanded(issue.key);
-                        }}
-                      >
-                        {isExpanded ? "Hide links" : "Show links"}
-                      </button>
-                    </div>
                   </div>
 
                   {isExpanded ? (
