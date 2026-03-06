@@ -1,14 +1,23 @@
 import { spawn, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { getConfig } from "../../../config";
 import { AppError } from "../../../shared/errors";
 import { getTicketOrThrow } from "../../tickets/service";
 
-export type OpenInTarget = "explorer" | "vscode" | "cursor";
+export type OpenInTarget = "explorer" | "vscode" | "cursor" | "terminal";
 
 interface OpenInAppInput {
   directory: string;
   target: OpenInTarget;
+}
+
+interface LauncherSpec {
+  binary: string;
+  args: (directory: string) => string[];
+  cwd?: (directory: string) => string | undefined;
+  preserveInputCwd?: boolean;
 }
 
 interface OpenTicketInAppInput {
@@ -27,6 +36,13 @@ interface PreferredFolderCandidate {
       existsOnDisk: boolean;
     }>;
   };
+}
+
+interface WindowsTerminalProfile {
+  guid: string;
+  name?: string;
+  source?: string;
+  commandline?: string;
 }
 
 function sortProjectLinks(links: PreferredFolderCandidate[]) {
@@ -108,34 +124,151 @@ function getTargetLabel(target: OpenInTarget) {
       return "VS Code";
     case "cursor":
       return "Cursor";
+    case "terminal":
+      return "Terminal";
   }
 }
 
-function getLauncher(target: OpenInTarget) {
+function isWindowsTerminalBinary(binary: string) {
+  return /(^|[\\/])wt(?:\.exe)?$/i.test(binary);
+}
+
+function findWindowsTerminalSettingsPath() {
+  const config = getConfig();
+
+  if (config.windowsTerminalSettingsPath) {
+    return config.windowsTerminalSettingsPath;
+  }
+
+  if (process.platform === "win32") {
+    return null;
+  }
+
+  const usersRoot = "/mnt/c/Users";
+  if (!fs.existsSync(usersRoot)) {
+    return null;
+  }
+
+  const candidateRelativePaths = [
+    "AppData/Local/Packages/Microsoft.WindowsTerminal_8wekyb3d8bbwe/LocalState/settings.json",
+    "AppData/Local/Packages/Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe/LocalState/settings.json",
+    "AppData/Local/Microsoft/Windows Terminal/settings.json"
+  ];
+
+  for (const userDirectory of fs.readdirSync(usersRoot)) {
+    for (const relativePath of candidateRelativePaths) {
+      const candidatePath = path.join(usersRoot, userDirectory, relativePath);
+      if (fs.existsSync(candidatePath)) {
+        return candidatePath;
+      }
+    }
+  }
+
+  return null;
+}
+
+function loadDefaultWindowsTerminalProfile(): WindowsTerminalProfile | null {
+  const settingsPath = findWindowsTerminalSettingsPath();
+  if (!settingsPath || !fs.existsSync(settingsPath)) {
+    return null;
+  }
+
+  try {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8")) as {
+      defaultProfile?: string;
+      profiles?: { list?: WindowsTerminalProfile[] };
+    };
+    const defaultProfileGuid = settings.defaultProfile;
+    const profiles = settings.profiles?.list ?? [];
+    if (!defaultProfileGuid) {
+      return null;
+    }
+
+    return profiles.find((profile) => profile.guid === defaultProfileGuid) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isWslWindowsTerminalProfile(profile: WindowsTerminalProfile | null) {
+  if (!profile) {
+    return false;
+  }
+
+  return (
+    profile.source === "Windows.Terminal.Wsl" ||
+    profile.source?.startsWith("CanonicalGroupLimited.") === true ||
+    profile.commandline?.toLowerCase().includes("wsl.exe") === true ||
+    profile.name?.toLowerCase().includes("ubuntu") === true
+  );
+}
+
+function buildWindowsTerminalArgs(directory: string) {
+  const defaultProfile = loadDefaultWindowsTerminalProfile();
+
+  if (process.platform !== "win32" && isWslEnvironment() && isWslWindowsTerminalProfile(defaultProfile)) {
+    const args = ["-w", "0", "nt"];
+    if (defaultProfile?.guid) {
+      args.push("-p", defaultProfile.guid);
+    }
+
+    args.push("wsl.exe", "--distribution", process.env.WSL_DISTRO_NAME ?? "", "--cd", directory);
+    return args;
+  }
+
+  return ["-w", "0", "nt", "-d", toWindowsPath(directory)];
+}
+
+function getLauncher(target: OpenInTarget): LauncherSpec {
   const config = getConfig();
 
   switch (target) {
     case "explorer":
       return {
         binary: config.explorerBinary,
-        args: (directory: string) => [toWindowsPath(directory)]
+        args: (directory: string) => [toWindowsPath(directory)],
+        preserveInputCwd: true
       };
     case "vscode":
       return {
         binary: config.vscodeBinary,
-        args: (directory: string) => [directory]
+        args: (directory: string) => [directory],
+        preserveInputCwd: true
       };
     case "cursor":
       return {
         binary: config.cursorBinary,
-        args: (directory: string) => [directory]
+        args: (directory: string) => [directory],
+        preserveInputCwd: true
+      };
+    case "terminal":
+      if (isWindowsTerminalBinary(config.terminalBinary)) {
+        return {
+          binary: config.terminalBinary,
+          args: (directory: string) => buildWindowsTerminalArgs(directory),
+          cwd: () => undefined
+        };
+      }
+
+      return {
+        binary: config.terminalBinary,
+        args: (directory: string) => {
+          if (process.platform === "win32" || isWslEnvironment()) {
+            return ["-d", toWindowsPath(directory)];
+          }
+
+          return [];
+        },
+        cwd: (directory: string) => (process.platform === "win32" || isWslEnvironment() ? undefined : directory)
       };
   }
 }
 
 export async function openInApp(input: OpenInAppInput) {
   const launcher = getLauncher(input.target);
+  const resolvedCwd = launcher.cwd ? launcher.cwd(input.directory) : launcher.preserveInputCwd ? input.directory : undefined;
   const child = spawn(launcher.binary, launcher.args(input.directory), {
+    cwd: resolvedCwd,
     detached: true,
     stdio: "ignore"
   });

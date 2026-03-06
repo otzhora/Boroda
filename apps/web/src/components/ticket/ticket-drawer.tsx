@@ -4,7 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
+  type FocusEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
   type ReactNode
@@ -119,7 +119,7 @@ function EditableReadRegion(props: {
     props.onActivate();
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) {
       return;
     }
@@ -205,6 +205,38 @@ function ChevronIcon(props: { className?: string }) {
   );
 }
 
+function AppWindowIcon(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={props.className} aria-hidden="true">
+      <rect x="3.5" y="4" width="17" height="16" rx="3.5" className="fill-white/6 stroke-current" strokeWidth="1.4" />
+      <path d="M3.5 8h17" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="7" cy="6.1" r="0.9" className="fill-current" />
+      <circle cx="10.2" cy="6.1" r="0.9" className="fill-current opacity-80" />
+    </svg>
+  );
+}
+
+function FolderIcon(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={props.className} aria-hidden="true">
+      <path
+        d="M3.5 7.5a2 2 0 0 1 2-2H9l1.8 2H18.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"
+        className="fill-white/6 stroke-current"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function getOpenInTargetIcon(target: OpenInTarget) {
+  if (target === "explorer") {
+    return <FolderIcon className="h-4 w-4 shrink-0 text-amber-200" />;
+  }
+
+  return <AppWindowIcon className="h-4 w-4 shrink-0 text-sky-200" />;
+}
+
 function getPreferredProjectFolder(ticket: Ticket | undefined) {
   if (!ticket) {
     return null;
@@ -270,12 +302,13 @@ const openInTargets: Array<{
     id: "explorer",
     label: "File Explorer",
     description: "Open the linked folder in Explorer."
+  },
+  {
+    id: "terminal",
+    label: "Terminal",
+    description: "Open the linked folder in Terminal."
   }
 ];
-
-function getOpenInTargetLabel(target: OpenInTarget | null) {
-  return openInTargets.find((option) => option.id === target)?.label ?? "selected app";
-}
 
 function getAvailableTerminalFolders(ticket: Ticket | undefined): TerminalFolderOption[] {
   if (!ticket) {
@@ -344,17 +377,27 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const [activeDetailTab, setActiveDetailTab] = useState<DetailTabId>("contexts");
   const [isJiraSectionExpanded, setIsJiraSectionExpanded] = useState(true);
   const [isLinkedProjectsSectionExpanded, setIsLinkedProjectsSectionExpanded] = useState(false);
-  const [isOpenTargetPickerOpen, setIsOpenTargetPickerOpen] = useState(false);
-  const [selectedOpenTarget, setSelectedOpenTarget] = useState<OpenInTarget | null>(null);
+  const [isOpenInMenuOpen, setIsOpenInMenuOpen] = useState(false);
+  const [selectedOpenTarget, setSelectedOpenTarget] = useState<OpenInTarget>("vscode");
+  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
   const detailTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const editorRootRefs = useRef<Partial<Record<EditableSectionId, HTMLElement | null>>>({});
-  const firstOpenTargetOptionRef = useRef<HTMLButtonElement>(null);
+  const openInMenuRef = useRef<HTMLDivElement>(null);
+  const openInActionButtonRef = useRef<HTMLButtonElement>(null);
+  const openInToggleButtonRef = useRef<HTMLButtonElement>(null);
+  const openInAppButtonRefs = useRef<Record<OpenInTarget, HTMLButtonElement | null>>({
+    vscode: null,
+    cursor: null,
+    explorer: null,
+    terminal: null
+  });
   const firstFolderOptionRef = useRef<HTMLButtonElement>(null);
   const detailTabsId = useId();
   const jiraSectionId = useId();
   const linkedProjectsSectionId = useId();
+  const openInMenuId = useId();
   const preferredProjectFolder = getPreferredProjectFolder(ticket);
   const availableTerminalFolders = useMemo(() => getAvailableTerminalFolders(ticket), [ticket]);
   const jiraSettingsQuery = useJiraSettingsQuery();
@@ -365,8 +408,9 @@ export function TicketDrawer(props: TicketDrawerProps) {
     setActiveDetailTab("contexts");
     setIsJiraSectionExpanded(true);
     setIsLinkedProjectsSectionExpanded(false);
-    setIsOpenTargetPickerOpen(false);
-    setSelectedOpenTarget(null);
+    setIsOpenInMenuOpen(false);
+    setSelectedOpenTarget("vscode");
+    setIsFolderPickerOpen(false);
   }, [ticketId]);
 
   useEffect(() => {
@@ -407,27 +451,31 @@ export function TicketDrawer(props: TicketDrawerProps) {
 
   useEffect(() => {
     if (!availableTerminalFolders.length) {
-      setIsOpenTargetPickerOpen(false);
-      setSelectedOpenTarget(null);
+      setIsOpenInMenuOpen(false);
+      setIsFolderPickerOpen(false);
     }
   }, [availableTerminalFolders.length]);
 
-  const isFolderPickerOpen = selectedOpenTarget !== null && availableTerminalFolders.length > 1;
-  const openInButtonLabel = "Open in…";
+  const selectedOpenTargetLabel =
+    openInTargets.find((target) => target.id === selectedOpenTarget)?.label ?? "selected app";
+  const openInButtonLabel = `Open in ${selectedOpenTargetLabel}`;
+  const hasMultipleOpenFolders = availableTerminalFolders.length > 1;
 
   const handleOpenInTarget = (target: OpenInTarget) => {
-    if (availableTerminalFolders.length <= 1) {
-      setIsOpenTargetPickerOpen(false);
-      onOpenInApp(target, preferredProjectFolder?.id);
+    setSelectedOpenTarget(target);
+    setIsOpenInMenuOpen(false);
+  };
+
+  const closeOpenInMenu = (restoreFocus = false) => {
+    setIsOpenInMenuOpen(false);
+
+    if (!restoreFocus) {
       return;
     }
 
-    setSelectedOpenTarget(target);
-    setIsOpenTargetPickerOpen(false);
-  };
-
-  const handleOpenInButtonClick = () => {
-    setIsOpenTargetPickerOpen(true);
+    window.setTimeout(() => {
+      openInToggleButtonRef.current?.focus();
+    }, 0);
   };
 
   useEffect(() => {
@@ -458,6 +506,54 @@ export function TicketDrawer(props: TicketDrawerProps) {
       document.removeEventListener("pointerdown", handlePointerDown, true);
     };
   }, [activeEditor, isSaving, onSave]);
+
+  useEffect(() => {
+    if (!isOpenInMenuOpen) {
+      return;
+    }
+
+    const focusFirstTarget = () => {
+      openInAppButtonRefs.current.vscode?.focus();
+    };
+
+    focusFirstTarget();
+    const timeoutId = window.setTimeout(focusFirstTarget, 0);
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (
+        openInMenuRef.current?.contains(target) ||
+        openInActionButtonRef.current?.contains(target) ||
+        openInToggleButtonRef.current?.contains(target)
+      ) {
+        return;
+      }
+
+      closeOpenInMenu();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      event.preventDefault();
+      closeOpenInMenu(true);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpenInMenuOpen]);
 
   const metadata = useMemo(
     () => ({
@@ -516,6 +612,58 @@ export function TicketDrawer(props: TicketDrawerProps) {
     const nextTab = detailTabs[nextIndex];
     setActiveDetailTab(nextTab.id);
     detailTabRefs.current[nextIndex]?.focus();
+  };
+
+  const handleOpenInMenuBlur = (event: FocusEvent<HTMLDivElement>) => {
+    const nextFocused = event.relatedTarget;
+    if (!(nextFocused instanceof Node)) {
+      return;
+    }
+
+    if (
+      openInMenuRef.current?.contains(nextFocused) ||
+      openInToggleButtonRef.current?.contains(nextFocused) ||
+      openInActionButtonRef.current?.contains(nextFocused)
+    ) {
+      return;
+    }
+
+    closeOpenInMenu();
+  };
+
+  const handleOpenInMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const focusableButtons = openInMenuRef.current
+      ? Array.from(openInMenuRef.current.querySelectorAll<HTMLButtonElement>("button:not([disabled])"))
+      : [];
+    const currentIndex = focusableButtons.findIndex((button) => button === document.activeElement);
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!focusableButtons.length) {
+        return;
+      }
+
+      const nextIndex =
+        currentIndex === -1
+          ? 0
+          : event.key === "ArrowDown"
+            ? (currentIndex + 1) % focusableButtons.length
+            : (currentIndex - 1 + focusableButtons.length) % focusableButtons.length;
+
+      focusableButtons[nextIndex]?.focus();
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      focusableButtons[0]?.focus();
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      focusableButtons[focusableButtons.length - 1]?.focus();
+    }
   };
 
   return (
@@ -1020,21 +1168,94 @@ export function TicketDrawer(props: TicketDrawerProps) {
                 <h4 className="m-0 text-base font-semibold text-ink-50">Actions</h4>
                 <div className="grid min-w-0 gap-2.5">
                   {availableTerminalFolders.length ? (
-                    <button
-                      type="button"
-                      className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.10] px-3 py-1.5 text-sm font-medium text-ink-50 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
-                      onClick={handleOpenInButtonClick}
-                      disabled={isOpeningInApp}
-                      aria-label={isOpeningInApp ? "Opening" : openInButtonLabel}
-                    >
-                      {isOpeningInApp ? (
-                        <span
-                          className="mr-2 inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
-                          aria-hidden="true"
-                        />
+                    <div className="relative min-w-0">
+                      <div className="flex min-w-0">
+                        <button
+                          ref={openInActionButtonRef}
+                          type="button"
+                          className="inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-l-lg border border-white/10 bg-white/[0.10] px-3 py-2 text-sm font-medium text-ink-50 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
+                          onClick={() => {
+                            if (hasMultipleOpenFolders) {
+                              setIsFolderPickerOpen(true);
+                              return;
+                            }
+
+                            onOpenInApp(selectedOpenTarget, preferredProjectFolder?.id);
+                          }}
+                          disabled={isOpeningInApp}
+                          aria-label={isOpeningInApp ? "Opening" : openInButtonLabel}
+                        >
+                          {isOpeningInApp ? (
+                            <span
+                              className="inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            getOpenInTargetIcon(selectedOpenTarget)
+                          )}
+                          <span className="truncate">{isOpeningInApp ? "Opening…" : openInButtonLabel}</span>
+                        </button>
+                        <button
+                          ref={openInToggleButtonRef}
+                          type="button"
+                          className="inline-flex min-h-10 min-w-11 items-center justify-center rounded-r-lg border border-l-0 border-white/10 bg-white/[0.10] px-3 py-2 text-ink-100 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
+                          aria-label="Choose open-in app"
+                          aria-haspopup="dialog"
+                          aria-expanded={isOpenInMenuOpen}
+                          aria-controls={isOpenInMenuOpen ? openInMenuId : undefined}
+                          onClick={() => {
+                            setIsOpenInMenuOpen((current) => {
+                              return !current;
+                            });
+                          }}
+                          disabled={isOpeningInApp}
+                        >
+                          <ChevronIcon className={`h-4 w-4 transition-transform ${isOpenInMenuOpen ? "rotate-180" : ""}`} />
+                        </button>
+                      </div>
+
+                      {isOpenInMenuOpen ? (
+                        <div
+                          id={openInMenuId}
+                          ref={openInMenuRef}
+                          className="absolute right-0 top-[calc(100%+0.45rem)] z-20 grid w-[min(23rem,calc(100vw-4rem))] gap-1 rounded-[18px] border border-white/10 bg-canvas-900 p-2 shadow-[0_24px_72px_rgba(0,0,0,0.42)]"
+                          role="dialog"
+                          aria-label="Open in"
+                          onBlur={handleOpenInMenuBlur}
+                          onKeyDown={handleOpenInMenuKeyDown}
+                        >
+                          <div className="px-2 pb-1 pt-1">
+                            <p className="m-0 text-[0.78rem] font-semibold uppercase tracking-[0.12em] text-ink-300">Choose app</p>
+                          </div>
+                          {openInTargets.map((target) => {
+                            return (
+                              <div key={target.id} className="grid gap-1 rounded-[14px] border border-transparent bg-white/[0.02] p-1">
+                                <button
+                                  ref={(element) => {
+                                    openInAppButtonRefs.current[target.id] = element;
+                                  }}
+                                  type="button"
+                                  className="grid min-h-11 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-3 py-2 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+                                  aria-pressed={selectedOpenTarget === target.id}
+                                  onClick={() => {
+                                    handleOpenInTarget(target.id);
+                                  }}
+                                >
+                                  {getOpenInTargetIcon(target.id)}
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-sm font-semibold text-ink-50">{target.label}</span>
+                                    <span className="block truncate text-[0.82rem] text-ink-300">{target.description}</span>
+                                  </span>
+                                  <span className="text-[0.76rem] font-medium uppercase tracking-[0.1em] text-ink-400">
+                                    {selectedOpenTarget === target.id ? "Selected" : "Use"}
+                                  </span>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       ) : null}
-                      {isOpeningInApp ? "Opening…" : openInButtonLabel}
-                    </button>
+                    </div>
                   ) : null}
                   <button
                     type="button"
@@ -1059,38 +1280,11 @@ export function TicketDrawer(props: TicketDrawerProps) {
       )}
 
       <ModalDialog
-        open={isOpenTargetPickerOpen}
-        title="Open in"
-        description="Choose which app to use for the linked project folder."
-        onClose={() => {
-          setIsOpenTargetPickerOpen(false);
-        }}
-        initialFocusRef={firstOpenTargetOptionRef}
-      >
-        <div className="grid min-w-0 gap-2">
-          {openInTargets.map((target, index) => (
-            <button
-              key={target.id}
-              ref={index === 0 ? firstOpenTargetOptionRef : undefined}
-              type="button"
-              className="grid min-w-0 gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
-              onClick={() => {
-                handleOpenInTarget(target.id);
-              }}
-            >
-              <span className="min-w-0 text-sm font-semibold text-ink-50">{target.label}</span>
-              <span className="text-sm text-ink-200">{target.description}</span>
-            </button>
-          ))}
-        </div>
-      </ModalDialog>
-
-      <ModalDialog
         open={isFolderPickerOpen}
         title="Choose folder"
-        description={`Pick which linked project folder to open in ${getOpenInTargetLabel(selectedOpenTarget)}.`}
+        description={`Pick which linked project folder to open in ${selectedOpenTargetLabel}.`}
         onClose={() => {
-          setSelectedOpenTarget(null);
+          setIsFolderPickerOpen(false);
         }}
         initialFocusRef={firstFolderOptionRef}
       >
@@ -1102,11 +1296,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
               type="button"
               className="grid min-w-0 gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
               onClick={() => {
-                if (!selectedOpenTarget) {
-                  return;
-                }
-
-                setSelectedOpenTarget(null);
+                setIsFolderPickerOpen(false);
                 onOpenInApp(selectedOpenTarget, folder.folderId);
               }}
             >
@@ -1123,6 +1313,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
           ))}
         </div>
       </ModalDialog>
+
     </ModalDialog>
   );
 }

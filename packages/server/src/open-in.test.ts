@@ -20,6 +20,7 @@ const previousWslDistroName = process.env.WSL_DISTRO_NAME;
 const previousExplorerBin = process.env.BORODA_EXPLORER_BIN;
 const previousVscodeBin = process.env.BORODA_VSCODE_BIN;
 const previousCursorBin = process.env.BORODA_CURSOR_BIN;
+const previousTerminalBin = process.env.BORODA_TERMINAL_BIN;
 
 before(async () => {
   tempRoot = await mkdtemp(path.join(os.tmpdir(), "boroda-open-in-tests-"));
@@ -31,6 +32,7 @@ before(async () => {
   process.env.BORODA_EXPLORER_BIN = "/bin/true";
   process.env.BORODA_VSCODE_BIN = "/bin/true";
   process.env.BORODA_CURSOR_BIN = "/bin/true";
+  process.env.BORODA_TERMINAL_BIN = "/bin/true";
 
   const [{ buildApp }, dbClient, schema] = await Promise.all([
     import("./app"),
@@ -61,6 +63,7 @@ beforeEach(() => {
   process.env.BORODA_EXPLORER_BIN = "/bin/true";
   process.env.BORODA_VSCODE_BIN = "/bin/true";
   process.env.BORODA_CURSOR_BIN = "/bin/true";
+  process.env.BORODA_TERMINAL_BIN = "/bin/true";
 });
 
 after(async () => {
@@ -86,6 +89,12 @@ after(async () => {
     delete process.env.BORODA_CURSOR_BIN;
   } else {
     process.env.BORODA_CURSOR_BIN = previousCursorBin;
+  }
+
+  if (previousTerminalBin === undefined) {
+    delete process.env.BORODA_TERMINAL_BIN;
+  } else {
+    process.env.BORODA_TERMINAL_BIN = previousTerminalBin;
   }
 
   await app.close();
@@ -155,6 +164,25 @@ test("opens VS Code for the primary linked project folder", async () => {
     ok: true,
     directory: folder.path,
     target: "vscode"
+  });
+});
+
+test("opens Terminal for the primary linked project folder", async () => {
+  const { folder, ticket } = await createTicketWithFolder("CLI Tools");
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "terminal"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    ok: true,
+    directory: folder.path,
+    target: "terminal"
   });
 });
 

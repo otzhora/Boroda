@@ -4,7 +4,7 @@ import { ticketIdParamSchema } from "../../tickets/schemas";
 import { openTicketInApp } from "./service";
 
 const openTicketInAppBodySchema = z.object({
-  target: z.enum(["explorer", "vscode", "cursor"]),
+  target: z.enum(["explorer", "vscode", "cursor", "terminal"]),
   folderId: z.number().int().positive().optional()
 });
 

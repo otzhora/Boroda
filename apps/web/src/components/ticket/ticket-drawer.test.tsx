@@ -1,5 +1,5 @@
 import * as React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { toTicketForm } from "../../features/tickets/form";
@@ -507,10 +507,11 @@ describe("TicketDrawer", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "Open in…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose open-in app" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open in VS Code" })).toBeInTheDocument();
   });
 
-  it("lets the user choose which linked project path to open in", async () => {
+  it("lets the user choose an app first, then choose which linked project path to open in", async () => {
     const user = userEvent.setup();
     const handleOpenInApp = vi.fn();
 
@@ -589,14 +590,19 @@ describe("TicketDrawer", () => {
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Open in…" }));
+    await user.click(screen.getByRole("button", { name: "Choose open-in app" }));
     const appPicker = screen.getByRole("dialog", { name: "Open in" });
     expect(appPicker).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /VS Code/ }));
+    await user.click(within(appPicker).getByRole("button", { name: /File Explorer/ }));
+
+    expect(screen.getByRole("button", { name: "Open in File Explorer" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open in File Explorer" }));
 
     const folderPicker = screen.getByRole("dialog", { name: "Choose folder" });
-    const adminOptionLabel = screen.getByText("Admin Dashboard", { selector: "span" });
+
+    const adminOptionLabel = within(folderPicker).getByText("Admin Dashboard", { selector: "span" });
     const adminOptionButton = adminOptionLabel.closest("button");
 
     expect(folderPicker).toContainElement(adminOptionButton);
@@ -604,7 +610,7 @@ describe("TicketDrawer", () => {
 
     await user.click(adminOptionButton!);
 
-    expect(handleOpenInApp).toHaveBeenCalledWith("vscode", 77);
+    expect(handleOpenInApp).toHaveBeenCalledWith("explorer", 77);
   });
 
   it("keeps focus in the description field while typing", async () => {
