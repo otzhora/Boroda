@@ -11,7 +11,8 @@ export function getConfig() {
     uploadsPath: process.env.BORODA_UPLOADS_PATH ?? path.resolve(repoRoot, "data/uploads"),
     webDistPath: path.resolve(repoRoot, "apps/web/dist"),
     migrationsPath: path.resolve(repoRoot, "drizzle/migrations"),
-    windowsTerminalBinary: process.env.BORODA_WINDOWS_TERMINAL_BIN ?? "wt.exe",
-    windowsTerminalSettingsPath: process.env.BORODA_WINDOWS_TERMINAL_SETTINGS_PATH ?? null
+    explorerBinary: process.env.BORODA_EXPLORER_BIN ?? "explorer.exe",
+    vscodeBinary: process.env.BORODA_VSCODE_BIN ?? "code",
+    cursorBinary: process.env.BORODA_CURSOR_BIN ?? "cursor"
   };
 }

@@ -119,12 +119,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -156,12 +156,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -257,12 +257,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -305,12 +305,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={handleChange}
         onSave={handleSave}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -333,12 +333,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={1}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={handleChange}
         onSave={handleSave}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -364,12 +364,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={handleSave}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={handleClose}
       />
@@ -400,12 +400,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={handleSave}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -435,12 +435,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -457,7 +457,7 @@ describe("TicketDrawer", () => {
     expect(screen.getByRole("button", { name: "Edit ticket due date" })).toBeInTheDocument();
   });
 
-  it("shows the terminal action when a linked project has an available folder", () => {
+  it("shows the open-in action when a linked project has an available folder", () => {
     render(
       <TicketDrawer
         ticketId={ticket.id}
@@ -496,23 +496,23 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
 
-    expect(screen.getByRole("button", { name: "Open in Terminal" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open in…" })).toBeInTheDocument();
   });
 
-  it("lets the user choose which linked project path to open in terminal", async () => {
+  it("lets the user choose which linked project path to open in", async () => {
     const user = userEvent.setup();
-    const handleOpenInTerminal = vi.fn();
+    const handleOpenInApp = vi.fn();
 
     render(
       <TicketDrawer
@@ -578,28 +578,33 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={handleOpenInTerminal}
+        onOpenInApp={handleOpenInApp}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
     );
 
-    await user.click(screen.getByRole("button", { name: "Open in Terminal…" }));
-    const terminalPicker = screen.getByRole("dialog", { name: "Choose terminal path" });
+    await user.click(screen.getByRole("button", { name: "Open in…" }));
+    const appPicker = screen.getByRole("dialog", { name: "Open in" });
+    expect(appPicker).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /VS Code/ }));
+
+    const folderPicker = screen.getByRole("dialog", { name: "Choose folder" });
     const adminOptionLabel = screen.getByText("Admin Dashboard", { selector: "span" });
     const adminOptionButton = adminOptionLabel.closest("button");
 
-    expect(terminalPicker).toContainElement(adminOptionButton);
+    expect(folderPicker).toContainElement(adminOptionButton);
     expect(adminOptionButton).not.toBeNull();
 
     await user.click(adminOptionButton!);
 
-    expect(handleOpenInTerminal).toHaveBeenCalledWith(77);
+    expect(handleOpenInApp).toHaveBeenCalledWith("vscode", 77);
   });
 
   it("keeps focus in the description field while typing", async () => {
@@ -617,12 +622,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={handleChange}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -656,14 +661,14 @@ describe("TicketDrawer", () => {
           isSaving={false}
           saveSuccessCount={0}
           isDeleting={false}
-          isOpeningInTerminal={false}
+          isOpeningInApp={false}
           isRefreshingJira={false}
           onChange={(updater) => {
             setForm((current) => updater(current));
           }}
           onSave={vi.fn()}
           onDelete={vi.fn()}
-          onOpenInTerminal={vi.fn()}
+          onOpenInApp={vi.fn()}
           onRefreshJira={vi.fn()}
           onClose={vi.fn()}
         />
@@ -716,14 +721,14 @@ describe("TicketDrawer", () => {
           isSaving={false}
           saveSuccessCount={0}
           isDeleting={false}
-          isOpeningInTerminal={false}
+          isOpeningInApp={false}
           isRefreshingJira={false}
           onChange={(updater) => {
             setForm((current) => updater(current));
           }}
           onSave={vi.fn()}
           onDelete={vi.fn()}
-          onOpenInTerminal={vi.fn()}
+          onOpenInApp={vi.fn()}
           onRefreshJira={vi.fn()}
           onClose={vi.fn()}
         />
@@ -780,12 +785,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -846,12 +851,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -891,12 +896,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={vi.fn()}
         onClose={vi.fn()}
       />
@@ -944,12 +949,12 @@ describe("TicketDrawer", () => {
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
-        isOpeningInTerminal={false}
+        isOpeningInApp={false}
         isRefreshingJira={false}
         onChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
-        onOpenInTerminal={vi.fn()}
+        onOpenInApp={vi.fn()}
         onRefreshJira={handleRefreshJira}
         onClose={vi.fn()}
       />

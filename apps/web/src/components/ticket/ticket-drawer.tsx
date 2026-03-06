@@ -10,7 +10,7 @@ import {
   type ReactNode
 } from "react";
 import { BOARD_STATUS_ORDER, statusLabelMap, TICKET_PRIORITIES } from "../../lib/constants";
-import type { Project, Ticket } from "../../lib/types";
+import type { OpenInTarget, Project, Ticket } from "../../lib/types";
 import type { TicketFormState } from "../../features/tickets/form";
 import { useJiraSettingsQuery } from "../../features/jira/queries";
 import { ModalDialog } from "../ui/modal-dialog";
@@ -29,12 +29,12 @@ interface TicketDrawerProps {
   isSaving: boolean;
   saveSuccessCount: number;
   isDeleting: boolean;
-  isOpeningInTerminal: boolean;
+  isOpeningInApp: boolean;
   isRefreshingJira: boolean;
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
   onSave: () => void;
   onDelete: () => void;
-  onOpenInTerminal: (folderId?: number) => void;
+  onOpenInApp: (target: OpenInTarget, folderId?: number) => void;
   onRefreshJira: () => void;
   onClose: () => void;
 }
@@ -251,6 +251,32 @@ interface TerminalFolderOption {
   isPrimaryFolder: boolean;
 }
 
+const openInTargets: Array<{
+  id: OpenInTarget;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "vscode",
+    label: "VS Code",
+    description: "Open the linked folder in Visual Studio Code."
+  },
+  {
+    id: "cursor",
+    label: "Cursor",
+    description: "Open the linked folder in Cursor."
+  },
+  {
+    id: "explorer",
+    label: "File Explorer",
+    description: "Open the linked folder in Explorer."
+  }
+];
+
+function getOpenInTargetLabel(target: OpenInTarget | null) {
+  return openInTargets.find((option) => option.id === target)?.label ?? "selected app";
+}
+
 function getAvailableTerminalFolders(ticket: Ticket | undefined): TerminalFolderOption[] {
   if (!ticket) {
     return [];
@@ -305,12 +331,12 @@ export function TicketDrawer(props: TicketDrawerProps) {
     isSaving,
     saveSuccessCount,
     isDeleting,
-    isOpeningInTerminal,
+    isOpeningInApp,
     isRefreshingJira,
     onChange,
     onSave,
     onDelete,
-    onOpenInTerminal,
+    onOpenInApp,
     onRefreshJira,
     onClose
   } = props;
@@ -318,12 +344,14 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const [activeDetailTab, setActiveDetailTab] = useState<DetailTabId>("contexts");
   const [isJiraSectionExpanded, setIsJiraSectionExpanded] = useState(true);
   const [isLinkedProjectsSectionExpanded, setIsLinkedProjectsSectionExpanded] = useState(false);
-  const [isTerminalPickerOpen, setIsTerminalPickerOpen] = useState(false);
+  const [isOpenTargetPickerOpen, setIsOpenTargetPickerOpen] = useState(false);
+  const [selectedOpenTarget, setSelectedOpenTarget] = useState<OpenInTarget | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
   const detailTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const editorRootRefs = useRef<Partial<Record<EditableSectionId, HTMLElement | null>>>({});
-  const firstTerminalOptionRef = useRef<HTMLButtonElement>(null);
+  const firstOpenTargetOptionRef = useRef<HTMLButtonElement>(null);
+  const firstFolderOptionRef = useRef<HTMLButtonElement>(null);
   const detailTabsId = useId();
   const jiraSectionId = useId();
   const linkedProjectsSectionId = useId();
@@ -337,7 +365,8 @@ export function TicketDrawer(props: TicketDrawerProps) {
     setActiveDetailTab("contexts");
     setIsJiraSectionExpanded(true);
     setIsLinkedProjectsSectionExpanded(false);
-    setIsTerminalPickerOpen(false);
+    setIsOpenTargetPickerOpen(false);
+    setSelectedOpenTarget(null);
   }, [ticketId]);
 
   useEffect(() => {
@@ -378,19 +407,27 @@ export function TicketDrawer(props: TicketDrawerProps) {
 
   useEffect(() => {
     if (!availableTerminalFolders.length) {
-      setIsTerminalPickerOpen(false);
+      setIsOpenTargetPickerOpen(false);
+      setSelectedOpenTarget(null);
     }
   }, [availableTerminalFolders.length]);
 
-  const openInTerminalButtonLabel = availableTerminalFolders.length > 1 ? "Open in Terminal…" : "Open in Terminal";
+  const isFolderPickerOpen = selectedOpenTarget !== null && availableTerminalFolders.length > 1;
+  const openInButtonLabel = "Open in…";
 
-  const handleOpenInTerminal = () => {
+  const handleOpenInTarget = (target: OpenInTarget) => {
     if (availableTerminalFolders.length <= 1) {
-      onOpenInTerminal(preferredProjectFolder?.id);
+      setIsOpenTargetPickerOpen(false);
+      onOpenInApp(target, preferredProjectFolder?.id);
       return;
     }
 
-    setIsTerminalPickerOpen(true);
+    setSelectedOpenTarget(target);
+    setIsOpenTargetPickerOpen(false);
+  };
+
+  const handleOpenInButtonClick = () => {
+    setIsOpenTargetPickerOpen(true);
   };
 
   useEffect(() => {
@@ -986,17 +1023,17 @@ export function TicketDrawer(props: TicketDrawerProps) {
                     <button
                       type="button"
                       className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.10] px-3 py-1.5 text-sm font-medium text-ink-50 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
-                      onClick={handleOpenInTerminal}
-                      disabled={isOpeningInTerminal}
-                      aria-label={isOpeningInTerminal ? "Opening terminal" : openInTerminalButtonLabel}
+                      onClick={handleOpenInButtonClick}
+                      disabled={isOpeningInApp}
+                      aria-label={isOpeningInApp ? "Opening" : openInButtonLabel}
                     >
-                      {isOpeningInTerminal ? (
+                      {isOpeningInApp ? (
                         <span
                           className="mr-2 inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
                           aria-hidden="true"
                         />
                       ) : null}
-                      {isOpeningInTerminal ? "Opening…" : openInTerminalButtonLabel}
+                      {isOpeningInApp ? "Opening…" : openInButtonLabel}
                     </button>
                   ) : null}
                   <button
@@ -1022,24 +1059,55 @@ export function TicketDrawer(props: TicketDrawerProps) {
       )}
 
       <ModalDialog
-        open={isTerminalPickerOpen}
-        title="Choose terminal path"
-        description="Pick which linked project folder to open for this ticket."
+        open={isOpenTargetPickerOpen}
+        title="Open in"
+        description="Choose which app to use for the linked project folder."
         onClose={() => {
-          setIsTerminalPickerOpen(false);
+          setIsOpenTargetPickerOpen(false);
         }}
-        initialFocusRef={firstTerminalOptionRef}
+        initialFocusRef={firstOpenTargetOptionRef}
+      >
+        <div className="grid min-w-0 gap-2">
+          {openInTargets.map((target, index) => (
+            <button
+              key={target.id}
+              ref={index === 0 ? firstOpenTargetOptionRef : undefined}
+              type="button"
+              className="grid min-w-0 gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+              onClick={() => {
+                handleOpenInTarget(target.id);
+              }}
+            >
+              <span className="min-w-0 text-sm font-semibold text-ink-50">{target.label}</span>
+              <span className="text-sm text-ink-200">{target.description}</span>
+            </button>
+          ))}
+        </div>
+      </ModalDialog>
+
+      <ModalDialog
+        open={isFolderPickerOpen}
+        title="Choose folder"
+        description={`Pick which linked project folder to open in ${getOpenInTargetLabel(selectedOpenTarget)}.`}
+        onClose={() => {
+          setSelectedOpenTarget(null);
+        }}
+        initialFocusRef={firstFolderOptionRef}
       >
         <div className="grid min-w-0 gap-2">
           {availableTerminalFolders.map((folder, index) => (
             <button
               key={folder.folderId}
-              ref={index === 0 ? firstTerminalOptionRef : undefined}
+              ref={index === 0 ? firstFolderOptionRef : undefined}
               type="button"
               className="grid min-w-0 gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
               onClick={() => {
-                setIsTerminalPickerOpen(false);
-                onOpenInTerminal(folder.folderId);
+                if (!selectedOpenTarget) {
+                  return;
+                }
+
+                setSelectedOpenTarget(null);
+                onOpenInApp(selectedOpenTarget, folder.folderId);
               }}
             >
               <span className="min-w-0 text-sm font-semibold text-ink-50">

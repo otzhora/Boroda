@@ -8,7 +8,7 @@ import { exportRoutes } from "./modules/export/routes";
 import { fsRoutes } from "./modules/fs/routes";
 import { healthRoutes } from "./modules/health/routes";
 import { jiraRoutes } from "./modules/integrations/jira/routes";
-import { windowsTerminalRoutes } from "./modules/integrations/windows-terminal/routes";
+import { openInRoutes } from "./modules/integrations/open-in/routes";
 import { projectRoutes } from "./modules/projects/routes";
 import { ticketRoutes } from "./modules/tickets/routes";
 import { workContextRoutes } from "./modules/work-contexts/routes";
@@ -42,7 +42,7 @@ export function buildApp() {
     api.register(fsRoutes);
     api.register(exportRoutes);
     api.register(jiraRoutes);
-    api.register(windowsTerminalRoutes);
+    api.register(openInRoutes);
   }, { prefix: "/api" });
 
   if (fs.existsSync(config.webDistPath)) {

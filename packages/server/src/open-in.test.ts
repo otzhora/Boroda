@@ -17,16 +17,20 @@ let tempRoot = "";
 let existingFolderPath = "";
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const previousWslDistroName = process.env.WSL_DISTRO_NAME;
-const previousWindowsTerminalBin = process.env.BORODA_WINDOWS_TERMINAL_BIN;
+const previousExplorerBin = process.env.BORODA_EXPLORER_BIN;
+const previousVscodeBin = process.env.BORODA_VSCODE_BIN;
+const previousCursorBin = process.env.BORODA_CURSOR_BIN;
 
 before(async () => {
-  tempRoot = await mkdtemp(path.join(os.tmpdir(), "boroda-wt-tests-"));
+  tempRoot = await mkdtemp(path.join(os.tmpdir(), "boroda-open-in-tests-"));
   existingFolderPath = path.join(tempRoot, "workspace-folder");
   await mkdir(existingFolderPath, { recursive: true });
 
   process.env.BORODA_DB_PATH = path.join(tempRoot, "test.sqlite");
   process.env.WSL_DISTRO_NAME = "boroda-test";
-  process.env.BORODA_WINDOWS_TERMINAL_BIN = "/bin/true";
+  process.env.BORODA_EXPLORER_BIN = "/bin/true";
+  process.env.BORODA_VSCODE_BIN = "/bin/true";
+  process.env.BORODA_CURSOR_BIN = "/bin/true";
 
   const [{ buildApp }, dbClient, schema] = await Promise.all([
     import("./app"),
@@ -54,7 +58,9 @@ beforeEach(() => {
   app.db.delete(ticketsTable).run();
   app.db.delete(projectsTable).run();
   process.env.WSL_DISTRO_NAME = "boroda-test";
-  process.env.BORODA_WINDOWS_TERMINAL_BIN = "/bin/true";
+  process.env.BORODA_EXPLORER_BIN = "/bin/true";
+  process.env.BORODA_VSCODE_BIN = "/bin/true";
+  process.env.BORODA_CURSOR_BIN = "/bin/true";
 });
 
 after(async () => {
@@ -64,10 +70,22 @@ after(async () => {
     process.env.WSL_DISTRO_NAME = previousWslDistroName;
   }
 
-  if (previousWindowsTerminalBin === undefined) {
-    delete process.env.BORODA_WINDOWS_TERMINAL_BIN;
+  if (previousExplorerBin === undefined) {
+    delete process.env.BORODA_EXPLORER_BIN;
   } else {
-    process.env.BORODA_WINDOWS_TERMINAL_BIN = previousWindowsTerminalBin;
+    process.env.BORODA_EXPLORER_BIN = previousExplorerBin;
+  }
+
+  if (previousVscodeBin === undefined) {
+    delete process.env.BORODA_VSCODE_BIN;
+  } else {
+    process.env.BORODA_VSCODE_BIN = previousVscodeBin;
+  }
+
+  if (previousCursorBin === undefined) {
+    delete process.env.BORODA_CURSOR_BIN;
+  } else {
+    process.env.BORODA_CURSOR_BIN = previousCursorBin;
   }
 
   await app.close();
@@ -75,13 +93,13 @@ after(async () => {
   await rm(tempRoot, { recursive: true, force: true });
 });
 
-test("opens Windows Terminal for the primary linked project folder", async () => {
+async function createTicketWithFolder(projectName: string) {
   const projectResponse = await app.inject({
     method: "POST",
     url: "/api/projects",
     payload: {
-      name: "Payments Backend",
-      slug: "payments-backend",
+      name: projectName,
+      slug: projectName.toLowerCase().replace(/\s+/g, "-"),
       description: "",
       color: "#355c7d"
     }
@@ -104,7 +122,7 @@ test("opens Windows Terminal for the primary linked project folder", async () =>
     method: "POST",
     url: "/api/tickets",
     payload: {
-      title: "Open terminal",
+      title: `Open ${projectName}`,
       description: "",
       status: "READY",
       priority: "HIGH",
@@ -118,19 +136,29 @@ test("opens Windows Terminal for the primary linked project folder", async () =>
   });
   const ticket = ticketResponse.json();
 
+  return { project, folder, ticket };
+}
+
+test("opens VS Code for the primary linked project folder", async () => {
+  const { folder, ticket } = await createTicketWithFolder("Payments Backend");
+
   const response = await app.inject({
     method: "POST",
-    url: `/api/integrations/windows-terminal/tickets/${ticket.id}/open`
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "vscode"
+    }
   });
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), {
     ok: true,
-    directory: folder.path
+    directory: folder.path,
+    target: "vscode"
   });
 });
 
-test("opens Windows Terminal for the selected linked project folder", async () => {
+test("opens Cursor for the selected linked project folder", async () => {
   const projectOneResponse = await app.inject({
     method: "POST",
     url: "/api/projects",
@@ -184,7 +212,7 @@ test("opens Windows Terminal for the selected linked project folder", async () =
     method: "POST",
     url: "/api/tickets",
     payload: {
-      title: "Open selected terminal",
+      title: "Open selected folder",
       description: "",
       status: "READY",
       priority: "HIGH",
@@ -204,8 +232,9 @@ test("opens Windows Terminal for the selected linked project folder", async () =
 
   const response = await app.inject({
     method: "POST",
-    url: `/api/integrations/windows-terminal/tickets/${ticket.id}/open`,
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
     payload: {
+      target: "cursor",
       folderId: secondFolder.id
     }
   });
@@ -213,7 +242,8 @@ test("opens Windows Terminal for the selected linked project folder", async () =
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), {
     ok: true,
-    directory: secondFolder.path
+    directory: secondFolder.path,
+    target: "cursor"
   });
 });
 
@@ -250,7 +280,10 @@ test("returns 409 when the ticket has no available linked project folder", async
 
   const response = await app.inject({
     method: "POST",
-    url: `/api/integrations/windows-terminal/tickets/${ticket.id}/open`
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "explorer"
+    }
   });
 
   assert.equal(response.statusCode, 409);
@@ -263,60 +296,24 @@ test("returns 409 when the ticket has no available linked project folder", async
   });
 });
 
-test("returns 501 when Windows Terminal is unavailable", async () => {
-  process.env.BORODA_WINDOWS_TERMINAL_BIN = path.join(tempRoot, "missing-wt");
+test("returns 501 when the selected target app is unavailable", async () => {
+  process.env.BORODA_CURSOR_BIN = path.join(tempRoot, "missing-cursor");
 
-  const projectResponse = await app.inject({
-    method: "POST",
-    url: "/api/projects",
-    payload: {
-      name: "Infra",
-      slug: "infra",
-      description: "",
-      color: "#111111"
-    }
-  });
-  const project = projectResponse.json();
-
-  await app.inject({
-    method: "POST",
-    url: `/api/projects/${project.id}/folders`,
-    payload: {
-      label: "workspace",
-      path: existingFolderPath,
-      kind: "APP",
-      isPrimary: true
-    }
-  });
-
-  const ticketResponse = await app.inject({
-    method: "POST",
-    url: "/api/tickets",
-    payload: {
-      title: "Terminal missing",
-      description: "",
-      status: "READY",
-      priority: "LOW",
-      projectLinks: [
-        {
-          projectId: project.id,
-          relationship: "PRIMARY"
-        }
-      ]
-    }
-  });
-  const ticket = ticketResponse.json();
+  const { ticket } = await createTicketWithFolder("Infra");
 
   const response = await app.inject({
     method: "POST",
-    url: `/api/integrations/windows-terminal/tickets/${ticket.id}/open`
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "cursor"
+    }
   });
 
   assert.equal(response.statusCode, 501);
   assert.deepEqual(response.json(), {
     error: {
-      code: "WINDOWS_TERMINAL_NOT_AVAILABLE",
-      message: "Windows Terminal is not available on this machine",
+      code: "OPEN_TARGET_NOT_AVAILABLE",
+      message: "Cursor is not available on this machine",
       details: {}
     }
   });

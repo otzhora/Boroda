@@ -22,7 +22,7 @@ import {
   useCreateTicketMutation,
   useDeleteTicketMutation,
   useMoveTicketStatusMutation,
-  useOpenTicketInWindowsTerminalMutation,
+  useOpenTicketInAppMutation,
   useRefreshTicketJiraLinksMutation,
   useUpdateTicketMutation
 } from "../features/tickets/mutations";
@@ -179,14 +179,14 @@ export function BoardPage() {
       }
     }
   });
-  const openTicketInWindowsTerminalMutation = useOpenTicketInWindowsTerminalMutation(selectedTicketId);
+  const openTicketInAppMutation = useOpenTicketInAppMutation(selectedTicketId);
   const refreshTicketJiraLinksMutation = useRefreshTicketJiraLinksMutation(selectedTicketId);
 
   const actionError =
     createTicketMutation.error?.message ??
     updateTicketMutation.error?.message ??
     deleteTicketMutation.error?.message ??
-    openTicketInWindowsTerminalMutation.error?.message ??
+    openTicketInAppMutation.error?.message ??
     refreshTicketJiraLinksMutation.error?.message ??
     moveTicketStatusMutation.error?.message;
 
@@ -435,7 +435,7 @@ export function BoardPage() {
         isSaving={updateTicketMutation.isPending}
         saveSuccessCount={ticketSaveSuccessCount}
         isDeleting={deleteTicketMutation.isPending}
-        isOpeningInTerminal={openTicketInWindowsTerminalMutation.isPending}
+        isOpeningInApp={openTicketInAppMutation.isPending}
         isRefreshingJira={refreshTicketJiraLinksMutation.isPending}
         onChange={(updater) => {
           setEditForm((current) => updater(current));
@@ -446,8 +446,8 @@ export function BoardPage() {
         onDelete={() => {
           deleteTicketMutation.mutate();
         }}
-        onOpenInTerminal={(folderId) => {
-          openTicketInWindowsTerminalMutation.mutate(folderId === undefined ? undefined : { folderId });
+        onOpenInApp={(target, folderId) => {
+          openTicketInAppMutation.mutate(folderId === undefined ? { target } : { target, folderId });
         }}
         onRefreshJira={() => {
           refreshTicketJiraLinksMutation.mutate();

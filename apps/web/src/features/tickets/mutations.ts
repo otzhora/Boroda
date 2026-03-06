@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { BoardResponse, Ticket, TicketJiraIssueLink, TicketStatus } from "../../lib/types";
+import type { BoardResponse, OpenInTarget, Ticket, TicketJiraIssueLink, TicketStatus } from "../../lib/types";
 import { boardQueryKey, type BoardFilters } from "../board/queries";
 import { assignedJiraIssueLinksQueryKey, assignedJiraIssuesQueryKey } from "../jira/queries";
 import { ticketQueryKey, ticketsQueryKey } from "./queries";
@@ -196,16 +196,16 @@ export function useMoveTicketStatusMutation(options: {
   });
 }
 
-export function useOpenTicketInWindowsTerminalMutation(ticketId: number | null) {
+export function useOpenTicketInAppMutation(ticketId: number | null) {
   return useMutation({
-    mutationFn: (input?: { folderId?: number }) => {
+    mutationFn: (input: { target: OpenInTarget; folderId?: number }) => {
       if (ticketId === null) {
         throw new Error("No ticket selected");
       }
 
-      return apiClient<{ ok: true; directory: string }>(`/api/integrations/windows-terminal/tickets/${ticketId}/open`, {
+      return apiClient<{ ok: true; directory: string; target: OpenInTarget }>(`/api/integrations/open-in/tickets/${ticketId}/open`, {
         method: "POST",
-        body: JSON.stringify(input ?? {})
+        body: JSON.stringify(input)
       });
     }
   });

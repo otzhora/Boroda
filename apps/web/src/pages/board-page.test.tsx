@@ -51,7 +51,7 @@ vi.mock("../features/tickets/mutations", () => ({
     isPending: false,
     error: null
   })),
-  useOpenTicketInWindowsTerminalMutation: vi.fn(() => ({
+  useOpenTicketInAppMutation: vi.fn(() => ({
     mutate: mocks.openTerminalMutate,
     isPending: false,
     error: null
