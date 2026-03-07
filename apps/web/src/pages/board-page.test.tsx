@@ -193,23 +193,21 @@ describe("BoardPage", () => {
 
     renderBoardPage();
 
-    const projectFilters = screen.getAllByLabelText("Project");
-    const priorityFilters = screen.getAllByLabelText("Priority");
-
     await user.type(screen.getByLabelText("Search"), "bug");
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({ q: "bug" });
 
-    await user.selectOptions(projectFilters[0], "2");
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    await user.selectOptions(screen.getByLabelText("Project"), "2");
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({ q: "bug", projectId: 2 });
 
-    await user.selectOptions(priorityFilters[0], "HIGH");
+    await user.selectOptions(screen.getByLabelText("Priority"), "HIGH");
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({
       q: "bug",
       projectId: 2,
       priority: "HIGH"
     });
 
-    await user.click(screen.getAllByRole("button", { name: "Clear filters" })[0]);
+    await user.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({});
   });
 

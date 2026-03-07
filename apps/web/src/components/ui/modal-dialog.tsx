@@ -63,10 +63,10 @@ export function ModalDialog({
       : "min-h-0 overflow-x-hidden overflow-y-auto";
   const panelClassName =
     variant === "flat"
-      ? `grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-[16px] border border-white/10 bg-canvas-900 shadow-[0_24px_72px_rgba(0,0,0,0.32)] ${
+      ? `grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-[10px] border border-white/10 bg-canvas-925 shadow-[0_8px_24px_rgba(0,0,0,0.24)] ${
           size === "wide" ? "max-w-[94rem]" : "max-w-3xl"
         }`
-      : `grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden rounded-[22px] border border-white/8 bg-canvas-900 px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.44)] sm:px-6 sm:py-6 ${
+      : `grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden rounded-[10px] border border-white/8 bg-canvas-925 px-4 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.24)] sm:px-6 sm:py-6 ${
           size === "wide" ? "max-w-[94rem]" : "max-w-2xl"
         }`;
   const titleClassName =
@@ -75,8 +75,8 @@ export function ModalDialog({
       : "m-0 text-[1.65rem] font-semibold tracking-[-0.03em] text-ink-50";
   const closeButtonClassName =
     variant === "flat"
-      ? "inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.02] px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.05] xl:justify-self-start"
-      : "inline-flex min-h-10 min-w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] xl:justify-self-start";
+      ? "inline-flex min-h-10 min-w-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900 xl:justify-self-start"
+      : "inline-flex min-h-10 min-w-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900 xl:justify-self-start";
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -218,7 +218,7 @@ export function ModalDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-4 py-4 backdrop-blur-sm sm:px-6"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-4 py-4 sm:px-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();

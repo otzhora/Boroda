@@ -9,6 +9,7 @@ import {
 } from "../components/board/quick-ticket-form";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
 import { ModalDialog } from "../components/ui/modal-dialog";
+import { OverflowMenu } from "../components/ui/overflow-menu";
 import { useAppHeader } from "../app/router";
 import { useBoardQuery, type BoardFilters } from "../features/board/queries";
 import { useProjectsQuery } from "../features/projects/queries";
@@ -31,16 +32,15 @@ import { TICKET_PRIORITIES } from "../lib/constants";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
 const panelClassName =
-  "grid gap-5 rounded-[20px] border border-white/8 bg-canvas-900 px-5 py-5 shadow-[0_18px_48px_rgba(0,0,0,0.22)]";
+  "grid gap-4 rounded-[10px] border border-white/8 bg-canvas-925 px-5 py-5";
 const softPanelClassName =
-  "grid gap-3 rounded-[16px] border border-white/8 bg-canvas-900 px-4 py-4";
-const toolbarClassName = "sticky top-0 z-30 border-b border-white/8 bg-canvas-975 py-2";
+  "grid gap-3 rounded-[10px] border border-white/8 bg-canvas-925 px-4 py-4";
 const inputClassName =
-  "min-h-9 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-ink-50 placeholder:text-ink-300";
+  "min-h-10 rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300";
 const secondaryButtonClassName =
-  "inline-flex min-h-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900 disabled:cursor-progress disabled:opacity-70";
 const primaryButtonClassName =
-  "inline-flex min-h-10 items-center justify-center rounded-full border border-white/10 bg-ink-50 px-3.5 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-white disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-accent-500/40 bg-accent-500 px-3.5 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-accent-300 disabled:cursor-progress disabled:opacity-70";
 
 function hasBoardFilters(filters: BoardFilters) {
   return Boolean(filters.projectId || filters.priority || filters.q?.trim());
@@ -57,6 +57,10 @@ function isTypingTarget(target: EventTarget | null) {
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement
   );
+}
+
+function isSearchFocused(searchInputRef: React.RefObject<HTMLInputElement | null>) {
+  return document.activeElement === searchInputRef.current;
 }
 
 function toQuickCreatePayload(form: QuickTicketFormState) {
@@ -85,7 +89,7 @@ function parseTicketId(value: string | null) {
 }
 
 export function BoardPage() {
-  const { setActions } = useAppHeader();
+  const { setActions, setRightActions, hasHost } = useAppHeader();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(EMPTY_BOARD_FILTERS);
@@ -201,6 +205,25 @@ export function BoardPage() {
       return;
     }
 
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+
+      if (isSearchFocused(searchInputRef)) {
+        searchInputRef.current?.blur();
+        return;
+      }
+
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+      return;
+    }
+
+    if (event.key === "Escape" && isSearchFocused(searchInputRef)) {
+      event.preventDefault();
+      searchInputRef.current?.blur();
+      return;
+    }
+
     if (isTypingTarget(event.target)) {
       return;
     }
@@ -232,58 +255,37 @@ export function BoardPage() {
   }, []);
 
   useEffect(() => {
+    const filtersButtonLabel = boardHasFilters ? "Filters applied" : "Filters";
+
     setActions(
       <>
-        <button
-          type="button"
-          className={primaryButtonClassName}
-          onClick={() => {
-            setIsQuickCreateOpen(true);
-          }}
+        <label className="min-w-0 flex-1 basis-[18rem] max-w-[32rem]">
+          <span className="sr-only">Search</span>
+          <input
+            ref={searchInputRef}
+            className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
+            placeholder="Search…"
+            value={boardFilters.q ?? ""}
+            onChange={(event) => {
+              const value = event.target.value;
+              setBoardFilters((current) => ({
+                ...current,
+                q: value || undefined
+              }));
+            }}
+          />
+        </label>
+        <OverflowMenu
+          buttonLabel={filtersButtonLabel}
+          buttonText={filtersButtonLabel}
+          buttonClassName={secondaryButtonClassName}
+          menuClassName="absolute top-[calc(100%+0.5rem)] z-30 grid min-w-[280px] gap-3 rounded-[10px] border border-white/8 bg-canvas-925 p-3 shadow-[0_8px_24px_rgba(0,0,0,0.24)]"
         >
-          Create
-        </button>
-        <Link to="/settings" className={secondaryButtonClassName}>
-          Settings
-        </Link>
-      </>
-    );
-
-    return () => {
-      setActions(null);
-    };
-  }, [setActions]);
-
-  return (
-    <section className="flex h-full min-h-0 min-w-0 flex-col gap-3">
-      {actionError ? (
-        <p className={`${softPanelClassName} m-0 text-sm text-danger-400`} role="alert">
-          {actionError}
-        </p>
-      ) : null}
-
-      <section className={toolbarClassName}>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <label className="min-w-[320px] flex-1">
-            <span className="sr-only">Search</span>
-            <input
-              ref={searchInputRef}
-              className={inputClassName}
-              placeholder="Search…"
-              value={boardFilters.q ?? ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                setBoardFilters((current) => ({
-                  ...current,
-                  q: value || undefined
-                }));
-              }}
-            />
-          </label>
-          <label className="min-w-[180px] flex-none">
-            <span className="sr-only">Project</span>
+          <label className="grid gap-2">
+            <span className="text-sm font-medium text-ink-100">Project</span>
             <select
               className={inputClassName}
+              aria-label="Project"
               value={boardFilters.projectId ? String(boardFilters.projectId) : ""}
               onChange={(event) => {
                 const value = event.target.value;
@@ -301,10 +303,11 @@ export function BoardPage() {
               ))}
             </select>
           </label>
-          <label className="min-w-[150px] flex-none">
-            <span className="sr-only">Priority</span>
+          <label className="grid gap-2">
+            <span className="text-sm font-medium text-ink-100">Priority</span>
             <select
               className={inputClassName}
+              aria-label="Priority"
               value={boardFilters.priority ?? ""}
               onChange={(event) => {
                 const value = event.target.value;
@@ -330,18 +333,139 @@ export function BoardPage() {
                 setBoardFilters(EMPTY_BOARD_FILTERS);
               }}
             >
-              Clear
+              Clear filters
             </button>
           ) : null}
-        </div>
-      </section>
+        </OverflowMenu>
+        <button
+          type="button"
+          className={primaryButtonClassName}
+          onClick={() => {
+            setIsQuickCreateOpen(true);
+          }}
+        >
+          Create
+        </button>
+      </>
+    );
+    setRightActions(
+      <Link to="/settings" className={secondaryButtonClassName}>
+        Settings
+      </Link>
+    );
 
-      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+    return () => {
+      setActions(null);
+      setRightActions(null);
+    };
+  }, [
+    boardFilters.priority,
+    boardFilters.projectId,
+    boardFilters.q,
+    boardHasFilters,
+    inputClassName,
+    projects,
+    setActions,
+    setRightActions
+  ]);
+
+  return (
+    <section className="flex h-full min-h-0 min-w-0 flex-col gap-4">
+      {actionError ? (
+        <p className={`${softPanelClassName} m-0 text-sm text-danger-400`} role="alert">
+          {actionError}
+        </p>
+      ) : null}
+
+      {!hasHost ? (
+        <section className={`${softPanelClassName} grid-cols-[minmax(0,1fr)_auto] items-center gap-3`}>
+          <label className="min-w-0">
+            <span className="sr-only">Search</span>
+            <input
+              ref={searchInputRef}
+              className={`${inputClassName} transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
+              placeholder="Search…"
+              value={boardFilters.q ?? ""}
+              onChange={(event) => {
+                const value = event.target.value;
+                setBoardFilters((current) => ({
+                  ...current,
+                  q: value || undefined
+                }));
+              }}
+            />
+          </label>
+          <OverflowMenu
+            buttonLabel={boardHasFilters ? "Filters applied" : "Filters"}
+            buttonText={boardHasFilters ? "Filters applied" : "Filters"}
+            buttonClassName={secondaryButtonClassName}
+            menuClassName="absolute top-[calc(100%+0.5rem)] right-0 z-30 grid min-w-[280px] gap-3 rounded-[10px] border border-white/8 bg-canvas-925 p-3 shadow-[0_8px_24px_rgba(0,0,0,0.24)]"
+          >
+            <label className="grid gap-2">
+              <span className="text-sm font-medium text-ink-100">Project</span>
+              <select
+                className={inputClassName}
+                aria-label="Project"
+                value={boardFilters.projectId ? String(boardFilters.projectId) : ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setBoardFilters((current) => ({
+                    ...current,
+                    projectId: value ? Number(value) : undefined
+                  }));
+                }}
+              >
+                <option value="">All projects</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-2">
+              <span className="text-sm font-medium text-ink-100">Priority</span>
+              <select
+                className={inputClassName}
+                aria-label="Priority"
+                value={boardFilters.priority ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setBoardFilters((current) => ({
+                    ...current,
+                    priority: value ? (value as BoardFilters["priority"]) : undefined
+                  }));
+                }}
+              >
+                <option value="">All priorities</option>
+                {TICKET_PRIORITIES.map((priority) => (
+                  <option key={priority} value={priority}>
+                    {priority}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {boardHasFilters ? (
+              <button
+                type="button"
+                className={secondaryButtonClassName}
+                onClick={() => {
+                  setBoardFilters(EMPTY_BOARD_FILTERS);
+                }}
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </OverflowMenu>
+        </section>
+      ) : null}
+
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden w-full">
         {boardQuery.isLoading ? <p className={`${softPanelClassName} m-0 text-sm text-ink-50`}>Loading board…</p> : null}
         {boardQuery.isError ? (
-          <section className={`${panelClassName} h-full`} aria-live="polite">
-            <h3 className="m-0 text-xl font-semibold text-ink-50">Board request failed</h3>
-            <p className="m-0 text-sm text-ink-200">
+          <section className={`${panelClassName} h-full content-start`} aria-live="polite">
+            <h3 className="m-0 text-lg font-semibold text-ink-50">Board request failed</h3>
+            <p className="m-0 max-w-[48rem] text-sm text-ink-200">
               The board could not be loaded. Retry the request or export the local database before troubleshooting.
             </p>
             <div className="flex flex-wrap gap-3">
@@ -352,14 +476,14 @@ export function BoardPage() {
           </section>
         ) : null}
         {!boardQuery.isLoading && !boardQuery.isError && totalTickets === 0 ? (
-          <section className={`${panelClassName} h-full`} aria-live="polite">
-            <h3 className="m-0 text-xl font-semibold text-ink-50">
+          <section className={`${panelClassName} h-full content-start`} aria-live="polite">
+            <h3 className="m-0 text-lg font-semibold text-ink-50">
               {boardHasFilters ? "No tickets match these filters" : "No tickets on the board yet"}
             </h3>
-            <p className="m-0 text-sm text-ink-200">
+            <p className="m-0 max-w-[44rem] text-sm text-ink-200">
               {boardHasFilters
                 ? "Clear the current filters or create a ticket that matches them."
-                : "Create a ticket from the popup or load the sample seed data for local testing."}
+                : "Create a ticket from the dialog or load the sample seed data for local testing."}
             </p>
             <div className="flex flex-wrap gap-3">
               {boardHasFilters ? (

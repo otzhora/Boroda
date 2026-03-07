@@ -35,8 +35,8 @@ describe("TicketCard", () => {
 
     const chip = screen.getByText("Payments Backend");
     expect(chip).toHaveStyle({
-      backgroundColor: "rgb(53 92 125 / 0.16)",
-      borderColor: "rgb(53 92 125 / 0.34)",
+      backgroundColor: "rgb(53 92 125 / 0.12)",
+      borderColor: "rgb(53 92 125 / 0.3)",
       color: "rgb(202 213 221)"
     });
   });
@@ -72,7 +72,7 @@ describe("TicketCard", () => {
 
     const chip = screen.getByText("Uncolored Project");
     expect(chip).not.toHaveStyle({
-      backgroundColor: "rgb(53 92 125 / 0.16)"
+      backgroundColor: "rgb(53 92 125 / 0.12)"
     });
   });
 });

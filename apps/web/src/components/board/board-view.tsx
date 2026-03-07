@@ -46,15 +46,14 @@ function ColumnSection({
   return (
     <section
       ref={setNodeRef}
-      className={`flex h-full min-h-0 min-w-[320px] flex-1 basis-[320px] flex-col overflow-hidden rounded-[20px] border shadow-[0_18px_48px_rgba(0,0,0,0.2)] transition-colors ${
-        isOver
-          ? "border-white/20 bg-canvas-850"
-          : "border-white/8 bg-canvas-900"
+      aria-label={statusLabelMap[status]}
+      className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[10px] border transition-colors ${
+        isOver ? "border-accent-500/45 bg-canvas-900" : "border-white/8 bg-canvas-925"
       }`}
     >
-      <header className="sticky top-0 z-10 flex min-h-12 items-center justify-between gap-3 border-b border-white/8 bg-canvas-900 px-4 py-2">
-        <h3 className="m-0 text-sm font-semibold uppercase tracking-[0.16em] text-ink-100">{statusLabelMap[status]}</h3>
-        <span className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-ink-200">
+      <header className="flex min-h-12 items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+        <h3 className="m-0 text-sm font-semibold text-ink-50">{statusLabelMap[status]}</h3>
+        <span className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-md border border-white/8 bg-canvas-950 px-1.5 text-xs font-medium text-ink-200">
           {column?.tickets.length ?? 0}
         </span>
       </header>
@@ -119,8 +118,8 @@ export function BoardView({
       onDragEnd={handleDragEnd}
       onDragCancel={clearDragState}
     >
-      <div className="h-full min-h-0 overflow-x-auto overflow-y-hidden pb-2">
-        <div className="flex h-full min-h-0 min-w-full gap-4">
+      <div className="h-full min-h-0 w-full overflow-hidden pb-2">
+        <div className="grid h-full min-h-0 w-full grid-cols-7 gap-3">
           {BOARD_STATUS_ORDER.map((status) => (
             <ColumnSection
               key={status}

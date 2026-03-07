@@ -21,13 +21,13 @@ interface QuickTicketFormProps {
   onCancel?: () => void;
 }
 
-const fieldLabelClassName = "m-0 text-[0.78rem] font-semibold uppercase tracking-[0.12em] text-ink-300";
+const fieldLabelClassName = "m-0 text-sm font-medium text-ink-100";
 const fieldClassName =
-  "min-h-11 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5 text-ink-50 placeholder:text-ink-300";
+  "min-h-11 rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-ink-50 placeholder:text-ink-300";
 const footerButtonClassName =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm font-medium transition-colors disabled:cursor-progress disabled:opacity-70";
-const primaryButtonClassName = `${footerButtonClassName} border-white/10 bg-ink-50 text-canvas-975 hover:bg-white`;
-const secondaryButtonClassName = `${footerButtonClassName} border-white/10 bg-white/[0.02] text-ink-100 hover:border-white/16 hover:bg-white/[0.05]`;
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-[10px] border px-3.5 py-2.5 text-sm font-medium transition-colors disabled:cursor-progress disabled:opacity-70";
+const primaryButtonClassName = `${footerButtonClassName} border-accent-500/40 bg-accent-500 text-canvas-975 hover:bg-accent-300`;
+const secondaryButtonClassName = `${footerButtonClassName} border-white/10 bg-canvas-950 text-ink-100 hover:border-white/16 hover:bg-canvas-900`;
 
 function LoadingSpinner() {
   return (
@@ -72,7 +72,7 @@ export function QuickTicketForm({
           <input
             ref={titleInputRef}
             className={fieldClassName}
-            placeholder="Capture the next ticket…"
+            placeholder="Ticket title…"
             value={form.title}
             onChange={(event) =>
               onChange((current) => ({

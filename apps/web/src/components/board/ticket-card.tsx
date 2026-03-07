@@ -11,10 +11,10 @@ interface TicketCardProps {
 }
 
 const priorityClassNameMap = {
-  LOW: "border border-white/8 bg-white/[0.04] text-ink-100",
-  MEDIUM: "border border-white/10 bg-canvas-800 text-ink-100",
-  HIGH: "border border-white/14 bg-white/[0.08] text-ink-50",
-  CRITICAL: "border border-red-400/20 bg-red-950/50 text-red-100"
+  LOW: "border border-white/8 bg-canvas-950 text-ink-200",
+  MEDIUM: "border border-white/10 bg-canvas-900 text-ink-100",
+  HIGH: "border border-accent-500/35 bg-accent-500/12 text-accent-700",
+  CRITICAL: "border border-red-400/28 bg-red-950/40 text-red-100"
 } as const;
 
 function toTransformStyle(transform: { x: number; y: number } | null) {
@@ -68,8 +68,8 @@ function getProjectBadgeStyle(color: string): CSSProperties | undefined {
   const textColor = `rgb(${mixChannel(rgb.r, 255, 0.74)} ${mixChannel(rgb.g, 255, 0.74)} ${mixChannel(rgb.b, 255, 0.74)})`;
 
   return {
-    backgroundColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.16)`,
-    borderColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.34)`,
+    backgroundColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.12)`,
+    borderColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.3)`,
     color: textColor
   };
 }
@@ -77,12 +77,10 @@ function getProjectBadgeStyle(color: string): CSSProperties | undefined {
 function TicketCardContent({ ticket }: { ticket: BoardTicket }) {
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[0.7rem] font-medium uppercase tracking-[0.18em] text-ink-300">
-          {ticket.key}
-        </span>
+      <div className="flex items-start justify-between gap-3">
+        <span className="font-mono text-[0.74rem] font-medium text-ink-300">{ticket.key}</span>
         <span
-          className={`rounded-full px-2.5 py-1 text-[0.72rem] font-medium ${priorityClassNameMap[ticket.priority]}`}
+          className={`rounded-md px-2 py-1 text-[0.72rem] font-medium ${priorityClassNameMap[ticket.priority]}`}
         >
           {ticket.priority}
         </span>
@@ -92,7 +90,7 @@ function TicketCardContent({ ticket }: { ticket: BoardTicket }) {
         <div className="flex flex-wrap gap-2">
           {ticket.projectBadges.map((badge) => (
             <span
-              className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[0.78rem] text-ink-200"
+              className="rounded-md border border-white/8 bg-canvas-950 px-2 py-1 text-[0.78rem] text-ink-200"
               key={`${ticket.id}-${badge.id}-${badge.relationship}`}
               style={getProjectBadgeStyle(badge.color)}
             >
@@ -105,7 +103,7 @@ function TicketCardContent({ ticket }: { ticket: BoardTicket }) {
         <div className="flex flex-wrap gap-2">
           {ticket.jiraIssues.slice(0, 2).map((issue) => (
             <span
-              className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-[0.78rem] text-sky-100"
+              className="rounded-md border border-white/10 bg-canvas-950 px-2 py-1 text-[0.78rem] text-ink-100"
               key={`${ticket.id}-${issue.key}`}
               title={issue.summary ? `${issue.key} ${issue.summary}` : issue.key}
             >
@@ -113,13 +111,15 @@ function TicketCardContent({ ticket }: { ticket: BoardTicket }) {
             </span>
           ))}
           {ticket.jiraIssues.length > 2 ? (
-            <span className="rounded-full border border-white/8 bg-white/[0.03] px-2.5 py-1 text-[0.78rem] text-ink-200">
+            <span className="rounded-md border border-white/8 bg-canvas-950 px-2 py-1 text-[0.78rem] text-ink-200">
               +{ticket.jiraIssues.length - 2} Jira
             </span>
           ) : null}
         </div>
       ) : null}
-      <p className="m-0 text-sm text-ink-300">{ticket.contextsCount} work contexts</p>
+      <p className="m-0 text-sm text-ink-300">
+        {ticket.contextsCount} {ticket.contextsCount === 1 ? "work context" : "work contexts"}
+      </p>
     </>
   );
 }
@@ -140,10 +140,10 @@ export function TicketCard({
     },
     disabled: !interactive
   });
-  const className = `grid w-full gap-3 rounded-[16px] border bg-canvas-850 px-4 py-4 text-left text-ink-50 shadow-[0_12px_30px_rgba(0,0,0,0.16)] transition-[border-color,background-color,opacity,box-shadow] ${
+  const className = `grid w-full gap-3 rounded-[10px] border px-4 py-4 text-left text-ink-50 transition-[border-color,background-color,opacity,color] ${
     isSelected
-      ? "border-white/16 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04),0_12px_30px_rgba(0,0,0,0.2)]"
-      : "border-white/6 hover:border-white/10 hover:bg-canvas-800"
+      ? "border-accent-500/45 bg-canvas-850"
+      : "border-white/8 bg-canvas-900 hover:border-white/14 hover:bg-canvas-850"
   } ${isDragging ? "cursor-grabbing opacity-0" : interactive ? "cursor-pointer" : "cursor-grabbing"}`;
   const style = {
     transform: interactive && !isDragging ? toTransformStyle(transform) : undefined,
