@@ -13,9 +13,10 @@
     "dev": "sh -c 'npm run dev:server & npm run dev:web & wait'",
     "dev:web": "npm run dev -w @boroda/web",
     "dev:server": "npm run dev -w @boroda/server",
-    "test": "npm run test -w @boroda/server",
+    "test": "npm run test -w @boroda/server && npm run test -w @boroda/web",
     "build": "npm run build -w @boroda/web && npm run build -w @boroda/server",
     "typecheck": "npm run typecheck -w @boroda/web && npm run typecheck -w @boroda/server",
+    "verify": "npm run typecheck && npm run test",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "npm run migrate -w @boroda/server",
     "db:seed": "npm run seed -w @boroda/server"

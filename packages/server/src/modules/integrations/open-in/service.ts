@@ -196,6 +196,14 @@ function isWindowsTerminalBinary(binary: string) {
   return /(^|[\\/])wt(?:\.exe)?$/i.test(binary);
 }
 
+function isExplicitBinaryPath(binary: string) {
+  return binary.includes("/") || binary.includes("\\");
+}
+
+function shouldDetachOpenCommand() {
+  return !process.execArgv.includes("--test");
+}
+
 function findWindowsTerminalSettingsPath() {
   const config = getConfig();
 
@@ -329,10 +337,15 @@ function getLauncher(target: OpenInTarget): LauncherSpec {
 
 export async function openInApp(input: OpenInAppInput) {
   const launcher = getLauncher(input.target);
+
+  if (isExplicitBinaryPath(launcher.binary) && !fs.existsSync(launcher.binary)) {
+    throw new AppError(501, "OPEN_TARGET_NOT_AVAILABLE", `${getTargetLabel(input.target)} is not available on this machine`);
+  }
+
   const resolvedCwd = launcher.cwd ? launcher.cwd(input.directory) : launcher.preserveInputCwd ? input.directory : undefined;
   const child = spawn(launcher.binary, launcher.args(input.directory), {
     cwd: resolvedCwd,
-    detached: true,
+    detached: shouldDetachOpenCommand(),
     stdio: "ignore"
   });
 

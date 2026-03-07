@@ -196,7 +196,7 @@ describe("BoardPage", () => {
     await user.type(screen.getByLabelText("Search"), "bug");
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({ q: "bug" });
 
-    await user.click(screen.getByRole("button", { name: "Filters" }));
+    await user.click(screen.getByRole("button", { name: "Filters applied" }));
     await user.selectOptions(screen.getByLabelText("Project"), "2");
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({ q: "bug", projectId: 2 });
 
@@ -207,7 +207,7 @@ describe("BoardPage", () => {
       priority: "HIGH"
     });
 
-    await user.click(screen.getByRole("button", { name: "Clear filters" }));
+    await user.click(screen.getAllByRole("button", { name: "Clear filters" })[0]);
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({});
   });
 
@@ -230,6 +230,7 @@ describe("BoardPage", () => {
       title: "Wire board filters",
       description: "",
       branch: null,
+      workspaces: [],
       jiraIssues: [],
       status: "READY",
       priority: "HIGH",

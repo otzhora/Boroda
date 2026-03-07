@@ -254,6 +254,7 @@ describe("JiraPage", () => {
       title: "Operational cleanup follow-up",
       description: "",
       branch: null,
+      workspaces: [],
       jiraIssues: [{ key: "OPS-42", summary: "Ops cleanup" }],
       status: "READY",
       priority: "HIGH",
