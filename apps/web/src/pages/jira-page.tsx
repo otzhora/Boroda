@@ -14,31 +14,24 @@ import { useAddTicketJiraLinkMutation } from "../features/tickets/mutations";
 import { useTicketsQuery } from "../features/tickets/queries";
 
 const headerActionButtonClassName =
-  "inline-flex min-h-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06]";
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900";
 const topBarButtonClassName =
-  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900 disabled:cursor-progress disabled:opacity-70";
 const createButtonClassName =
-  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-ink-50 px-3 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-white disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-accent-500/40 bg-accent-500 px-3 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-accent-300 disabled:cursor-progress disabled:opacity-70";
 const issueListClassName =
-  "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-white/8 bg-canvas-900/96";
+  "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border border-white/8 bg-canvas-925";
 const issueArticleClassName =
   "grid gap-0 border-t border-white/8 px-4 transition-colors first:border-t-0";
-const issueRowClassName = "grid items-center gap-4 py-4";
-const issueBodyClassName = "grid gap-4 px-4 pb-4";
-const issueInsetPanelClassName = "grid gap-4 border-t border-white/8 pt-4";
-const rowToggleButtonClassName =
-  "flex min-h-[5.25rem] min-w-0 items-start gap-3 rounded-[12px] px-1 py-1 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
+const issueRowClassName = "grid gap-4 py-4";
+const issueBodyClassName = "grid gap-4 border-t border-white/8 pb-4 pt-4";
+const issueToggleButtonClassName =
+  "grid w-full min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[8px] px-1 py-1 text-left transition-colors hover:bg-white/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
 const spinnerClassName = "h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent";
-const emptyPanelClassName = "border border-white/8 bg-canvas-900/96 px-4 py-4";
+const emptyPanelClassName = "rounded-[10px] border border-white/8 bg-canvas-925 px-4 py-4";
+const issueChipClassName = "inline-flex min-h-6 items-center rounded-[8px] border px-2 py-0.5 text-xs font-medium";
 
 type JiraIssueSort = "needs-boroda" | "linked-first" | "jira-order" | "jira-key";
-
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit"
-});
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
@@ -72,16 +65,6 @@ function toQuickCreatePayload(issue: { key: string; summary: string }, form: Qui
       ? [{ projectId: Number(form.projectId), relationship: "PRIMARY" as const }]
       : []
   };
-}
-
-function formatUpdatedAt(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Updated recently";
-  }
-
-  return `Updated ${dateTimeFormatter.format(date)}`;
 }
 
 function parseIssueSort(value: string | null): JiraIssueSort {
@@ -181,6 +164,7 @@ export function JiraPage() {
   const issues = sortIssues(payload?.issues ?? [], issueSort);
   const projects = projectsQuery.data ?? [];
   const tickets = ticketsQuery.data ?? [];
+  const linkedIssuesCount = issues.filter((issue) => issue.borodaTickets.length > 0).length;
 
   const openQuickCreate = (issue: { key: string; summary: string }) => {
     setIssueToCreateFrom(issue);
@@ -215,15 +199,17 @@ export function JiraPage() {
   return (
     <section className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-3">
       <div className="flex min-h-12 flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-3">
-        <div className="min-w-0">
-          <h1 className="m-0 text-base font-semibold text-ink-50">Assigned Jira issues</h1>
-          <p className="m-0 mt-1 text-sm text-ink-200">Jira stays primary. Boroda links sit beside each issue.</p>
-        </div>
+        <h1 className="m-0 text-base font-semibold text-ink-50">Assigned Jira issues</h1>
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-ink-300">
+            <span>{issues.length} issues</span>
+            <span aria-hidden="true">/</span>
+            <span>{linkedIssuesCount} linked</span>
+          </div>
           <label className="min-w-[12rem]">
             <span className="sr-only">Sort Jira issues</span>
             <select
-              className="min-h-10 rounded-[10px] border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-ink-50"
+              className="min-h-10 rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50"
               aria-label="Sort Jira issues"
               value={issueSort}
               onChange={(event) => {
@@ -281,7 +267,7 @@ export function JiraPage() {
 
       {issues.length > 0 ? (
         <section className={issueListClassName}>
-          <ul className="m-0 list-none px-0 py-2">
+          <ul className="m-0 list-none p-0">
             {issues.map((issue) => {
               const jiraHref = baseUrl ? `${baseUrl}/browse/${issue.key}` : null;
               const isExpanded = expandedIssueKeys.includes(issue.key);
@@ -298,7 +284,7 @@ export function JiraPage() {
                   <div className={issueRowClassName}>
                     <button
                       type="button"
-                      className={`${rowToggleButtonClassName} ${isExpanded ? "bg-white/[0.04]" : ""}`}
+                      className={`${issueToggleButtonClassName} ${isExpanded ? "bg-white/[0.03]" : ""}`}
                       aria-expanded={isExpanded}
                       aria-controls={panelId}
                       aria-label={`${isExpanded ? "Hide links" : "Show links"} for ${issue.key}`}
@@ -306,57 +292,73 @@ export function JiraPage() {
                         toggleIssueExpanded(issue.key);
                       }}
                     >
+                      <span
+                        className="flex h-4 w-4 items-center justify-center text-sm leading-none text-ink-300"
+                        aria-hidden="true"
+                      >
+                        <span className={isExpanded ? "-translate-y-px" : ""}>{isExpanded ? "⌄" : "›"}</span>
+                      </span>
                       <div
-                        className={`mt-0.5 h-10 w-2.5 shrink-0 rounded-[999px] ${
+                        className={`h-3 w-3 shrink-0 rounded-[3px] ${
                           issue.borodaTickets.length > 0 ? "bg-emerald-300/70" : "bg-ink-300/45"
                         }`}
                       />
-                      <div className="min-w-0">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          {jiraHref ? (
-                            <a
-                              href={jiraHref}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="relative z-10 inline-flex min-h-7 items-center rounded-[999px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-ink-50 transition-colors hover:border-white/16 hover:bg-white/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
-                              aria-label={`Open Jira issue ${issue.key}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                              }}
-                            >
-                              {issue.key}
-                            </a>
-                          ) : (
-                            <span className="inline-flex min-h-7 items-center rounded-[999px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-ink-50">
-                              {issue.key}
-                            </span>
-                          )}
-                          <span
-                            className={`inline-flex min-h-7 items-center rounded-[999px] border px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] ${
-                              issue.borodaTickets.length > 0
-                                ? "border-emerald-400/24 bg-emerald-400/10 text-emerald-100"
-                                : "border-amber-300/24 bg-amber-300/10 text-amber-100"
-                            }`}
+                      <div className="flex min-w-0 items-center gap-3">
+                        {jiraHref ? (
+                          <a
+                            href={jiraHref}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="shrink-0 font-mono text-sm font-medium text-[#6ea8ff] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+                            aria-label={`Open Jira issue ${issue.key}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
                           >
-                            {issue.borodaTickets.length > 0 ? "Linked" : "Needs Boroda"}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex flex-wrap gap-2 text-sm text-ink-300">
-                          <span>{linkedCountLabel}</span>
-                        </div>
-                        <p className="m-0 mt-2 break-words text-[0.95rem] leading-6 text-ink-100">{issue.summary}</p>
+                            {issue.key}
+                          </a>
+                        ) : (
+                          <span className="shrink-0 font-mono text-sm font-medium text-[#6ea8ff]">{issue.key}</span>
+                        )}
+                        <p className="m-0 min-w-0 truncate text-[0.95rem] leading-6 text-ink-100">{issue.summary}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                        <span
+                          className={`${issueChipClassName} ${
+                            issue.borodaTickets.length > 0
+                              ? "border-emerald-400/24 bg-emerald-400/10 text-emerald-100"
+                              : "border-amber-300/24 bg-amber-300/10 text-amber-100"
+                          }`}
+                        >
+                          {issue.borodaTickets.length > 0 ? "Linked" : "Needs Boroda"}
+                        </span>
+                        <span className={`${issueChipClassName} border-white/10 bg-white/[0.04] text-ink-200`}>
+                          {linkedCountLabel}
+                        </span>
                       </div>
                     </button>
-                  </div>
 
-                  {isExpanded ? (
-                    <div id={panelId} className={issueBodyClassName} role="region" aria-label={`Boroda links for ${issue.key}`}>
-                      <div className={issueInsetPanelClassName}>
-                        <div className="flex items-center justify-between gap-3">
-                          <h4 className="m-0 text-sm font-semibold uppercase tracking-[0.14em] text-ink-200">
-                            Boroda tickets
-                          </h4>
-                          <span className="text-sm text-ink-300">{linkedCountLabel}</span>
+                    {isExpanded ? (
+                      <div id={panelId} className={issueBodyClassName} role="region" aria-label={`Boroda links for ${issue.key}`}>
+                        <div className="grid gap-2">
+                          {issue.borodaTickets.length > 0 ? (
+                            <ul className="m-0 grid list-none gap-2 p-0" role="list">
+                              {issue.borodaTickets.map((ticket) => (
+                                <li key={ticket.id}>
+                                  <Link
+                                    to={`/?ticketId=${ticket.id}`}
+                                    className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-[8px] border border-white/8 bg-canvas-950 px-3 py-2.5 transition-colors hover:border-white/14 hover:bg-canvas-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+                                    aria-label={`Open Boroda ticket ${ticket.key}`}
+                                  >
+                                    <span className="font-mono text-sm font-medium text-ink-50">{ticket.key}</span>
+                                    <span className="min-w-0 truncate text-sm text-ink-100">{ticket.title}</span>
+                                  </Link>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="m-0 text-sm text-ink-300">No linked BRD tickets.</p>
+                          )}
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
@@ -381,45 +383,9 @@ export function JiraPage() {
                             Create new Boroda
                           </button>
                         </div>
-
-                        {issue.borodaTickets.length > 0 ? (
-                          <div className="grid gap-3">
-                            <ul className="grid gap-3 p-0" role="list">
-                              {issue.borodaTickets.map((ticket) => (
-                                <li className="grid gap-3" key={ticket.id}>
-                                  <div className="grid gap-3 rounded-[12px] border border-white/7 bg-white/[0.02] px-3 py-3 md:grid-cols-[minmax(0,1.4fr)_auto]">
-                                    <Link
-                                      to={`/?ticketId=${ticket.id}`}
-                                      className="min-w-0"
-                                      aria-label={`Open Boroda ticket ${ticket.key}`}
-                                    >
-                                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                        <span className="text-sm font-semibold text-ink-50">{ticket.key}</span>
-                                        <span className="inline-flex min-h-7 items-center rounded-[999px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-ink-200">
-                                          {ticket.status.replace(/_/g, " ")}
-                                        </span>
-                                      </div>
-                                      <p className="m-0 mt-1.5 break-words text-sm text-ink-100">{ticket.title}</p>
-                                    </Link>
-                                    <div className="text-sm text-ink-300 md:text-right">
-                                      <p className="m-0">Updated</p>
-                                      <p className="m-0 mt-1">{formatUpdatedAt(ticket.updatedAt).replace("Updated ", "")}</p>
-                                    </div>
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : (
-                          <div className="grid gap-3 rounded-[12px] border border-white/7 bg-white/[0.02] px-3 py-3">
-                            <p className="m-0 text-sm text-ink-300">
-                              No Boroda tickets yet. Create the first one linked to <span className="font-medium text-ink-100">{issue.key}</span>.
-                            </p>
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </li>
               );
             })}
@@ -439,9 +405,9 @@ export function JiraPage() {
         showCloseButton={false}
       >
         <div className="border-b border-white/8 px-3 py-3 sm:px-4 sm:py-4">
-          <p className="m-0 text-[0.78rem] font-semibold uppercase tracking-[0.12em] text-ink-300">Linked Jira issue</p>
+          <p className="m-0 text-sm font-medium text-ink-100">Linked Jira issue</p>
           <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
-            <span className="inline-flex min-h-7 items-center rounded-[8px] border border-white/10 bg-white/[0.04] px-2 py-1 text-[0.8rem] font-semibold text-ink-50">
+            <span className="rounded-[8px] border border-white/10 bg-canvas-950 px-2 py-1 font-mono text-sm font-semibold text-ink-50">
               {issueToCreateFrom?.key}
             </span>
             <p className="m-0 min-w-0 break-words text-sm text-ink-100">{issueToCreateFrom?.summary}</p>
@@ -483,9 +449,9 @@ export function JiraPage() {
         showCloseButton={false}
       >
         <div className="border-b border-white/8 px-3 py-3 sm:px-4 sm:py-4">
-          <p className="m-0 text-[0.78rem] font-semibold uppercase tracking-[0.12em] text-ink-300">Link to Jira issue</p>
+          <p className="m-0 text-sm font-medium text-ink-100">Link to Jira issue</p>
           <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
-            <span className="inline-flex min-h-7 items-center rounded-[999px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-ink-50">
+            <span className="rounded-[8px] border border-white/10 bg-canvas-950 px-2 py-1 font-mono text-sm font-medium text-ink-50">
               {issueToLinkToExisting?.key}
             </span>
             <p className="m-0 min-w-0 break-words text-sm text-ink-100">{issueToLinkToExisting?.summary}</p>
@@ -494,10 +460,10 @@ export function JiraPage() {
 
         <div className="grid gap-3 px-3 py-3 sm:px-4 sm:py-4">
           <label className="grid gap-2">
-            <span className="m-0 text-[0.78rem] font-semibold uppercase tracking-[0.12em] text-ink-300">Search Boroda tickets</span>
+            <span className="m-0 text-sm font-medium text-ink-100">Search Boroda tickets</span>
             <input
               ref={linkExistingSearchRef}
-              className="min-h-10 rounded-[10px] border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300"
+              className="min-h-10 rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300"
               value={ticketSearch}
               onChange={(event) => {
                 setTicketSearch(event.target.value);
@@ -518,11 +484,11 @@ export function JiraPage() {
             linkableTickets.length > 0 ? (
               <ul className="m-0 grid list-none gap-3 p-0" role="list">
                 {linkableTickets.map((ticket) => (
-                  <li className="grid gap-3 rounded-[12px] border border-white/7 bg-white/[0.02] px-3 py-3 md:grid-cols-[minmax(0,1fr)_auto]" key={ticket.id}>
+                  <li className="grid gap-3 rounded-[10px] border border-white/8 bg-canvas-950 px-3 py-3 md:grid-cols-[minmax(0,1fr)_auto]" key={ticket.id}>
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <span className="text-sm font-semibold text-ink-50">{ticket.key}</span>
-                        <span className="inline-flex min-h-7 items-center rounded-[999px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-ink-200">
+                        <span className="inline-flex min-h-6 items-center rounded-[8px] border border-white/10 bg-white/[0.04] px-2 py-0.5 text-xs font-medium text-ink-200">
                           {ticket.status.replace(/_/g, " ")}
                         </span>
                       </div>

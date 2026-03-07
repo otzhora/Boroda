@@ -33,43 +33,41 @@ interface MutationContext {
 }
 
 const PROJECTS_QUERY_KEY = ["projects"] as const;
-const panelClassName = "grid gap-4 rounded-[16px] border border-white/8 bg-canvas-900/96 px-4 py-4";
+const panelClassName = "grid gap-4 rounded-[10px] border border-white/8 bg-canvas-925 px-4 py-4";
 const insetPanelClassName = "grid gap-4 border-t border-white/8 pt-4";
 const projectListClassName =
-  "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[16px] border border-white/8 bg-canvas-900/96 py-2";
+  "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border border-white/8 bg-canvas-925";
 const projectArticleClassName =
   "grid gap-0 border-t border-white/8 px-4 transition-colors first:border-t-0";
-const projectRowClassName = "grid items-center gap-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto]";
+const projectRowClassName = "grid items-center py-4";
 const projectBodyClassName = "grid gap-4 px-4 pb-4";
 const rowClassName =
   "grid gap-3 border-t border-white/8 py-3 first:border-t-0 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]";
-const sectionTitleClassName = "m-0 text-sm font-semibold uppercase tracking-[0.14em] text-ink-200";
-const labelClassName = "m-0 text-[0.78rem] font-medium uppercase tracking-[0.12em] text-ink-300";
+const sectionTitleClassName = "m-0 text-sm font-semibold text-ink-100";
+const labelClassName = "m-0 text-sm font-medium text-ink-100";
 const fieldClassName = "grid gap-1.5";
 const fieldWideClassName = "grid gap-1.5 md:col-span-full";
 const compactFieldClassName = "grid min-w-0 gap-1.5";
 const compactCheckboxLabelClassName =
-  "flex min-h-10 min-w-[11rem] items-center gap-3 self-end rounded-[10px] border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-ink-50";
+  "flex min-h-10 min-w-[11rem] items-center gap-3 self-end rounded-[10px] border border-white/8 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50";
 const inputClassName =
-  "min-h-10 rounded-[10px] border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300";
+  "min-h-10 rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300";
 const textareaClassName =
-  "rounded-[10px] border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300";
+  "rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300";
 const primaryButtonClassName =
-  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.92] px-3 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-white disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-accent-500/40 bg-accent-500 px-3 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-accent-300 disabled:cursor-progress disabled:opacity-70";
 const secondaryButtonClassName =
-  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900 disabled:cursor-progress disabled:opacity-70";
 const headerActionButtonClassName =
-  "inline-flex min-h-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-progress disabled:opacity-70";
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900 disabled:cursor-progress disabled:opacity-70";
 const dangerButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-red-400/24 bg-red-950/36 px-3 py-2 text-sm font-medium text-red-100 transition-colors hover:border-red-300/32 hover:bg-red-950/52 disabled:cursor-progress disabled:opacity-70";
 const subtleDangerButtonClassName =
   "inline-flex min-h-9 items-center justify-center rounded-[10px] border border-red-400/18 bg-transparent px-3 py-2 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/30 disabled:cursor-progress disabled:opacity-70";
-const checkboxLabelClassName =
-  "flex min-h-10 items-center gap-3 rounded-[10px] border border-white/8 bg-white/[0.03] px-3 py-2.5 text-sm text-ink-50";
 const chipClassName =
-  "inline-flex min-h-7 items-center rounded-[999px] border px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em]";
+  "inline-flex min-h-6 items-center rounded-[8px] border px-2 py-0.5 text-xs font-medium";
 const rowToggleButtonClassName =
-  "flex min-h-[5.25rem] min-w-0 items-start gap-3 rounded-[12px] px-1 py-1 text-left transition-colors hover:bg-white/[0.03] focus-visible:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
+  "flex min-w-0 items-start gap-3 rounded-[8px] px-1 py-1 text-left transition-colors hover:bg-white/[0.02] focus-visible:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
 
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -992,10 +990,7 @@ export function ProjectsPage() {
 
       <section className="mx-auto flex h-full w-full min-h-0 min-w-0 max-w-6xl flex-col gap-3 pb-2">
         <div className="flex min-h-12 flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-3">
-          <div className="min-w-0">
-            <h1 className="m-0 text-base font-semibold text-ink-50">Projects</h1>
-            <p className="m-0 mt-1 text-sm text-ink-200">Project records and folders stay together in one rail.</p>
-          </div>
+          <h1 className="m-0 text-base font-semibold text-ink-50">Projects</h1>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap items-center gap-2 text-sm text-ink-300">
               <span>{sortedProjects.length} projects</span>
@@ -1037,21 +1032,18 @@ export function ProjectsPage() {
                 <div className={projectRowClassName}>
                   <button
                     type="button"
-                    className={`${rowToggleButtonClassName} ${isExpandedProject ? "bg-white/[0.04]" : ""}`}
+                    className={`${rowToggleButtonClassName} w-full ${isExpandedProject ? "bg-white/[0.04]" : ""}`}
                     aria-expanded={isExpandedProject}
                     onClick={() => toggleProjectExpansion(project.id)}
                   >
                     <div
-                      className="mt-0.5 h-10 w-2.5 shrink-0 rounded-[999px]"
+                      className="mt-1 h-3 w-3 shrink-0 rounded-[3px]"
                       style={{ backgroundColor: project.color || "#445" }}
                     />
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <h3 className="m-0 text-[0.95rem] font-semibold leading-6 text-ink-100">{project.name}</h3>
-                        <span
-                          className="inline-flex min-h-7 items-center rounded-[999px] border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[0.72rem] font-medium uppercase tracking-[0.08em] text-ink-50"
-                          style={getProjectBadgeStyle(project.color)}
-                        >
+                        <span className="rounded-[8px] border px-2 py-0.5 font-mono text-xs" style={getProjectBadgeStyle(project.color)}>
                           {project.slug}
                         </span>
                       </div>
@@ -1060,24 +1052,11 @@ export function ProjectsPage() {
                         <span aria-hidden="true">/</span>
                         <span>Updated {formatDateTime(project.updatedAt)}</span>
                       </div>
-                      {project.description ? (
-                        <p className="m-0 mt-2 break-words text-[0.95rem] leading-6 text-ink-100">
-                          {project.description}
-                        </p>
-                      ) : null}
+                      <p className="m-0 mt-2 line-clamp-2 break-words text-[0.95rem] leading-6 text-ink-100">
+                        {project.description || "No description"}
+                      </p>
                     </div>
                   </button>
-
-                  <div className="flex flex-wrap gap-2 lg:justify-end">
-                    <button
-                      type="button"
-                      className={dangerButtonClassName}
-                      disabled={deleteProjectMutation.isPending}
-                      onClick={() => handleDeleteProject(project)}
-                    >
-                      Delete
-                    </button>
-                  </div>
                 </div>
 
                 {isExpandedProject ? (
@@ -1090,6 +1069,14 @@ export function ProjectsPage() {
                           onClick={() => beginProjectEdit(project)}
                         >
                           Edit project
+                        </button>
+                        <button
+                          type="button"
+                          className={dangerButtonClassName}
+                          disabled={deleteProjectMutation.isPending}
+                          onClick={() => handleDeleteProject(project)}
+                        >
+                          Delete
                         </button>
                       </div>
                     ) : null}
@@ -1177,8 +1164,8 @@ export function ProjectsPage() {
                       </div>
 
                       {project.folders.length ? (
-                        <ul className="grid p-0" role="list">
-                          {sortFolders(project.folders).map((folder) => {
+                            <ul className="grid rounded-[10px] border border-white/8 bg-canvas-950 p-0" role="list">
+                              {sortFolders(project.folders).map((folder) => {
                             const isEditingFolder = editingFolderIds[folder.id] ?? false;
                             const folderEditForm = folderEditForms[folder.id] ?? createFolderFormState(folder);
                             const folderValidation = pathValidation[`folder-${folder.id}`];
@@ -1189,11 +1176,7 @@ export function ProjectsPage() {
                                   <div className="min-w-0">
                                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                                       <p className="m-0 min-w-0 text-sm font-medium text-ink-50">{folder.label}</p>
-                                      {folder.isPrimary ? (
-                                        <span className={`${chipClassName} border-sky-300/24 bg-sky-300/10 text-sky-100`}>
-                                          Primary
-                                        </span>
-                                      ) : null}
+                                      {folder.isPrimary ? <span className={`${chipClassName} border-white/12 bg-white/[0.04] text-ink-100`}>Primary</span> : null}
                                       <span className={getFolderStatusClassName(folder.existsOnDisk)}>
                                         {folder.existsOnDisk ? "On disk" : "Missing"}
                                       </span>

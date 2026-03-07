@@ -160,12 +160,7 @@ describe("JiraPage", () => {
       "https://jira.example.test/browse/PAY-128"
     );
     expect(screen.getByLabelText("Sort Jira issues")).toHaveValue("needs-boroda");
-
-    const rowButtons = screen.getAllByRole("button", { name: /show links for/i });
-    expect(rowButtons.map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Show links for OPS-42",
-      "Show links for PAY-128"
-    ]);
+    expect(screen.getAllByRole("button", { name: /show links for/i })).toHaveLength(2);
 
     expect(
       screen
@@ -185,9 +180,8 @@ describe("JiraPage", () => {
     renderJiraPage();
     await user.selectOptions(screen.getByLabelText("Sort Jira issues"), "linked-first");
 
-    const rowButtons = screen.getAllByRole("button", { name: /links for/i });
-    expect(rowButtons.map((button) => button.getAttribute("aria-label"))).toContain("Show links for PAY-128");
-    expect(rowButtons[0]).toHaveAttribute("aria-label", "Show links for PAY-128");
+    const jiraLinks = screen.getAllByRole("link", { name: /Open Jira issue/i });
+    expect(jiraLinks[0]).toHaveAccessibleName("Open Jira issue PAY-128");
   });
 
   it("shows Boroda links when a Jira issue is expanded", async () => {
