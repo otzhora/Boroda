@@ -39,17 +39,15 @@ const projectListClassName =
   "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border border-white/8 bg-canvas-925";
 const projectArticleClassName =
   "grid gap-0 border-t border-white/8 px-4 transition-colors first:border-t-0";
-const projectRowClassName = "grid items-center py-4";
-const projectBodyClassName = "grid gap-4 px-4 pb-4";
-const rowClassName =
-  "grid gap-3 border-t border-white/8 py-3 first:border-t-0 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]";
+const projectRowClassName = "grid gap-4 py-4";
+const projectBodyClassName = "grid gap-4 border-t border-white/8 pb-4 pt-4";
 const sectionTitleClassName = "m-0 text-sm font-semibold text-ink-100";
 const labelClassName = "m-0 text-sm font-medium text-ink-100";
 const fieldClassName = "grid gap-1.5";
 const fieldWideClassName = "grid gap-1.5 md:col-span-full";
 const compactFieldClassName = "grid min-w-0 gap-1.5";
 const compactCheckboxLabelClassName =
-  "flex min-h-10 min-w-[11rem] items-center gap-3 self-end rounded-[10px] border border-white/8 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50";
+  "flex min-h-10 min-w-[11rem] items-center gap-3 self-end rounded-[10px] border border-white/8 bg-canvas-950 px-3 py-2 text-sm text-ink-50";
 const inputClassName =
   "min-h-10 rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300";
 const textareaClassName =
@@ -66,8 +64,9 @@ const subtleDangerButtonClassName =
   "inline-flex min-h-9 items-center justify-center rounded-[10px] border border-red-400/18 bg-transparent px-3 py-2 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/30 disabled:cursor-progress disabled:opacity-70";
 const chipClassName =
   "inline-flex min-h-6 items-center rounded-[8px] border px-2 py-0.5 text-xs font-medium";
-const rowToggleButtonClassName =
-  "flex min-w-0 items-start gap-3 rounded-[8px] px-1 py-1 text-left transition-colors hover:bg-white/[0.02] focus-visible:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
+const projectToggleButtonClassName =
+  "grid w-full min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[8px] px-1 py-1 text-left transition-colors hover:bg-white/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
+const spinnerClassName = "h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent";
 
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -223,6 +222,14 @@ function rollbackProjects(queryClient: QueryClient, context?: MutationContext) {
 function getFolderStatusClassName(existsOnDisk: boolean) {
   return `${chipClassName} ${
     existsOnDisk
+      ? "border-emerald-400/24 bg-emerald-400/10 text-emerald-100"
+      : "border-amber-300/24 bg-amber-300/10 text-amber-100"
+  }`;
+}
+
+function getProjectStatusClassName(folderCount: number) {
+  return `${chipClassName} ${
+    folderCount > 0
       ? "border-emerald-400/24 bg-emerald-400/10 text-emerald-100"
       : "border-amber-300/24 bg-amber-300/10 text-amber-100"
   }`;
@@ -1002,6 +1009,17 @@ export function ProjectsPage() {
             <button
               type="button"
               className={secondaryButtonClassName}
+              onClick={() => {
+                void projectsQuery.refetch();
+              }}
+              disabled={projectsQuery.isFetching}
+            >
+              {projectsQuery.isFetching ? <span className={spinnerClassName} aria-hidden="true" /> : null}
+              <span>{projectsQuery.isFetching ? "Refreshing…" : "Refresh"}</span>
+            </button>
+            <button
+              type="button"
+              className={secondaryButtonClassName}
               onClick={() => setIsCreateProjectOpen(true)}
             >
               New project
@@ -1020,401 +1038,465 @@ export function ProjectsPage() {
           ) : null}
 
           <div className={projectListClassName}>
-          {sortedProjects.map((project) => {
-            const isEditingProject = editingProjectId === project.id;
-            const isExpandedProject = expandedProjectId === project.id;
-            const projectEditForm = projectEditForms[project.id] ?? createProjectFormState(project);
-            const folderCreateForm = folderCreateForms[project.id] ?? createFolderFormState();
-            const projectValidation = pathValidation[`project-${project.id}`];
+            {sortedProjects.map((project) => {
+              const isEditingProject = editingProjectId === project.id;
+              const isExpandedProject = expandedProjectId === project.id;
+              const projectEditForm = projectEditForms[project.id] ?? createProjectFormState(project);
+              const folderCreateForm = folderCreateForms[project.id] ?? createFolderFormState();
+              const projectValidation = pathValidation[`project-${project.id}`];
+              const folderCountLabel = formatFolderCount(project.folders.length);
+              const hasFolders = project.folders.length > 0;
 
-            return (
-              <article className={projectArticleClassName} key={project.id}>
-                <div className={projectRowClassName}>
-                  <button
-                    type="button"
-                    className={`${rowToggleButtonClassName} w-full ${isExpandedProject ? "bg-white/[0.04]" : ""}`}
-                    aria-expanded={isExpandedProject}
-                    onClick={() => toggleProjectExpansion(project.id)}
-                  >
-                    <div
-                      className="mt-1 h-3 w-3 shrink-0 rounded-[3px]"
-                      style={{ backgroundColor: project.color || "#445" }}
-                    />
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <h3 className="m-0 text-[0.95rem] font-semibold leading-6 text-ink-100">{project.name}</h3>
-                        <span className="rounded-[8px] border px-2 py-0.5 font-mono text-xs" style={getProjectBadgeStyle(project.color)}>
-                          {project.slug}
+              return (
+                <article className={projectArticleClassName} key={project.id}>
+                  <div className={projectRowClassName}>
+                    <button
+                      type="button"
+                      className={`${projectToggleButtonClassName} ${isExpandedProject ? "bg-white/[0.03]" : ""}`}
+                      aria-expanded={isExpandedProject}
+                      aria-controls={`project-panel-${project.id}`}
+                      aria-label={`${isExpandedProject ? "Hide details" : "Show details"} for ${project.name}`}
+                      onClick={() => toggleProjectExpansion(project.id)}
+                    >
+                      <span
+                        className="flex h-4 w-4 items-center justify-center text-sm leading-none text-ink-300"
+                        aria-hidden="true"
+                      >
+                        <span className={isExpandedProject ? "-translate-y-px" : ""}>
+                          {isExpandedProject ? "⌄" : "›"}
+                        </span>
+                      </span>
+                      <div
+                        className="h-3 w-3 shrink-0 rounded-[3px]"
+                        style={{ backgroundColor: project.color || "#445" }}
+                      />
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-3">
+                          <span
+                            className="shrink-0 rounded-[8px] border px-2 py-0.5 font-mono text-xs"
+                            style={getProjectBadgeStyle(project.color)}
+                          >
+                            {project.slug}
+                          </span>
+                          <h3 className="m-0 min-w-0 truncate text-[0.95rem] font-medium leading-6 text-ink-100">
+                            {project.name}
+                          </h3>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                        <span className={getProjectStatusClassName(project.folders.length)}>
+                          {hasFolders ? "Configured" : "Needs folder"}
+                        </span>
+                        <span className={`${chipClassName} border-white/10 bg-white/[0.04] text-ink-200`}>
+                          {folderCountLabel}
                         </span>
                       </div>
-                      <div className="mt-1 flex flex-wrap gap-2 text-sm text-ink-300">
-                        <span>{formatFolderCount(project.folders.length)}</span>
-                        <span aria-hidden="true">/</span>
-                        <span>Updated {formatDateTime(project.updatedAt)}</span>
-                      </div>
-                      <p className="m-0 mt-2 line-clamp-2 break-words text-[0.95rem] leading-6 text-ink-100">
-                        {project.description || "No description"}
-                      </p>
-                    </div>
-                  </button>
-                </div>
+                    </button>
+                  </div>
 
-                {isExpandedProject ? (
-                  <div className={projectBodyClassName}>
-                    {!isEditingProject ? (
-                      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/8 pt-4">
-                        <button
-                          type="button"
-                          className={secondaryButtonClassName}
-                          onClick={() => beginProjectEdit(project)}
-                        >
-                          Edit project
-                        </button>
-                        <button
-                          type="button"
-                          className={dangerButtonClassName}
-                          disabled={deleteProjectMutation.isPending}
-                          onClick={() => handleDeleteProject(project)}
-                        >
-                          Delete
-                        </button>
+                  {isExpandedProject ? (
+                    <div
+                      id={`project-panel-${project.id}`}
+                      className={projectBodyClassName}
+                      role="region"
+                      aria-label={`Project details for ${project.name}`}
+                    >
+                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+                        <div className="min-w-0 space-y-1">
+                          <p className="m-0 text-sm text-ink-300">Updated {formatDateTime(project.updatedAt)}</p>
+                          <p className="m-0 break-words text-sm leading-6 text-ink-100">
+                            {project.description || "No description"}
+                          </p>
+                        </div>
+                        {!isEditingProject ? (
+                          <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                            <button
+                              type="button"
+                              className={secondaryButtonClassName}
+                              onClick={() => beginProjectEdit(project)}
+                            >
+                              Edit project
+                            </button>
+                            <button
+                              type="button"
+                              className={dangerButtonClassName}
+                              disabled={deleteProjectMutation.isPending}
+                              onClick={() => handleDeleteProject(project)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
 
-                    {isEditingProject ? (
-                      <form className={insetPanelClassName} onSubmit={(event) => void handleUpdateProject(event, project.id)}>
-                        <div className="grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
-                          <label className={fieldClassName}>
-                            <span className={labelClassName}>Name</span>
+                      {isEditingProject ? (
+                        <form
+                          className={insetPanelClassName}
+                          onSubmit={(event) => void handleUpdateProject(event, project.id)}
+                        >
+                          <div className="grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+                            <label className={fieldClassName}>
+                              <span className={labelClassName}>Name</span>
+                              <input
+                                className={inputClassName}
+                                name={`projectName-${project.id}`}
+                                autoComplete="off"
+                                value={projectEditForm.name}
+                                onChange={(event) =>
+                                  updateProjectEditForm(project.id, { name: event.target.value })
+                                }
+                                required
+                              />
+                            </label>
+                            <label className={fieldClassName}>
+                              <span className={labelClassName}>Slug</span>
+                              <input
+                                className={inputClassName}
+                                name={`projectSlug-${project.id}`}
+                                autoComplete="off"
+                                autoCapitalize="off"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                value={projectEditForm.slug}
+                                onChange={(event) =>
+                                  updateProjectEditForm(project.id, { slug: event.target.value })
+                                }
+                                required
+                              />
+                            </label>
+                            <label className={fieldClassName}>
+                              <span className={labelClassName}>Color</span>
+                              <input
+                                className={inputClassName}
+                                name={`projectColor-${project.id}`}
+                                autoComplete="off"
+                                spellCheck={false}
+                                value={projectEditForm.color}
+                                onChange={(event) =>
+                                  updateProjectEditForm(project.id, { color: event.target.value })
+                                }
+                              />
+                            </label>
+                            <label className={fieldWideClassName}>
+                              <span className={labelClassName}>Description</span>
+                              <textarea
+                                className={textareaClassName}
+                                name={`projectDescription-${project.id}`}
+                                value={projectEditForm.description}
+                                onChange={(event) =>
+                                  updateProjectEditForm(project.id, { description: event.target.value })
+                                }
+                                rows={3}
+                              />
+                            </label>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              className={primaryButtonClassName}
+                              type="submit"
+                              disabled={updateProjectMutation.isPending}
+                            >
+                              {updateProjectMutation.isPending ? "Saving…" : "Save"}
+                            </button>
+                            <button
+                              type="button"
+                              className={secondaryButtonClassName}
+                              onClick={() => cancelProjectEdit(project.id)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      ) : null}
+
+                      <section className="grid gap-3" aria-labelledby={`project-folders-${project.id}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 id={`project-folders-${project.id}`} className={sectionTitleClassName}>
+                            Folders
+                          </h4>
+                          <span className="text-sm text-ink-300">{folderCountLabel}</span>
+                        </div>
+
+                        {project.folders.length ? (
+                          <ul
+                            className="m-0 list-none rounded-[10px] border border-white/8 bg-canvas-950 p-0"
+                            role="list"
+                          >
+                            {sortFolders(project.folders).map((folder) => {
+                              const isEditingFolder = editingFolderIds[folder.id] ?? false;
+                              const folderEditForm =
+                                folderEditForms[folder.id] ?? createFolderFormState(folder);
+                              const folderValidation = pathValidation[`folder-${folder.id}`];
+
+                              return (
+                                <li
+                                  className="border-t border-white/8 px-3 py-3 first:border-t-0"
+                                  key={folder.id}
+                                >
+                                  <div className="grid gap-3">
+                                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+                                      <div className="min-w-0 space-y-1.5">
+                                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                          <p className="m-0 min-w-0 text-sm font-medium text-ink-50">
+                                            {folder.label}
+                                          </p>
+                                          {folder.isPrimary ? (
+                                            <span
+                                              className={`${chipClassName} border-white/12 bg-white/[0.04] text-ink-100`}
+                                            >
+                                              Primary
+                                            </span>
+                                          ) : null}
+                                          <span className={getFolderStatusClassName(folder.existsOnDisk)}>
+                                            {folder.existsOnDisk ? "On disk" : "Missing"}
+                                          </span>
+                                        </div>
+                                        <p className="m-0 break-words font-mono text-[0.84rem] text-ink-200">
+                                          {folder.path}
+                                        </p>
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-300">
+                                          <span>Default branch: {folder.defaultBranch || "Not set"}</span>
+                                          <span>Updated {formatDateTime(folder.updatedAt)}</span>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                                        <button
+                                          type="button"
+                                          className={secondaryButtonClassName}
+                                          onClick={() =>
+                                            isEditingFolder ? cancelFolderEdit(folder.id) : beginFolderEdit(folder)
+                                          }
+                                        >
+                                          {isEditingFolder ? "Close editor" : "Edit"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={subtleDangerButtonClassName}
+                                          disabled={deleteFolderMutation.isPending}
+                                          onClick={() => handleDeleteFolder(project.id, folder)}
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {isEditingFolder ? (
+                                      <form
+                                        className="grid gap-3 border-t border-white/8 pt-3"
+                                        onSubmit={(event) =>
+                                          void handleUpdateFolder(event, project.id, folder.id)
+                                        }
+                                      >
+                                        <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.8fr)_minmax(0,1fr)_auto]">
+                                          <label className={compactFieldClassName}>
+                                            <span className={labelClassName}>Label</span>
+                                            <input
+                                              className={inputClassName}
+                                              name={`folderLabel-${folder.id}`}
+                                              autoComplete="off"
+                                              value={folderEditForm.label}
+                                              onChange={(event) =>
+                                                updateFolderEditForm(folder, { label: event.target.value })
+                                              }
+                                              required
+                                            />
+                                          </label>
+                                          <label className={compactFieldClassName}>
+                                            <span className={labelClassName}>WSL path</span>
+                                            <input
+                                              className={inputClassName}
+                                              name={`folderPath-${folder.id}`}
+                                              autoComplete="off"
+                                              spellCheck={false}
+                                              value={folderEditForm.path}
+                                              onChange={(event) =>
+                                                updateFolderEditForm(folder, { path: event.target.value })
+                                              }
+                                              required
+                                            />
+                                          </label>
+                                          <label className={compactFieldClassName}>
+                                            <span className={labelClassName}>Default branch</span>
+                                            <input
+                                              className={inputClassName}
+                                              name={`folderDefaultBranch-${folder.id}`}
+                                              autoComplete="off"
+                                              spellCheck={false}
+                                              value={folderEditForm.defaultBranch}
+                                              onChange={(event) =>
+                                                updateFolderEditForm(folder, {
+                                                  defaultBranch: event.target.value
+                                                })
+                                              }
+                                              placeholder="main"
+                                            />
+                                          </label>
+                                          <label className={compactCheckboxLabelClassName}>
+                                            <input
+                                              className="h-4 w-4 shrink-0 accent-ink-50"
+                                              type="checkbox"
+                                              checked={folderEditForm.isPrimary}
+                                              onChange={(event) =>
+                                                updateFolderEditForm(folder, {
+                                                  isPrimary: event.target.checked
+                                                })
+                                              }
+                                            />
+                                            <span>Primary folder</span>
+                                          </label>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-end gap-2">
+                                          <button
+                                            type="button"
+                                            className={secondaryButtonClassName}
+                                            disabled={validatePathMutation.isPending}
+                                            onClick={() =>
+                                              void handleValidatePath(
+                                                `folder-${folder.id}`,
+                                                folderEditForm.path,
+                                                folder.id
+                                              )
+                                            }
+                                          >
+                                            {validatePathMutation.isPending ? "Checking…" : "Check path"}
+                                          </button>
+                                          <button
+                                            className={primaryButtonClassName}
+                                            type="submit"
+                                            disabled={updateFolderMutation.isPending}
+                                          >
+                                            {updateFolderMutation.isPending ? "Saving…" : "Save"}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className={secondaryButtonClassName}
+                                            onClick={() => cancelFolderEdit(folder.id)}
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+
+                                        {folderValidation ? (
+                                          <p className="m-0 text-sm text-ink-300" aria-live="polite">
+                                            {describePathInfo(folderValidation)}
+                                          </p>
+                                        ) : null}
+                                      </form>
+                                    ) : null}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="m-0 text-sm text-ink-300">No folders yet.</p>
+                        )}
+                      </section>
+
+                      <form
+                        className="grid gap-3 rounded-[10px] border border-white/8 bg-canvas-950 px-3 py-3"
+                        onSubmit={(event) => void handleCreateFolder(event, project.id)}
+                        aria-label={`Add folder to ${project.name}`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className={sectionTitleClassName}>Add folder</h4>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.8fr)_minmax(0,1fr)_auto]">
+                          <label className={compactFieldClassName}>
+                            <span className={labelClassName}>Label</span>
                             <input
                               className={inputClassName}
-                              name={`projectName-${project.id}`}
+                              name={`newFolderLabel-${project.id}`}
                               autoComplete="off"
-                              value={projectEditForm.name}
+                              value={folderCreateForm.label}
                               onChange={(event) =>
-                                updateProjectEditForm(project.id, { name: event.target.value })
+                                updateFolderCreateForm(project.id, { label: event.target.value })
                               }
+                              placeholder="terraform"
                               required
                             />
                           </label>
-                          <label className={fieldClassName}>
-                            <span className={labelClassName}>Slug</span>
+                          <label className={compactFieldClassName}>
+                            <span className={labelClassName}>WSL path</span>
                             <input
                               className={inputClassName}
-                              name={`projectSlug-${project.id}`}
+                              name={`newFolderPath-${project.id}`}
                               autoComplete="off"
-                              autoCapitalize="off"
-                              autoCorrect="off"
                               spellCheck={false}
-                              value={projectEditForm.slug}
+                              value={folderCreateForm.path}
                               onChange={(event) =>
-                                updateProjectEditForm(project.id, { slug: event.target.value })
+                                updateFolderCreateForm(project.id, { path: event.target.value })
                               }
+                              placeholder="/home/otzhora/projects/payments-terraform"
                               required
                             />
                           </label>
-                          <label className={fieldClassName}>
-                            <span className={labelClassName}>Color</span>
+                          <label className={compactFieldClassName}>
+                            <span className={labelClassName}>Default branch</span>
                             <input
                               className={inputClassName}
-                              name={`projectColor-${project.id}`}
+                              name={`newFolderDefaultBranch-${project.id}`}
                               autoComplete="off"
                               spellCheck={false}
-                              value={projectEditForm.color}
+                              value={folderCreateForm.defaultBranch}
                               onChange={(event) =>
-                                updateProjectEditForm(project.id, { color: event.target.value })
+                                updateFolderCreateForm(project.id, {
+                                  defaultBranch: event.target.value
+                                })
                               }
+                              placeholder="main"
                             />
                           </label>
-                          <label className={fieldWideClassName}>
-                            <span className={labelClassName}>Description</span>
-                            <textarea
-                              className={textareaClassName}
-                              name={`projectDescription-${project.id}`}
-                              value={projectEditForm.description}
+                          <label className={compactCheckboxLabelClassName}>
+                            <input
+                              className="h-4 w-4 shrink-0 accent-ink-50"
+                              type="checkbox"
+                              checked={folderCreateForm.isPrimary}
                               onChange={(event) =>
-                                updateProjectEditForm(project.id, { description: event.target.value })
+                                updateFolderCreateForm(project.id, {
+                                  isPrimary: event.target.checked
+                                })
                               }
-                              rows={3}
                             />
+                            <span>Primary folder</span>
                           </label>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          <button className={primaryButtonClassName} type="submit" disabled={updateProjectMutation.isPending}>
-                            {updateProjectMutation.isPending ? "Saving…" : "Save"}
-                          </button>
+                        <div className="flex flex-wrap items-end gap-2">
                           <button
                             type="button"
                             className={secondaryButtonClassName}
-                            onClick={() => cancelProjectEdit(project.id)}
+                            disabled={validatePathMutation.isPending}
+                            onClick={() =>
+                              void handleValidatePath(`project-${project.id}`, folderCreateForm.path)
+                            }
                           >
-                            Cancel
+                            {validatePathMutation.isPending ? "Checking…" : "Check path"}
+                          </button>
+                          <button
+                            className={primaryButtonClassName}
+                            type="submit"
+                            disabled={createFolderMutation.isPending}
+                          >
+                            {createFolderMutation.isPending ? "Adding…" : "Add folder"}
                           </button>
                         </div>
+
+                        {projectValidation ? (
+                          <p className="m-0 text-sm text-ink-300" aria-live="polite">
+                            {describePathInfo(projectValidation)}
+                          </p>
+                        ) : null}
                       </form>
-                    ) : null}
-
-                    <section className="grid gap-3" aria-labelledby={`project-folders-${project.id}`}>
-                      <div className="flex items-center justify-between gap-3">
-                        <h4 id={`project-folders-${project.id}`} className={sectionTitleClassName}>
-                          Folders
-                        </h4>
-                        <span className="text-sm text-ink-300">{formatFolderCount(project.folders.length)}</span>
-                      </div>
-
-                      {project.folders.length ? (
-                            <ul className="grid rounded-[10px] border border-white/8 bg-canvas-950 p-0" role="list">
-                              {sortFolders(project.folders).map((folder) => {
-                            const isEditingFolder = editingFolderIds[folder.id] ?? false;
-                            const folderEditForm = folderEditForms[folder.id] ?? createFolderFormState(folder);
-                            const folderValidation = pathValidation[`folder-${folder.id}`];
-
-                            return (
-                              <li className="grid gap-3" key={folder.id}>
-                                <div className={rowClassName}>
-                                  <div className="min-w-0">
-                                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                      <p className="m-0 min-w-0 text-sm font-medium text-ink-50">{folder.label}</p>
-                                      {folder.isPrimary ? <span className={`${chipClassName} border-white/12 bg-white/[0.04] text-ink-100`}>Primary</span> : null}
-                                      <span className={getFolderStatusClassName(folder.existsOnDisk)}>
-                                        {folder.existsOnDisk ? "On disk" : "Missing"}
-                                      </span>
-                                    </div>
-                                    <p className="m-0 mt-2 break-words font-mono text-[0.84rem] text-ink-200">
-                                      {folder.path}
-                                    </p>
-                                    <p className="m-0 mt-1 text-sm text-ink-300">
-                                      Default branch: {folder.defaultBranch || "Not set"}
-                                    </p>
-                                  </div>
-
-                                  <div className="text-sm text-ink-300 md:text-right">
-                                    <p className="m-0">Updated</p>
-                                    <p className="m-0 mt-1">{formatDateTime(folder.updatedAt)}</p>
-                                  </div>
-
-                                  <div className="flex flex-wrap gap-2 md:justify-end md:self-start">
-                                    <button
-                                      type="button"
-                                      className={secondaryButtonClassName}
-                                      onClick={() =>
-                                        isEditingFolder ? cancelFolderEdit(folder.id) : beginFolderEdit(folder)
-                                      }
-                                    >
-                                      {isEditingFolder ? "Close editor" : "Edit"}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={subtleDangerButtonClassName}
-                                      disabled={deleteFolderMutation.isPending}
-                                      onClick={() => handleDeleteFolder(project.id, folder)}
-                                    >
-                                      Remove
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {isEditingFolder ? (
-                                  <form
-                                    className={insetPanelClassName}
-                                    onSubmit={(event) => void handleUpdateFolder(event, project.id, folder.id)}
-                                  >
-                                    <div className="flex flex-wrap items-end gap-3">
-                                      <label className={`${compactFieldClassName} min-w-[10rem] flex-[1_1_11rem]`}>
-                                        <span className={labelClassName}>Label</span>
-                                        <input
-                                          className={inputClassName}
-                                          name={`folderLabel-${folder.id}`}
-                                          autoComplete="off"
-                                          value={folderEditForm.label}
-                                          onChange={(event) =>
-                                            updateFolderEditForm(folder, { label: event.target.value })
-                                          }
-                                          required
-                                        />
-                                      </label>
-                                      <label className={`${compactFieldClassName} min-w-[16rem] flex-[2_1_22rem]`}>
-                                        <span className={labelClassName}>WSL path</span>
-                                        <input
-                                          className={inputClassName}
-                                          name={`folderPath-${folder.id}`}
-                                          autoComplete="off"
-                                          spellCheck={false}
-                                          value={folderEditForm.path}
-                                          onChange={(event) =>
-                                            updateFolderEditForm(folder, { path: event.target.value })
-                                          }
-                                          required
-                                        />
-                                      </label>
-                                      <label className={`${compactFieldClassName} min-w-[11rem] flex-[1_1_12rem]`}>
-                                        <span className={labelClassName}>Default branch</span>
-                                        <input
-                                          className={inputClassName}
-                                          name={`folderDefaultBranch-${folder.id}`}
-                                          autoComplete="off"
-                                          spellCheck={false}
-                                          value={folderEditForm.defaultBranch}
-                                          onChange={(event) =>
-                                            updateFolderEditForm(folder, { defaultBranch: event.target.value })
-                                          }
-                                          placeholder="main"
-                                        />
-                                      </label>
-                                      <label className={compactCheckboxLabelClassName}>
-                                        <input
-                                          className="h-4 w-4 shrink-0 accent-ink-50"
-                                          type="checkbox"
-                                          checked={folderEditForm.isPrimary}
-                                          onChange={(event) =>
-                                            updateFolderEditForm(folder, {
-                                              isPrimary: event.target.checked
-                                            })
-                                          }
-                                          />
-                                        <span>Primary folder</span>
-                                      </label>
-                                    </div>
-
-                                    <div className="flex flex-wrap items-end gap-2">
-                                      <button
-                                        type="button"
-                                        className={secondaryButtonClassName}
-                                        disabled={validatePathMutation.isPending}
-                                        onClick={() =>
-                                          void handleValidatePath(
-                                            `folder-${folder.id}`,
-                                            folderEditForm.path,
-                                            folder.id
-                                          )
-                                        }
-                                      >
-                                        {validatePathMutation.isPending ? "Checking…" : "Check path"}
-                                      </button>
-                                      <button className={primaryButtonClassName} type="submit" disabled={updateFolderMutation.isPending}>
-                                        {updateFolderMutation.isPending ? "Saving…" : "Save"}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className={secondaryButtonClassName}
-                                        onClick={() => cancelFolderEdit(folder.id)}
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
-
-                                    {folderValidation ? (
-                                      <p className="m-0 text-sm text-ink-300" aria-live="polite">
-                                        {describePathInfo(folderValidation)}
-                                      </p>
-                                    ) : null}
-                                  </form>
-                                ) : null}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      ) : (
-                        <p className="m-0 text-sm text-ink-300">No folders.</p>
-                      )}
-                    </section>
-
-                    <form
-                      className={insetPanelClassName}
-                      onSubmit={(event) => void handleCreateFolder(event, project.id)}
-                      aria-label={`Add folder to ${project.name}`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <h4 className={sectionTitleClassName}>Add folder</h4>
-                      </div>
-
-                      <div className="flex flex-wrap items-end gap-3">
-                        <label className={`${compactFieldClassName} min-w-[10rem] flex-[1_1_11rem]`}>
-                          <span className={labelClassName}>Label</span>
-                          <input
-                            className={inputClassName}
-                            name={`newFolderLabel-${project.id}`}
-                            autoComplete="off"
-                            value={folderCreateForm.label}
-                            onChange={(event) =>
-                              updateFolderCreateForm(project.id, { label: event.target.value })
-                            }
-                            placeholder="terraform"
-                            required
-                          />
-                        </label>
-                        <label className={`${compactFieldClassName} min-w-[16rem] flex-[2_1_22rem]`}>
-                          <span className={labelClassName}>WSL path</span>
-                          <input
-                            className={inputClassName}
-                            name={`newFolderPath-${project.id}`}
-                            autoComplete="off"
-                            spellCheck={false}
-                            value={folderCreateForm.path}
-                            onChange={(event) =>
-                              updateFolderCreateForm(project.id, { path: event.target.value })
-                            }
-                            placeholder="/home/otzhora/projects/payments-terraform"
-                            required
-                          />
-                        </label>
-                        <label className={`${compactFieldClassName} min-w-[11rem] flex-[1_1_12rem]`}>
-                          <span className={labelClassName}>Default branch</span>
-                          <input
-                            className={inputClassName}
-                            name={`newFolderDefaultBranch-${project.id}`}
-                            autoComplete="off"
-                            spellCheck={false}
-                            value={folderCreateForm.defaultBranch}
-                            onChange={(event) =>
-                              updateFolderCreateForm(project.id, { defaultBranch: event.target.value })
-                            }
-                            placeholder="main"
-                          />
-                        </label>
-                        <label className={compactCheckboxLabelClassName}>
-                          <input
-                            className="h-4 w-4 shrink-0 accent-ink-50"
-                            type="checkbox"
-                            checked={folderCreateForm.isPrimary}
-                            onChange={(event) =>
-                              updateFolderCreateForm(project.id, {
-                                isPrimary: event.target.checked
-                              })
-                            }
-                          />
-                          <span>Primary folder</span>
-                        </label>
-                      </div>
-
-                      <div className="flex flex-wrap items-end gap-2">
-                        <button
-                          type="button"
-                          className={secondaryButtonClassName}
-                          disabled={validatePathMutation.isPending}
-                          onClick={() =>
-                            void handleValidatePath(`project-${project.id}`, folderCreateForm.path)
-                          }
-                        >
-                          {validatePathMutation.isPending ? "Checking…" : "Check path"}
-                        </button>
-                        <button className={primaryButtonClassName} type="submit" disabled={createFolderMutation.isPending}>
-                          {createFolderMutation.isPending ? "Adding…" : "Add folder"}
-                        </button>
-                      </div>
-
-                      {projectValidation ? (
-                        <p className="m-0 text-sm text-ink-300" aria-live="polite">
-                          {describePathInfo(projectValidation)}
-                        </p>
-                      ) : null}
-                    </form>
-                  </div>
-                ) : null}
-              </article>
-            );
-          })}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
 
           {folderError || validateError || deleteError ? (

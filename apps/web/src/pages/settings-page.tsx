@@ -1,7 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAppHeader } from "../app/router";
 import {
   useJiraSettingsQuery,
   useUpdateJiraSettingsMutation,
@@ -36,7 +35,6 @@ function createEmptyJiraSettingsFormState(): JiraSettingsFormState {
 }
 
 export function SettingsPage() {
-  const { setActions } = useAppHeader();
   const queryClient = useQueryClient();
   const importInputRef = useRef<HTMLInputElement>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -47,18 +45,8 @@ export function SettingsPage() {
   const updateJiraSettingsMutation = useUpdateJiraSettingsMutation();
 
   useEffect(() => {
-    setActions(
-      <Link to="/jira" className={buttonClassName}>
-        Jira issues
-      </Link>
-    );
-
     document.title = "Settings · Boroda";
-
-    return () => {
-      setActions(null);
-    };
-  }, [setActions]);
+  }, []);
 
   useEffect(() => {
     if (!jiraSettingsQuery.data) {
