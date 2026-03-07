@@ -231,7 +231,7 @@ function getFolderStatusClassName(existsOnDisk: boolean) {
 }
 
 export function ProjectsPage() {
-  const { setActions } = useAppHeader();
+  const { setActions, setRightActions } = useAppHeader();
   const queryClient = useQueryClient();
   const [projectForm, setProjectForm] = useState<ProjectFormState>(createProjectFormState());
   const [slugTouched, setSlugTouched] = useState(false);
@@ -250,7 +250,8 @@ export function ProjectsPage() {
   }, []);
 
   useEffect(() => {
-    setActions(
+    setActions(null);
+    setRightActions(
       <Link to="/settings" className={headerActionButtonClassName}>
         Settings
       </Link>
@@ -258,8 +259,9 @@ export function ProjectsPage() {
 
     return () => {
       setActions(null);
+      setRightActions(null);
     };
-  }, [setActions]);
+  }, [setActions, setRightActions]);
 
   const projectsQuery = useQuery({
     queryKey: PROJECTS_QUERY_KEY,

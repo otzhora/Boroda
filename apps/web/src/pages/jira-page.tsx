@@ -133,7 +133,7 @@ function sortIssues<
 }
 
 export function JiraPage() {
-  const { setActions } = useAppHeader();
+  const { setActions, setRightActions } = useAppHeader();
   const [searchParams, setSearchParams] = useSearchParams();
   const settingsQuery = useJiraSettingsQuery();
   const issuesQuery = useAssignedJiraIssueLinksQuery();
@@ -162,7 +162,8 @@ export function JiraPage() {
   }, []);
 
   useEffect(() => {
-    setActions(
+    setActions(null);
+    setRightActions(
       <Link to="/settings" className={headerActionButtonClassName}>
         Settings
       </Link>
@@ -170,8 +171,9 @@ export function JiraPage() {
 
     return () => {
       setActions(null);
+      setRightActions(null);
     };
-  }, [setActions]);
+  }, [setActions, setRightActions]);
 
   const baseUrl = settingsQuery.data?.baseUrl ? trimTrailingSlash(settingsQuery.data.baseUrl) : "";
   const issueSort = parseIssueSort(searchParams.get("sort"));
