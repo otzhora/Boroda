@@ -128,6 +128,41 @@
 }
 
 @layer utilities {
+  @keyframes open-in-success-flash {
+    0% {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    35% {
+      opacity: 0.68;
+      transform: scale(0.985);
+    }
+
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes open-in-error-nudge {
+    0% {
+      transform: translateX(0);
+    }
+
+    30% {
+      transform: translateX(-3px);
+    }
+
+    65% {
+      transform: translateX(2px);
+    }
+
+    100% {
+      transform: translateX(0);
+    }
+  }
+
   .sr-only {
     position: absolute;
     width: 1px;

@@ -1,8 +1,9 @@
 import * as React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { toTicketForm } from "../../features/tickets/form";
+import { setStoredDefaultOpenInMode } from "../../lib/user-preferences";
 import type { Project, Ticket } from "../../lib/types";
 
 const uploadTicketImageSpy = vi.fn(async () => ({
@@ -83,7 +84,103 @@ const ticket: Ticket = {
   activities: []
 };
 
+function createDeferred() {
+  let resolve!: () => void;
+  let reject!: (reason?: unknown) => void;
+
+  const promise = new Promise<void>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 describe("TicketDrawer", () => {
+  it("uses folder as the default open mode", () => {
+    setStoredDefaultOpenInMode("folder");
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "workspace",
+                    path: "/home/otzhora/projects/payments",
+                    defaultBranch: null,
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ],
+          workspaces: [
+            {
+              id: 91,
+              ticketId: ticket.id,
+              projectFolderId: 42,
+              branchName: "feature/open-flow",
+              baseBranch: null,
+              role: "primary",
+              worktreePath: "/tmp/worktree",
+              createdByBoroda: true,
+              lastOpenedAt: null,
+              createdAt: "2026-02-28T12:00:00.000Z",
+              updatedAt: "2026-02-28T12:00:00.000Z",
+              projectFolder: {
+                id: 42,
+                projectId: project.id,
+                label: "workspace",
+                path: "/home/otzhora/projects/payments",
+                defaultBranch: null,
+                kind: "APP",
+                isPrimary: true,
+                existsOnDisk: true,
+                createdAt: "2026-02-28T12:00:00.000Z",
+                updatedAt: "2026-02-28T12:00:00.000Z",
+                project
+              }
+            }
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInApp={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInApp={vi.fn()}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Folder" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("renders branch and linked Jira issues in read mode", () => {
     render(
       <TicketDrawer
@@ -616,7 +713,240 @@ describe("TicketDrawer", () => {
 
     await user.click(adminOptionButton!);
 
-    expect(handleOpenInApp).toHaveBeenCalledWith("explorer", 77, undefined);
+    expect(handleOpenInApp).toHaveBeenCalledWith("explorer", "folder", 77, undefined);
+  });
+
+  it("animates the open-in button through opening and success before resetting", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const deferred = createDeferred();
+      const handleOpenInApp = vi.fn(() => deferred.promise);
+
+      render(
+        <TicketDrawer
+          ticketId={ticket.id}
+          ticket={{
+            ...ticket,
+            projectLinks: [
+              {
+                id: 1,
+                ticketId: ticket.id,
+                projectId: project.id,
+                relationship: "PRIMARY",
+                createdAt: "2026-02-28T12:00:00.000Z",
+                project: {
+                  ...project,
+                  folders: [
+                    {
+                      id: 42,
+                      projectId: project.id,
+                      label: "workspace",
+                      path: "/home/otzhora/projects/payments",
+                      defaultBranch: null,
+                      kind: "APP",
+                      isPrimary: true,
+                      existsOnDisk: true,
+                      createdAt: "2026-02-28T12:00:00.000Z",
+                      updatedAt: "2026-02-28T12:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            ]
+          }}
+          isLoading={false}
+          isError={false}
+          form={toTicketForm(ticket)}
+          projects={[project]}
+          isSaving={false}
+          saveSuccessCount={0}
+          isDeleting={false}
+          isOpeningInApp={false}
+          isRefreshingJira={false}
+          onChange={vi.fn()}
+          onSave={vi.fn()}
+          onDelete={vi.fn()}
+          onOpenInApp={handleOpenInApp}
+          onRefreshJira={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Open in VS Code" }));
+
+      expect(handleOpenInApp).toHaveBeenCalledWith("vscode", "folder", 42, undefined);
+      expect(screen.getByRole("button", { name: "Opening" })).toBeDisabled();
+      expect(screen.getByText("Opening folder in VS Code…")).toBeInTheDocument();
+
+      await act(async () => {
+        deferred.resolve();
+        await deferred.promise;
+      });
+
+      expect(screen.getByRole("button", { name: "Opened" })).toBeInTheDocument();
+      expect(screen.getByText("Opened folder in VS Code.")).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1600);
+      });
+
+      expect(screen.getByRole("button", { name: "Open in VS Code" })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows open-in errors inline on the ticket action", async () => {
+    const user = userEvent.setup();
+    const handleOpenInApp = vi.fn(async () => {
+      throw new Error("VS Code CLI is not available.");
+    });
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "workspace",
+                    path: "/home/otzhora/projects/payments",
+                    defaultBranch: null,
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInApp={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInApp={handleOpenInApp}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open in VS Code" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Open failed" })).toBeInTheDocument();
+    });
+    expect(screen.getByText("VS Code CLI is not available.")).toBeInTheDocument();
+  });
+
+  it("lets the user switch to worktree mode before opening", async () => {
+    const user = userEvent.setup();
+    const handleOpenInApp = vi.fn();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "workspace",
+                    path: "/home/otzhora/projects/payments",
+                    defaultBranch: null,
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ],
+          workspaces: [
+            {
+              id: 91,
+              ticketId: ticket.id,
+              projectFolderId: 42,
+              branchName: "feature/open-flow",
+              baseBranch: null,
+              role: "primary",
+              worktreePath: "/tmp/worktree",
+              createdByBoroda: true,
+              lastOpenedAt: null,
+              createdAt: "2026-02-28T12:00:00.000Z",
+              updatedAt: "2026-02-28T12:00:00.000Z",
+              projectFolder: {
+                id: 42,
+                projectId: project.id,
+                label: "workspace",
+                path: "/home/otzhora/projects/payments",
+                defaultBranch: null,
+                kind: "APP",
+                isPrimary: true,
+                existsOnDisk: true,
+                createdAt: "2026-02-28T12:00:00.000Z",
+                updatedAt: "2026-02-28T12:00:00.000Z",
+                project
+              }
+            }
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInApp={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInApp={handleOpenInApp}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Worktree" }));
+    await user.click(screen.getByRole("button", { name: "Open in VS Code" }));
+
+    expect(handleOpenInApp).toHaveBeenCalledWith("vscode", "worktree", 42, 91);
   });
 
   it("opens the app picker upward when the trigger is near the viewport bottom", async () => {

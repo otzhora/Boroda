@@ -16,6 +16,7 @@ import {
 } from "./git-workspaces";
 
 export type OpenInTarget = "explorer" | "vscode" | "cursor" | "terminal";
+export type OpenInMode = "folder" | "worktree";
 
 interface OpenInAppInput {
   directory: string;
@@ -31,6 +32,7 @@ interface LauncherSpec {
 
 interface OpenTicketInAppInput {
   target: OpenInTarget;
+  mode: OpenInMode;
   folderId?: number;
   workspaceId?: number;
 }
@@ -448,35 +450,43 @@ export async function openTicketInApp(app: FastifyInstance, ticketId: number, in
     );
   }
 
-  const matchingWorkspaces = findWorkspacesForFolder(ticket.workspaces ?? [], selectedFolder.id);
-  let selectedWorkspace: TicketWorkspaceCandidate | null = null;
+  let directory = selectedFolder.path;
 
-  if (input.workspaceId !== undefined) {
-    selectedWorkspace = matchingWorkspaces.find((workspace) => workspace.id === input.workspaceId) ?? null;
+  if (input.mode === "worktree") {
+    const matchingWorkspaces = findWorkspacesForFolder(ticket.workspaces ?? [], selectedFolder.id);
+    let selectedWorkspace: TicketWorkspaceCandidate | null = null;
+
+    if (input.workspaceId !== undefined) {
+      selectedWorkspace = matchingWorkspaces.find((workspace) => workspace.id === input.workspaceId) ?? null;
+
+      if (!selectedWorkspace) {
+        throw new AppError(409, "TICKET_WORKSPACE_NOT_AVAILABLE", "The selected workspace is not available for this folder", {
+          folderId: selectedFolder.id,
+          workspaceId: input.workspaceId
+        });
+      }
+    } else if (matchingWorkspaces.length > 1) {
+      throw new AppError(409, "TICKET_WORKSPACE_SELECTION_REQUIRED", "Choose which ticket workspace to open for this folder", {
+        folderId: selectedFolder.id,
+        workspaces: matchingWorkspaces.map((workspace) => ({
+          id: workspace.id,
+          branchName: workspace.branchName,
+          role: workspace.role,
+          projectFolderId: workspace.projectFolderId
+        }))
+      });
+    } else {
+      selectedWorkspace = matchingWorkspaces[0] ?? null;
+    }
 
     if (!selectedWorkspace) {
-      throw new AppError(409, "TICKET_WORKSPACE_NOT_AVAILABLE", "The selected workspace is not available for this folder", {
-        folderId: selectedFolder.id,
-        workspaceId: input.workspaceId
+      throw new AppError(409, "TICKET_WORKSPACE_NOT_AVAILABLE", "No ticket worktree is available for this folder", {
+        folderId: selectedFolder.id
       });
     }
-  } else if (matchingWorkspaces.length > 1) {
-    throw new AppError(409, "TICKET_WORKSPACE_SELECTION_REQUIRED", "Choose which ticket workspace to open for this folder", {
-      folderId: selectedFolder.id,
-      workspaces: matchingWorkspaces.map((workspace) => ({
-        id: workspace.id,
-        branchName: workspace.branchName,
-        role: workspace.role,
-        projectFolderId: workspace.projectFolderId
-      }))
-    });
-  } else {
-    selectedWorkspace = matchingWorkspaces[0] ?? null;
-  }
 
-  const directory = selectedWorkspace
-    ? await resolveWorkspaceDirectory(app, ticket, selectedFolder.id, selectedWorkspace)
-    : selectedFolder.path;
+    directory = await resolveWorkspaceDirectory(app, ticket, selectedFolder.id, selectedWorkspace);
+  }
 
   return openInApp({
     directory,

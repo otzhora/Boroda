@@ -10,9 +10,10 @@ import {
   type ReactNode
 } from "react";
 import { BOARD_STATUS_ORDER, statusLabelMap, TICKET_PRIORITIES } from "../../lib/constants";
-import type { OpenInTarget, Project, Ticket } from "../../lib/types";
+import type { OpenInMode, OpenInTarget, Project, Ticket } from "../../lib/types";
 import type { TicketFormState } from "../../features/tickets/form";
 import { useJiraSettingsQuery } from "../../features/jira/queries";
+import { getStoredDefaultOpenInMode } from "../../lib/user-preferences";
 import { ModalDialog } from "../ui/modal-dialog";
 import {
   TicketDescriptionField,
@@ -41,7 +42,7 @@ interface TicketDrawerProps {
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
   onSave: () => void;
   onDelete: () => void;
-  onOpenInApp: (target: OpenInTarget, folderId?: number, workspaceId?: number) => void;
+  onOpenInApp: (target: OpenInTarget, mode: OpenInMode, folderId?: number, workspaceId?: number) => void | Promise<void>;
   onRefreshJira: () => void;
   onClose: () => void;
 }
@@ -66,6 +67,12 @@ type EditableSectionId =
   | "priority"
   | "dueAt"
   | "projectLinks";
+
+type OpenInFeedbackState =
+  | { phase: "idle" }
+  | { phase: "opening"; appLabel: string; modeLabel: string }
+  | { phase: "success"; appLabel: string; modeLabel: string }
+  | { phase: "error"; appLabel: string; modeLabel: string; message: string };
 
 const editableReadRegionClassName =
   "grid min-w-0 gap-3 rounded-xl border border-transparent p-2.5 transition-colors hover:border-white/10 hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
@@ -109,6 +116,18 @@ function getClosestScrollContainer(element: HTMLElement | null) {
   }
 
   return null;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return "Could not open the selected app.";
+}
+
+function getOpenInModeLabel(mode: OpenInMode) {
+  return mode === "folder" ? "folder" : "worktree";
 }
 
 function MetaRow(props: { label: string; value: string }) {
@@ -226,6 +245,24 @@ function ChevronIcon(props: { className?: string }) {
       aria-hidden="true"
     >
       <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function CheckIcon(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={props.className} aria-hidden="true">
+      <path d="M5 13.2 9.2 17 19 7.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AlertIcon(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={props.className} aria-hidden="true">
+      <path d="M12 7.5v5.5" strokeLinecap="round" />
+      <circle cx="12" cy="16.5" r="1" fill="currentColor" stroke="none" />
+      <path d="M12 3.75 21 19.25H3L12 3.75Z" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -432,6 +469,8 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const [openInMenuSide, setOpenInMenuSide] = useState<"top" | "bottom">("bottom");
   const [openInMenuMaxHeight, setOpenInMenuMaxHeight] = useState<number>(320);
   const [selectedOpenTarget, setSelectedOpenTarget] = useState<OpenInTarget>("vscode");
+  const [selectedOpenMode, setSelectedOpenMode] = useState<OpenInMode>(() => getStoredDefaultOpenInMode());
+  const [openInFeedback, setOpenInFeedback] = useState<OpenInFeedbackState>({ phase: "idle" });
   const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
   const [workspacePickerFolderId, setWorkspacePickerFolderId] = useState<number | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -441,6 +480,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const openInMenuRef = useRef<HTMLDivElement>(null);
   const openInActionButtonRef = useRef<HTMLButtonElement>(null);
   const openInToggleButtonRef = useRef<HTMLButtonElement>(null);
+  const openInResetTimeoutRef = useRef<number | null>(null);
   const openInAppButtonRefs = useRef<Record<OpenInTarget, HTMLButtonElement | null>>({
     vscode: null,
     cursor: null,
@@ -469,6 +509,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
     setIsLinkedProjectsSectionExpanded(false);
     setIsOpenInMenuOpen(false);
     setSelectedOpenTarget("vscode");
+    setSelectedOpenMode(getStoredDefaultOpenInMode());
     setIsFolderPickerOpen(false);
     setWorkspacePickerFolderId(null);
   }, [ticketId]);
@@ -568,6 +609,33 @@ export function TicketDrawer(props: TicketDrawerProps) {
     openInTargets.find((target) => target.id === selectedOpenTarget)?.label ?? "selected app";
   const openInButtonLabel = `Open in ${selectedOpenTargetLabel}`;
   const hasMultipleOpenFolders = availableTerminalFolders.length > 1;
+  const hasAnyWorktree = (ticket?.workspaces.length ?? 0) > 0;
+  const isOpenInPending = isOpeningInApp || openInFeedback.phase === "opening";
+  const openInStatusMessage =
+    openInFeedback.phase === "opening"
+      ? `Opening ${openInFeedback.modeLabel} in ${openInFeedback.appLabel}…`
+      : openInFeedback.phase === "success"
+        ? `Opened ${openInFeedback.modeLabel} in ${openInFeedback.appLabel}.`
+        : openInFeedback.phase === "error"
+          ? openInFeedback.message
+          : null;
+  const openInStatusTone =
+    openInFeedback.phase === "success" ? "success" : openInFeedback.phase === "error" ? "error" : "neutral";
+
+  const clearOpenInResetTimeout = () => {
+    if (openInResetTimeoutRef.current !== null) {
+      window.clearTimeout(openInResetTimeoutRef.current);
+      openInResetTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleOpenInReset = () => {
+    clearOpenInResetTimeout();
+    openInResetTimeoutRef.current = window.setTimeout(() => {
+      setOpenInFeedback((current) => (current.phase === "success" ? { phase: "idle" } : current));
+      openInResetTimeoutRef.current = null;
+    }, 1600);
+  };
 
   const handleOpenInTarget = (target: OpenInTarget) => {
     setSelectedOpenTarget(target);
@@ -586,8 +654,44 @@ export function TicketDrawer(props: TicketDrawerProps) {
     }, 0);
   };
 
+  const runOpenInAction = async (folderId?: number, workspaceId?: number) => {
+    if (isOpenInPending) {
+      return;
+    }
+
+    clearOpenInResetTimeout();
+    setOpenInFeedback({
+      phase: "opening",
+      appLabel: selectedOpenTargetLabel,
+      modeLabel: getOpenInModeLabel(selectedOpenMode)
+    });
+
+    try {
+      await Promise.resolve(onOpenInApp(selectedOpenTarget, selectedOpenMode, folderId, workspaceId));
+      setOpenInFeedback({
+        phase: "success",
+        appLabel: selectedOpenTargetLabel,
+        modeLabel: getOpenInModeLabel(selectedOpenMode)
+      });
+      scheduleOpenInReset();
+    } catch (error) {
+      setOpenInFeedback({
+        phase: "error",
+        appLabel: selectedOpenTargetLabel,
+        modeLabel: getOpenInModeLabel(selectedOpenMode),
+        message: getErrorMessage(error)
+      });
+    }
+  };
+
   const handleOpenInSelection = (folderId?: number) => {
     const targetFolderId = folderId ?? preferredProjectFolder?.id;
+
+    if (selectedOpenMode === "folder") {
+      void runOpenInAction(targetFolderId);
+      return;
+    }
+
     const matchingWorkspaces = getWorkspaceOptions(ticket, targetFolderId ?? null);
 
     if (targetFolderId && matchingWorkspaces.length > 1) {
@@ -596,8 +700,19 @@ export function TicketDrawer(props: TicketDrawerProps) {
       return;
     }
 
-    onOpenInApp(selectedOpenTarget, targetFolderId, matchingWorkspaces[0]?.id);
+    void runOpenInAction(targetFolderId, matchingWorkspaces[0]?.id);
   };
+
+  useEffect(() => {
+    clearOpenInResetTimeout();
+    setOpenInFeedback({ phase: "idle" });
+  }, [ticketId]);
+
+  useEffect(() => {
+    return () => {
+      clearOpenInResetTimeout();
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeEditor) {
@@ -983,6 +1098,171 @@ export function TicketDrawer(props: TicketDrawerProps) {
 
           <aside className="grid min-w-0 content-start xl:border-l xl:border-white/8 xl:pl-6">
             <div className="grid min-w-0 gap-4">
+              {availableTerminalFolders.length ? (
+                <section className={railSectionClassName}>
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="m-0 text-base font-semibold text-ink-50">Open</h4>
+                    <div className="inline-flex min-h-9 flex-wrap rounded-[8px] border border-white/8 bg-black/20 p-0.5">
+                      {(["folder", "worktree"] as const).map((mode) => {
+                        const isSelected = selectedOpenMode === mode;
+                        const isDisabled = mode === "worktree" && !hasAnyWorktree;
+
+                        return (
+                          <button
+                            key={mode}
+                            type="button"
+                            className={`inline-flex min-h-8 min-w-20 items-center justify-center rounded-[6px] px-2.5 py-1.5 text-sm transition-colors ${
+                              isSelected ? "bg-white text-canvas-975" : "text-ink-200 hover:bg-white/[0.05] hover:text-ink-50"
+                            } disabled:cursor-not-allowed disabled:opacity-45`}
+                            aria-pressed={isSelected}
+                            onClick={() => {
+                              setSelectedOpenMode(mode);
+                              setOpenInFeedback({ phase: "idle" });
+                            }}
+                            disabled={isDisabled || isOpenInPending}
+                          >
+                            {mode === "folder" ? "Folder" : "Worktree"}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="relative min-w-0">
+                    <div className="flex min-w-0">
+                      <button
+                        ref={openInActionButtonRef}
+                        type="button"
+                        className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-l-lg border px-3 py-2 text-sm font-medium transition-[background-color,border-color,color,transform,opacity] duration-200 ease-out motion-reduce:transition-none disabled:cursor-progress ${
+                          openInFeedback.phase === "success"
+                            ? "border-accent-500/50 bg-accent-500/18 text-accent-700 motion-safe:animate-[open-in-success-flash_720ms_ease-out]"
+                            : openInFeedback.phase === "error"
+                              ? "border-danger-400/45 bg-danger-700/30 text-danger-400 motion-safe:animate-[open-in-error-nudge_360ms_ease-out]"
+                              : "border-white/10 bg-white/[0.10] text-ink-50 hover:bg-white/[0.14]"
+                        } ${isOpenInPending ? "opacity-90" : ""}`}
+                        onClick={() => {
+                          if (hasMultipleOpenFolders) {
+                            setIsFolderPickerOpen(true);
+                            return;
+                          }
+
+                          handleOpenInSelection(preferredProjectFolder?.id);
+                        }}
+                        disabled={isOpenInPending}
+                        aria-label={
+                          openInFeedback.phase === "opening"
+                            ? "Opening"
+                            : openInFeedback.phase === "success"
+                              ? "Opened"
+                              : openInFeedback.phase === "error"
+                                ? "Open failed"
+                                : openInButtonLabel
+                        }
+                      >
+                        {openInFeedback.phase === "opening" ? (
+                          <span
+                            className="inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+                            aria-hidden="true"
+                          />
+                        ) : openInFeedback.phase === "success" ? (
+                          <CheckIcon className="h-4 w-4" />
+                        ) : openInFeedback.phase === "error" ? (
+                          <AlertIcon className="h-4 w-4" />
+                        ) : (
+                          getOpenInTargetIcon(selectedOpenTarget)
+                        )}
+                        <span className="truncate">
+                          {openInFeedback.phase === "opening"
+                            ? "Opening…"
+                            : openInFeedback.phase === "success"
+                              ? "Opened"
+                              : openInFeedback.phase === "error"
+                                ? "Open failed"
+                                : openInButtonLabel}
+                        </span>
+                      </button>
+                      <button
+                        ref={openInToggleButtonRef}
+                        type="button"
+                        className="inline-flex min-h-10 min-w-11 items-center justify-center rounded-r-lg border border-l-0 border-white/10 bg-white/[0.10] px-3 py-2 text-ink-100 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
+                        aria-label="Choose open-in app"
+                        aria-haspopup="dialog"
+                        aria-expanded={isOpenInMenuOpen}
+                        aria-controls={isOpenInMenuOpen ? openInMenuId : undefined}
+                        onClick={() => {
+                          setIsOpenInMenuOpen((current) => {
+                            return !current;
+                          });
+                        }}
+                        disabled={isOpenInPending}
+                      >
+                        <ChevronIcon className={`h-4 w-4 transition-transform ${isOpenInMenuOpen ? "rotate-180" : ""}`} />
+                      </button>
+                    </div>
+                    {openInStatusMessage ? (
+                      <p
+                        className={`m-0 mt-2 min-h-5 text-sm ${
+                          openInStatusTone === "success"
+                            ? "text-accent-700"
+                            : openInStatusTone === "error"
+                              ? "text-danger-400"
+                              : "text-ink-300"
+                        }`}
+                        aria-live="polite"
+                        role={openInStatusTone === "error" ? "alert" : "status"}
+                      >
+                        {openInStatusMessage}
+                      </p>
+                    ) : null}
+
+                    {isOpenInMenuOpen ? (
+                      <div
+                        id={openInMenuId}
+                        ref={openInMenuRef}
+                        data-side={openInMenuSide}
+                        className={`absolute right-0 z-20 grid w-[min(23rem,calc(100vw-4rem))] gap-1 overflow-y-auto rounded-[18px] border border-white/10 bg-canvas-900 p-2 shadow-[0_24px_72px_rgba(0,0,0,0.42)] ${
+                          openInMenuSide === "top" ? "bottom-[calc(100%+0.45rem)]" : "top-[calc(100%+0.45rem)]"
+                        }`}
+                        role="dialog"
+                        aria-label="Open in"
+                        style={{ maxHeight: `${openInMenuMaxHeight}px` }}
+                        onBlur={handleOpenInMenuBlur}
+                        onKeyDown={handleOpenInMenuKeyDown}
+                      >
+                        <div className="px-2 pb-1 pt-1">
+                          <p className="m-0 text-[0.78rem] font-semibold uppercase tracking-[0.12em] text-ink-300">Choose app</p>
+                        </div>
+                        {openInTargets.map((target) => {
+                          return (
+                            <div key={target.id} className="grid gap-1 rounded-[14px] border border-transparent bg-white/[0.02] p-1">
+                              <button
+                                ref={(element) => {
+                                  openInAppButtonRefs.current[target.id] = element;
+                                }}
+                                type="button"
+                                className="grid min-h-11 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-3 py-2 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+                                aria-pressed={selectedOpenTarget === target.id}
+                                onClick={() => {
+                                  handleOpenInTarget(target.id);
+                                }}
+                              >
+                                {getOpenInTargetIcon(target.id)}
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-semibold text-ink-50">{target.label}</span>
+                                  <span className="block truncate text-[0.82rem] text-ink-300">{target.description}</span>
+                                </span>
+                                <span className="text-[0.76rem] font-medium uppercase tracking-[0.1em] text-ink-400">
+                                  {selectedOpenTarget === target.id ? "Selected" : "Use"}
+                                </span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
+
               <section className={railSectionClassName}>
                 <div className="flex min-w-0 items-center justify-between gap-4">
                   <h4 className="m-0 text-base font-semibold text-ink-50">Details</h4>
@@ -1288,118 +1568,21 @@ export function TicketDrawer(props: TicketDrawerProps) {
               </section>
 
               <section className={railSectionClassName}>
-                <h4 className="m-0 text-base font-semibold text-ink-50">Actions</h4>
-                <div className="grid min-w-0 gap-2.5">
-                  {availableTerminalFolders.length ? (
-                    <div className="relative min-w-0">
-                      <div className="flex min-w-0">
-                        <button
-                          ref={openInActionButtonRef}
-                          type="button"
-                          className="inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-l-lg border border-white/10 bg-white/[0.10] px-3 py-2 text-sm font-medium text-ink-50 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
-                          onClick={() => {
-                            if (hasMultipleOpenFolders) {
-                              setIsFolderPickerOpen(true);
-                              return;
-                            }
-
-                            handleOpenInSelection(preferredProjectFolder?.id);
-                          }}
-                          disabled={isOpeningInApp}
-                          aria-label={isOpeningInApp ? "Opening" : openInButtonLabel}
-                        >
-                          {isOpeningInApp ? (
-                            <span
-                              className="inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            getOpenInTargetIcon(selectedOpenTarget)
-                          )}
-                          <span className="truncate">{isOpeningInApp ? "Opening…" : openInButtonLabel}</span>
-                        </button>
-                        <button
-                          ref={openInToggleButtonRef}
-                          type="button"
-                          className="inline-flex min-h-10 min-w-11 items-center justify-center rounded-r-lg border border-l-0 border-white/10 bg-white/[0.10] px-3 py-2 text-ink-100 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
-                          aria-label="Choose open-in app"
-                          aria-haspopup="dialog"
-                          aria-expanded={isOpenInMenuOpen}
-                          aria-controls={isOpenInMenuOpen ? openInMenuId : undefined}
-                          onClick={() => {
-                            setIsOpenInMenuOpen((current) => {
-                              return !current;
-                            });
-                          }}
-                          disabled={isOpeningInApp}
-                        >
-                          <ChevronIcon className={`h-4 w-4 transition-transform ${isOpenInMenuOpen ? "rotate-180" : ""}`} />
-                        </button>
-                      </div>
-
-                      {isOpenInMenuOpen ? (
-                        <div
-                          id={openInMenuId}
-                          ref={openInMenuRef}
-                          data-side={openInMenuSide}
-                          className={`absolute right-0 z-20 grid w-[min(23rem,calc(100vw-4rem))] gap-1 overflow-y-auto rounded-[18px] border border-white/10 bg-canvas-900 p-2 shadow-[0_24px_72px_rgba(0,0,0,0.42)] ${
-                            openInMenuSide === "top" ? "bottom-[calc(100%+0.45rem)]" : "top-[calc(100%+0.45rem)]"
-                          }`}
-                          role="dialog"
-                          aria-label="Open in"
-                          style={{ maxHeight: `${openInMenuMaxHeight}px` }}
-                          onBlur={handleOpenInMenuBlur}
-                          onKeyDown={handleOpenInMenuKeyDown}
-                        >
-                          <div className="px-2 pb-1 pt-1">
-                            <p className="m-0 text-[0.78rem] font-semibold uppercase tracking-[0.12em] text-ink-300">Choose app</p>
-                          </div>
-                          {openInTargets.map((target) => {
-                            return (
-                              <div key={target.id} className="grid gap-1 rounded-[14px] border border-transparent bg-white/[0.02] p-1">
-                                <button
-                                  ref={(element) => {
-                                    openInAppButtonRefs.current[target.id] = element;
-                                  }}
-                                  type="button"
-                                  className="grid min-h-11 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-3 py-2 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
-                                  aria-pressed={selectedOpenTarget === target.id}
-                                  onClick={() => {
-                                    handleOpenInTarget(target.id);
-                                  }}
-                                >
-                                  {getOpenInTargetIcon(target.id)}
-                                  <span className="min-w-0">
-                                    <span className="block truncate text-sm font-semibold text-ink-50">{target.label}</span>
-                                    <span className="block truncate text-[0.82rem] text-ink-300">{target.description}</span>
-                                  </span>
-                                  <span className="text-[0.76rem] font-medium uppercase tracking-[0.1em] text-ink-400">
-                                    {selectedOpenTarget === target.id ? "Selected" : "Use"}
-                                  </span>
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
+                <button
+                  type="button"
+                  className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-red-400/20 bg-red-950/28 px-3 py-1.5 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/40 disabled:cursor-progress disabled:opacity-70"
+                  onClick={onDelete}
+                  disabled={isDeleting}
+                  aria-label={isDeleting ? "Deleting ticket" : "Delete ticket"}
+                >
+                  {isDeleting ? (
+                    <span
+                      className="mr-2 inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
                   ) : null}
-                  <button
-                    type="button"
-                    className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-red-400/20 bg-red-950/28 px-3 py-1.5 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/40 disabled:cursor-progress disabled:opacity-70"
-                    onClick={onDelete}
-                    disabled={isDeleting}
-                    aria-label={isDeleting ? "Deleting ticket" : "Delete ticket"}
-                  >
-                    {isDeleting ? (
-                      <span
-                        className="mr-2 inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                    Delete ticket
-                  </button>
-                </div>
+                  Delete ticket
+                </button>
               </section>
             </div>
           </aside>
@@ -1459,7 +1642,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
               className="grid min-w-0 gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3 text-left transition-colors hover:border-white/16 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
               onClick={() => {
                 setWorkspacePickerFolderId(null);
-                onOpenInApp(selectedOpenTarget, workspace.folderId, workspace.id);
+                void runOpenInAction(workspace.folderId, workspace.id);
               }}
             >
               <span className="min-w-0 text-sm font-semibold text-ink-50">

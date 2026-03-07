@@ -7,6 +7,8 @@ import {
   type UpdateJiraSettingsPayload
 } from "../features/jira/queries";
 import { apiClient, apiClientBlob } from "../lib/api-client";
+import { getStoredDefaultOpenInMode, setStoredDefaultOpenInMode } from "../lib/user-preferences";
+import type { OpenInMode } from "../lib/types";
 
 const railClassName = "lg:sticky lg:top-20 lg:self-start";
 const navLinkClassName =
@@ -26,6 +28,10 @@ interface JiraSettingsFormState {
   apiToken: string;
 }
 
+interface GeneralSettingsFormState {
+  defaultOpenInMode: OpenInMode;
+}
+
 function createEmptyJiraSettingsFormState(): JiraSettingsFormState {
   return {
     baseUrl: "",
@@ -39,7 +45,12 @@ export function SettingsPage() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isSavingGeneralSettings, setIsSavingGeneralSettings] = useState(false);
   const [jiraForm, setJiraForm] = useState<JiraSettingsFormState>(createEmptyJiraSettingsFormState());
+  const [generalForm, setGeneralForm] = useState<GeneralSettingsFormState>(() => ({
+    defaultOpenInMode: getStoredDefaultOpenInMode()
+  }));
+  const [generalSettingsStatus, setGeneralSettingsStatus] = useState<string | null>(null);
 
   const jiraSettingsQuery = useJiraSettingsQuery();
   const updateJiraSettingsMutation = useUpdateJiraSettingsMutation();
@@ -134,6 +145,21 @@ export function SettingsPage() {
     ? "API token saved"
     : "No API token saved";
 
+  const saveGeneralSettings = useEffectEvent(async () => {
+    setIsSavingGeneralSettings(true);
+
+    try {
+      setStoredDefaultOpenInMode(generalForm.defaultOpenInMode);
+      setGeneralSettingsStatus(
+        generalForm.defaultOpenInMode === "folder"
+          ? "Folder is now the default open mode."
+          : "Worktree is now the default open mode."
+      );
+    } finally {
+      setIsSavingGeneralSettings(false);
+    }
+  });
+
   return (
     <section className="mx-auto grid w-full min-w-0 max-w-5xl gap-4 lg:grid-cols-[12rem_minmax(0,42rem)] lg:gap-6">
       <input
@@ -153,6 +179,9 @@ export function SettingsPage() {
           Settings
         </h1>
         <nav aria-label="Settings sections" className="grid border-t border-white/8 pt-1">
+          <a href="#settings-general" className={navLinkClassName}>
+            General
+          </a>
           <a href="#settings-jira" className={navLinkClassName}>
             Jira
           </a>
@@ -163,6 +192,61 @@ export function SettingsPage() {
       </aside>
 
       <div className="min-w-0 border-t border-white/8">
+        <section id="settings-general" aria-labelledby="settings-general-heading" className="scroll-mt-20 border-b border-white/8">
+          <form
+            className="grid gap-3 px-1 py-4 sm:px-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveGeneralSettings();
+            }}
+          >
+            <h2 id="settings-general-heading" className={sectionHeaderClassName}>
+              General
+            </h2>
+
+            <div className="grid gap-3 border border-white/8 bg-white/[0.02] px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div className="min-w-0">
+                <label className="block text-sm text-ink-100" htmlFor="default-open-mode">
+                  Default Open In mode
+                </label>
+                <p className="m-0 mt-1 text-xs text-ink-300">Folder opens the repo directly. Worktree opens the ticket workspace.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div id="default-open-mode" className="inline-flex min-h-9 flex-wrap rounded-[8px] border border-white/8 bg-black/20 p-0.5">
+                  {(["folder", "worktree"] as const).map((mode) => {
+                    const isSelected = generalForm.defaultOpenInMode === mode;
+
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`inline-flex min-h-8 min-w-20 items-center justify-center rounded-[6px] px-2.5 py-1.5 text-sm transition-colors ${
+                          isSelected ? "bg-white text-canvas-975" : "text-ink-200 hover:bg-white/[0.05] hover:text-ink-50"
+                        }`}
+                        aria-pressed={isSelected}
+                        onClick={() => {
+                          setGeneralForm({ defaultOpenInMode: mode });
+                          setGeneralSettingsStatus(null);
+                        }}
+                      >
+                        {mode === "folder" ? "Folder" : "Worktree"}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button type="submit" className={buttonClassName} disabled={isSavingGeneralSettings}>
+                  {isSavingGeneralSettings ? <span className={spinnerClassName} aria-hidden="true" /> : null}
+                  <span>{isSavingGeneralSettings ? "Saving…" : "Save"}</span>
+                </button>
+              </div>
+            </div>
+
+            <p className={helperTextClassName} aria-live="polite">
+              {generalSettingsStatus ?? "Choose how Open In should default across tickets."}
+            </p>
+          </form>
+        </section>
+
         <section id="settings-jira" aria-labelledby="settings-jira-heading" className="scroll-mt-20 border-b border-white/8">
           <form
             className="grid gap-4 px-1 py-4 sm:px-2"

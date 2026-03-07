@@ -191,7 +191,6 @@ export function BoardPage() {
     createTicketMutation.error?.message ??
     updateTicketMutation.error?.message ??
     deleteTicketMutation.error?.message ??
-    openTicketInAppMutation.error?.message ??
     refreshTicketJiraLinksMutation.error?.message ??
     moveTicketStatusMutation.error?.message;
 
@@ -571,8 +570,14 @@ export function BoardPage() {
         onDelete={() => {
           deleteTicketMutation.mutate();
         }}
-        onOpenInApp={(target, folderId) => {
-          openTicketInAppMutation.mutate(folderId === undefined ? { target } : { target, folderId });
+        onOpenInApp={async (target, mode, folderId, workspaceId) => {
+          await openTicketInAppMutation.mutateAsync(
+            folderId === undefined
+              ? { target, mode }
+              : workspaceId === undefined
+                ? { target, mode, folderId }
+                : { target, mode, folderId, workspaceId }
+          );
         }}
         onRefreshJira={() => {
           refreshTicketJiraLinksMutation.mutate();

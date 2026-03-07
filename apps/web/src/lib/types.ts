@@ -12,6 +12,7 @@ export type TicketProjectRelationship = (typeof TICKET_PROJECT_RELATIONSHIPS)[nu
 export type ProjectFolderKind = (typeof PROJECT_FOLDER_KINDS)[number];
 export type WorkContextType = (typeof WORK_CONTEXT_TYPES)[number];
 export type OpenInTarget = "explorer" | "vscode" | "cursor" | "terminal";
+export type OpenInMode = "folder" | "worktree";
 
 export interface PathInfo {
   path: string;

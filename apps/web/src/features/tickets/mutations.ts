@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { BoardResponse, OpenInTarget, Ticket, TicketJiraIssueLink, TicketStatus } from "../../lib/types";
+import type { BoardResponse, OpenInMode, OpenInTarget, Ticket, TicketJiraIssueLink, TicketStatus } from "../../lib/types";
 import { boardQueryKey, type BoardFilters } from "../board/queries";
 import { assignedJiraIssueLinksQueryKey, assignedJiraIssuesQueryKey } from "../jira/queries";
 import { ticketQueryKey, ticketsQueryKey } from "./queries";
@@ -204,7 +204,7 @@ export function useMoveTicketStatusMutation(options: {
 
 export function useOpenTicketInAppMutation(ticketId: number | null) {
   return useMutation({
-    mutationFn: (input: { target: OpenInTarget; folderId?: number; workspaceId?: number }) => {
+    mutationFn: (input: { target: OpenInTarget; mode: OpenInMode; folderId?: number; workspaceId?: number }) => {
       if (ticketId === null) {
         throw new Error("No ticket selected");
       }
