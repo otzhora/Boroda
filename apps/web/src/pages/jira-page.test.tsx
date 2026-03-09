@@ -182,6 +182,44 @@ describe("JiraPage", () => {
     expect(jiraLinks[0]).toHaveAccessibleName("Open Jira issue PAY-128");
   });
 
+  it("filters Jira issues from the search field", async () => {
+    const user = userEvent.setup();
+
+    renderJiraPage();
+    await user.type(screen.getByLabelText("Search"), "ops");
+
+    expect(screen.getByText("1 of 2 issues")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Jira issue OPS-42" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Jira issue PAY-128" })).not.toBeInTheDocument();
+  });
+
+  it("shows a filtered empty state when search has no matches", async () => {
+    const user = userEvent.setup();
+
+    renderJiraPage();
+    await user.type(screen.getByLabelText("Search"), "missing");
+
+    expect(screen.getByText("No Jira issues match this search.")).toBeInTheDocument();
+  });
+
+  it("focuses the search field from the board-style hotkeys", async () => {
+    const user = userEvent.setup();
+
+    renderJiraPage();
+    const searchInput = screen.getByLabelText("Search");
+
+    expect(searchInput).not.toHaveFocus();
+
+    await user.keyboard("/");
+    expect(searchInput).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(searchInput).not.toHaveFocus();
+
+    await user.keyboard("{Control>}k{/Control}");
+    expect(searchInput).toHaveFocus();
+  });
+
   it("shows Boroda links when a Jira issue is expanded", async () => {
     const user = userEvent.setup();
 

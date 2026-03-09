@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAppHeader } from "../app/router";
 import { useAssignedJiraIssueLinksQuery, useJiraSettingsQuery } from "../features/jira/queries";
@@ -19,6 +19,8 @@ const topBarButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900 disabled:cursor-progress disabled:opacity-70";
 const createButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-accent-500/40 bg-accent-500 px-3 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-accent-300 disabled:cursor-progress disabled:opacity-70";
+const inputClassName =
+  "min-h-10 rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300";
 const issueListClassName =
   "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[10px] border border-white/8 bg-canvas-925";
 const issueArticleClassName =
@@ -84,6 +86,27 @@ function parseIssueSort(value: string | null): JiraIssueSort {
   return "needs-boroda";
 }
 
+function normalizeIssueSearch(value: string | null) {
+  return value?.trim() ?? "";
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return (
+    target.isContentEditable ||
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  );
+}
+
+function isSearchFocused(searchInputRef: React.RefObject<HTMLInputElement | null>) {
+  return document.activeElement === searchInputRef.current;
+}
+
 function sortIssues<
   TIssue extends {
     key: string;
@@ -120,17 +143,19 @@ function sortIssues<
 }
 
 export function JiraPage() {
-  const { setActions, setRightActions } = useAppHeader();
+  const { setActions, setRightActions, hasHost } = useAppHeader();
   const [searchParams, setSearchParams] = useSearchParams();
   const settingsQuery = useJiraSettingsQuery();
   const issuesQuery = useAssignedJiraIssueLinksQuery();
   const projectsQuery = useProjectsQuery();
   const ticketsQuery = useTicketsQuery();
+  const [issueSearchInput, setIssueSearchInput] = useState(() => normalizeIssueSearch(searchParams.get("q")));
   const [issueToCreateFrom, setIssueToCreateFrom] = useState<{ key: string; summary: string } | null>(null);
   const [issueToLinkToExisting, setIssueToLinkToExisting] = useState<{ key: string; summary: string } | null>(null);
   const [quickCreateForm, setQuickCreateForm] = useState<QuickTicketFormState>(createEmptyQuickTicketForm());
   const [expandedIssueKeys, setExpandedIssueKeys] = useState<string[]>([]);
   const [ticketSearch, setTicketSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const quickCreateTitleRef = useRef<HTMLInputElement>(null);
   const linkExistingSearchRef = useRef<HTMLInputElement>(null);
   const createTicketMutation = useCreateTicketMutation({
@@ -148,8 +173,112 @@ export function JiraPage() {
     document.title = "Jira · Boroda";
   }, []);
 
+  const baseUrl = settingsQuery.data?.baseUrl ? trimTrailingSlash(settingsQuery.data.baseUrl) : "";
+  const issueSort = parseIssueSort(searchParams.get("sort"));
+  const payload = issuesQuery.data;
+  const issueSearch = normalizeIssueSearch(searchParams.get("q"));
+  const sortedIssues = sortIssues(payload?.issues ?? [], issueSort);
+  const issues = sortedIssues.filter((issue) => {
+    if (!issueSearchInput.trim()) {
+      return true;
+    }
+
+    const searchValue = issueSearchInput.trim().toLowerCase();
+    return (
+      issue.key.toLowerCase().includes(searchValue) ||
+      issue.summary.toLowerCase().includes(searchValue)
+    );
+  });
+  const projects = projectsQuery.data ?? [];
+  const tickets = ticketsQuery.data ?? [];
+  const linkedIssuesCount = issues.filter((issue) => issue.borodaTickets.length > 0).length;
+
   useEffect(() => {
-    setActions(null);
+    setIssueSearchInput((current) => (current === issueSearch ? current : issueSearch));
+  }, [issueSearch]);
+
+  useEffect(() => {
+    const normalizedInput = issueSearchInput.trim();
+
+    if (normalizedInput === issueSearch) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+
+    if (normalizedInput) {
+      nextSearchParams.set("q", issueSearchInput);
+    } else {
+      nextSearchParams.delete("q");
+    }
+
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [issueSearch, issueSearchInput, searchParams, setSearchParams]);
+
+  const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+
+      if (isSearchFocused(searchInputRef)) {
+        searchInputRef.current?.blur();
+        return;
+      }
+
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+      return;
+    }
+
+    if (event.key === "Escape" && isSearchFocused(searchInputRef)) {
+      event.preventDefault();
+      searchInputRef.current?.blur();
+      return;
+    }
+
+    if (isTypingTarget(event.target)) {
+      return;
+    }
+
+    if (event.key === "/") {
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }
+  });
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyboardShortcuts);
+    return () => {
+      window.removeEventListener("keydown", handleKeyboardShortcuts);
+    };
+  }, []);
+
+  const searchControl = (
+    <label className="min-w-0 flex-1 basis-[18rem] max-w-[32rem]">
+      <span className="sr-only">Search</span>
+      <input
+        ref={searchInputRef}
+        type="search"
+        inputMode="search"
+        name="jiraIssueSearch"
+        autoComplete="off"
+        spellCheck={false}
+        className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
+        placeholder="Search…"
+        value={issueSearchInput}
+        onChange={(event) => {
+          setIssueSearchInput(event.target.value);
+        }}
+      />
+    </label>
+  );
+
+  useEffect(() => {
+    setActions(hasHost ? searchControl : null);
     setRightActions(
       <Link to="/settings" className={headerActionButtonClassName}>
         Settings
@@ -160,15 +289,7 @@ export function JiraPage() {
       setActions(null);
       setRightActions(null);
     };
-  }, [setActions, setRightActions]);
-
-  const baseUrl = settingsQuery.data?.baseUrl ? trimTrailingSlash(settingsQuery.data.baseUrl) : "";
-  const issueSort = parseIssueSort(searchParams.get("sort"));
-  const payload = issuesQuery.data;
-  const issues = sortIssues(payload?.issues ?? [], issueSort);
-  const projects = projectsQuery.data ?? [];
-  const tickets = ticketsQuery.data ?? [];
-  const linkedIssuesCount = issues.filter((issue) => issue.borodaTickets.length > 0).length;
+  }, [hasHost, searchControl, setActions, setRightActions]);
 
   const openQuickCreate = (issue: { key: string; summary: string }) => {
     setIssueToCreateFrom(issue);
@@ -206,14 +327,15 @@ export function JiraPage() {
         <h1 className="m-0 text-base font-semibold text-ink-50">Assigned Jira issues</h1>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap items-center gap-2 text-sm text-ink-300">
-            <span>{issues.length} issues</span>
+            <span>{issueSearch ? `${issues.length} of ${sortedIssues.length} issues` : `${issues.length} issues`}</span>
             <span aria-hidden="true">/</span>
             <span>{linkedIssuesCount} linked</span>
           </div>
+          {!hasHost ? searchControl : null}
           <label className="min-w-[12rem]">
             <span className="sr-only">Sort Jira issues</span>
             <select
-              className="min-h-10 rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50"
+              className={inputClassName}
               aria-label="Sort Jira issues"
               value={issueSort}
               onChange={(event) => {
@@ -265,8 +387,12 @@ export function JiraPage() {
         <p className={`${emptyPanelClassName} m-0 text-sm text-ink-200`}>Loading assigned issues…</p>
       ) : null}
 
-      {!issuesQuery.isLoading && issues.length === 0 ? (
+      {!issuesQuery.isLoading && sortedIssues.length === 0 ? (
         <p className={`${emptyPanelClassName} m-0 text-sm text-ink-200`}>No assigned Jira issues found.</p>
+      ) : null}
+
+      {!issuesQuery.isLoading && sortedIssues.length > 0 && issues.length === 0 ? (
+        <p className={`${emptyPanelClassName} m-0 text-sm text-ink-200`}>No Jira issues match this search.</p>
       ) : null}
 
       {issues.length > 0 ? (
