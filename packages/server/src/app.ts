@@ -14,11 +14,42 @@ import { ticketRoutes } from "./modules/tickets/routes";
 import { workContextRoutes } from "./modules/work-contexts/routes";
 import { dbPlugin } from "./plugins/db";
 import { toErrorPayload } from "./shared/errors";
+import { logServerError, logServerEvent } from "./shared/observability";
+
+declare module "fastify" {
+  interface FastifyRequest {
+    borodaRequestStartedAt?: bigint;
+  }
+}
 
 export function buildApp() {
   const config = getConfig();
   const app = Fastify({
-    logger: true
+    logger: true,
+    disableRequestLogging: true
+  });
+
+  app.addHook("onRequest", async (request) => {
+    request.borodaRequestStartedAt = process.hrtime.bigint();
+    logServerEvent(request.log, "info", "http.request.started", {
+      requestId: request.id,
+      method: request.method,
+      url: request.url
+    });
+  });
+
+  app.addHook("onResponse", async (request, reply) => {
+    const startedAt = request.borodaRequestStartedAt;
+    const durationMs = startedAt ? Number(process.hrtime.bigint() - startedAt) / 1_000_000 : undefined;
+
+    logServerEvent(request.log, "info", "http.request.completed", {
+      requestId: request.id,
+      method: request.method,
+      route: request.routeOptions.url,
+      url: request.url,
+      statusCode: reply.statusCode,
+      durationMs
+    });
   });
 
   app.register(dbPlugin);
@@ -28,8 +59,21 @@ export function buildApp() {
     }
   });
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const { statusCode, payload } = toErrorPayload(error);
+    const startedAt = request.borodaRequestStartedAt;
+    const durationMs = startedAt ? Number(process.hrtime.bigint() - startedAt) / 1_000_000 : undefined;
+
+    logServerError(request.log, "http.request.failed", error, {
+      requestId: request.id,
+      method: request.method,
+      route: request.routeOptions.url,
+      url: request.url,
+      statusCode,
+      durationMs,
+      errorCode: payload.error.code
+    });
+
     reply.status(statusCode).send(payload);
   });
 
@@ -75,6 +119,11 @@ export function buildApp() {
       return reply.sendFile("index.html");
     });
   }
+
+  logServerEvent(app, "info", "app.initialized", {
+    webDistPath: config.webDistPath,
+    servesStaticApp: fs.existsSync(config.webDistPath)
+  });
 
   return app;
 }

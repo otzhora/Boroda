@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { getConfig } from "../../../config";
 import { ticketActivities, ticketWorkspaces } from "../../../db/schema";
 import { AppError } from "../../../shared/errors";
+import { logServerEvent, withServerSpan } from "../../../shared/observability";
 import { getTicketOrThrow } from "../../tickets/service";
 import {
   detectRemoteDefaultBranch,
@@ -360,42 +361,52 @@ function getLauncher(target: OpenInTarget): LauncherSpec {
 }
 
 export async function openInApp(input: OpenInAppInput) {
-  const launcher = getLauncher(input.target);
+  return withServerSpan(
+    console,
+    "open_in.launch",
+    {
+      directory: input.directory,
+      target: input.target
+    },
+    async () => {
+      const launcher = getLauncher(input.target);
 
-  if (isExplicitBinaryPath(launcher.binary) && !fs.existsSync(launcher.binary)) {
-    throw new AppError(501, "OPEN_TARGET_NOT_AVAILABLE", `${getTargetLabel(input.target)} is not available on this machine`);
-  }
+      if (isExplicitBinaryPath(launcher.binary) && !fs.existsSync(launcher.binary)) {
+        throw new AppError(501, "OPEN_TARGET_NOT_AVAILABLE", `${getTargetLabel(input.target)} is not available on this machine`);
+      }
 
-  const resolvedCwd = launcher.cwd ? launcher.cwd(input.directory) : launcher.preserveInputCwd ? input.directory : undefined;
-  const child = spawn(launcher.binary, launcher.args(input.directory), {
-    cwd: resolvedCwd,
-    detached: shouldDetachOpenCommand(),
-    stdio: "ignore"
-  });
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      child.once("spawn", () => {
-        resolve();
+      const resolvedCwd = launcher.cwd ? launcher.cwd(input.directory) : launcher.preserveInputCwd ? input.directory : undefined;
+      const child = spawn(launcher.binary, launcher.args(input.directory), {
+        cwd: resolvedCwd,
+        detached: shouldDetachOpenCommand(),
+        stdio: "ignore"
       });
-      child.once("error", (error) => {
-        reject(error);
-      });
-    });
-    child.unref();
-  } catch (error) {
-    if (error instanceof Error && "code" in error && typeof error.code === "string" && error.code === "ENOENT") {
-      throw new AppError(501, "OPEN_TARGET_NOT_AVAILABLE", `${getTargetLabel(input.target)} is not available on this machine`);
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          child.once("spawn", () => {
+            resolve();
+          });
+          child.once("error", (error) => {
+            reject(error);
+          });
+        });
+        child.unref();
+      } catch (error) {
+        if (error instanceof Error && "code" in error && typeof error.code === "string" && error.code === "ENOENT") {
+          throw new AppError(501, "OPEN_TARGET_NOT_AVAILABLE", `${getTargetLabel(input.target)} is not available on this machine`);
+        }
+
+        throw error;
+      }
+
+      return {
+        ok: true as const,
+        directory: input.directory,
+        target: input.target
+      };
     }
-
-    throw error;
-  }
-
-  return {
-    ok: true as const,
-    directory: input.directory,
-    target: input.target
-  };
+  );
 }
 
 async function resolveWorkspaceDirectory(
@@ -496,64 +507,86 @@ async function resolveWorkspaceDirectory(
 }
 
 export async function openTicketInApp(app: FastifyInstance, ticketId: number, input: OpenTicketInAppInput) {
-  const ticket = await getTicketOrThrow(app, ticketId);
-  const selectedFolder =
-    input.folderId === undefined ? pickPreferredFolder(ticket.projectLinks) : findLinkedProjectFolder(ticket.projectLinks, input.folderId);
+  return withServerSpan(
+    app,
+    "ticket.open_in",
+    {
+      ticketId,
+      target: input.target,
+      mode: input.mode,
+      folderId: input.folderId,
+      workspaceId: input.workspaceId,
+      runSetup: input.runSetup
+    },
+    async () => {
+      const ticket = await getTicketOrThrow(app, ticketId);
+      const selectedFolder =
+        input.folderId === undefined ? pickPreferredFolder(ticket.projectLinks) : findLinkedProjectFolder(ticket.projectLinks, input.folderId);
 
-  if (input.folderId !== undefined && !selectedFolder) {
-    throw new AppError(409, "TICKET_PROJECT_FOLDER_NOT_AVAILABLE", "The selected project folder is not available for this ticket");
-  }
-
-  if (!selectedFolder?.existsOnDisk) {
-    throw new AppError(
-      409,
-      "TICKET_PROJECT_FOLDER_NOT_AVAILABLE",
-      input.folderId === undefined
-        ? "No linked project folder is available for this ticket"
-        : "The selected project folder is not available for this ticket"
-    );
-  }
-
-  let directory = selectedFolder.path;
-
-  if (input.mode === "worktree") {
-    const matchingWorkspaces = findWorkspacesForFolder(ticket.workspaces ?? [], selectedFolder.id);
-    let selectedWorkspace: TicketWorkspaceCandidate | null = null;
-
-    if (input.workspaceId !== undefined) {
-      selectedWorkspace = matchingWorkspaces.find((workspace) => workspace.id === input.workspaceId) ?? null;
-
-      if (!selectedWorkspace) {
-        throw new AppError(409, "TICKET_WORKSPACE_NOT_AVAILABLE", "The selected workspace is not available for this folder", {
-          folderId: selectedFolder.id,
-          workspaceId: input.workspaceId
-        });
+      if (input.folderId !== undefined && !selectedFolder) {
+        throw new AppError(409, "TICKET_PROJECT_FOLDER_NOT_AVAILABLE", "The selected project folder is not available for this ticket");
       }
-    } else if (matchingWorkspaces.length > 1) {
-      throw new AppError(409, "TICKET_WORKSPACE_SELECTION_REQUIRED", "Choose which ticket workspace to open for this folder", {
+
+      if (!selectedFolder?.existsOnDisk) {
+        throw new AppError(
+          409,
+          "TICKET_PROJECT_FOLDER_NOT_AVAILABLE",
+          input.folderId === undefined
+            ? "No linked project folder is available for this ticket"
+            : "The selected project folder is not available for this ticket"
+        );
+      }
+
+      let directory = selectedFolder.path;
+
+      if (input.mode === "worktree") {
+        const matchingWorkspaces = findWorkspacesForFolder(ticket.workspaces ?? [], selectedFolder.id);
+        let selectedWorkspace: TicketWorkspaceCandidate | null = null;
+
+        if (input.workspaceId !== undefined) {
+          selectedWorkspace = matchingWorkspaces.find((workspace) => workspace.id === input.workspaceId) ?? null;
+
+          if (!selectedWorkspace) {
+            throw new AppError(409, "TICKET_WORKSPACE_NOT_AVAILABLE", "The selected workspace is not available for this folder", {
+              folderId: selectedFolder.id,
+              workspaceId: input.workspaceId
+            });
+          }
+        } else if (matchingWorkspaces.length > 1) {
+          throw new AppError(409, "TICKET_WORKSPACE_SELECTION_REQUIRED", "Choose which ticket workspace to open for this folder", {
+            folderId: selectedFolder.id,
+            workspaces: matchingWorkspaces.map((workspace) => ({
+              id: workspace.id,
+              branchName: workspace.branchName,
+              role: workspace.role,
+              projectFolderId: workspace.projectFolderId
+            }))
+          });
+        } else {
+          selectedWorkspace = matchingWorkspaces[0] ?? null;
+        }
+
+        if (!selectedWorkspace) {
+          throw new AppError(409, "TICKET_WORKSPACE_NOT_AVAILABLE", "No ticket worktree is available for this folder", {
+            folderId: selectedFolder.id
+          });
+        }
+
+        directory = await resolveWorkspaceDirectory(app, ticket, selectedFolder.id, selectedWorkspace, input);
+      }
+
+      logServerEvent(app, "info", "ticket.open_in.directory_resolved", {
+        ticketId,
+        directory,
         folderId: selectedFolder.id,
-        workspaces: matchingWorkspaces.map((workspace) => ({
-          id: workspace.id,
-          branchName: workspace.branchName,
-          role: workspace.role,
-          projectFolderId: workspace.projectFolderId
-        }))
+        mode: input.mode,
+        target: input.target
       });
-    } else {
-      selectedWorkspace = matchingWorkspaces[0] ?? null;
-    }
 
-    if (!selectedWorkspace) {
-      throw new AppError(409, "TICKET_WORKSPACE_NOT_AVAILABLE", "No ticket worktree is available for this folder", {
-        folderId: selectedFolder.id
+      return openInApp({
+        directory,
+        target: input.target
       });
     }
-
-    directory = await resolveWorkspaceDirectory(app, ticket, selectedFolder.id, selectedWorkspace, input);
-  }
-
-  return openInApp({
-    directory,
-    target: input.target
-  });
+  );
 }

@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { jiraSettings, ticketJiraIssueLinks, tickets } from "../../../db/schema";
 import { AppError } from "../../../shared/errors";
+import { logServerEvent, withServerSpan } from "../../../shared/observability";
 import { updateJiraSettingsSchema } from "./schemas";
 
 type UpdateJiraSettingsInput = z.infer<typeof updateJiraSettingsSchema>;
@@ -52,34 +53,45 @@ export async function getJiraSettings(app: FastifyInstance) {
 }
 
 export async function upsertJiraSettings(app: FastifyInstance, input: UpdateJiraSettingsInput) {
-  const existing = await getStoredJiraSettings(app);
-  const trimmedToken = input.apiToken?.trim() ?? "";
-  const apiToken = trimmedToken || (existing?.apiToken ?? "");
+  return withServerSpan(
+    app,
+    "jira.settings.upsert",
+    {
+      baseUrl: sanitizeBaseUrl(input.baseUrl),
+      email: input.email.trim(),
+      providedApiToken: Boolean(input.apiToken?.trim())
+    },
+    async () => {
+      const existing = await getStoredJiraSettings(app);
+      const trimmedToken = input.apiToken?.trim() ?? "";
+      const apiToken = trimmedToken || (existing?.apiToken ?? "");
 
-  if (!apiToken) {
-    throw new AppError(400, "JIRA_API_TOKEN_REQUIRED", "Jira API token is required");
-  }
+      if (!apiToken) {
+        throw new AppError(400, "JIRA_API_TOKEN_REQUIRED", "Jira API token is required");
+      }
 
-  const payload = {
-    baseUrl: sanitizeBaseUrl(input.baseUrl),
-    email: input.email.trim(),
-    apiToken,
-    updatedAt: new Date().toISOString()
-  };
+      const payload = {
+        baseUrl: sanitizeBaseUrl(input.baseUrl),
+        email: input.email.trim(),
+        apiToken,
+        updatedAt: new Date().toISOString()
+      };
 
-  if (existing) {
-    await app.db
-      .update(jiraSettings)
-      .set(payload)
-      .where(eq(jiraSettings.id, existing.id));
-  } else {
-    await app.db.insert(jiraSettings).values(payload);
-  }
+      if (existing) {
+        await app.db
+          .update(jiraSettings)
+          .set(payload)
+          .where(eq(jiraSettings.id, existing.id));
+      } else {
+        await app.db.insert(jiraSettings).values(payload);
+      }
 
-  return {
-    ok: true as const,
-    hasApiToken: true
-  };
+      return {
+        ok: true as const,
+        hasApiToken: true
+      };
+    }
+  );
 }
 
 function toJiraAuthorizationHeader(email: string, apiToken: string) {
@@ -133,65 +145,82 @@ async function runJiraSearch(
     maxResults: number;
   }
 ) {
-  const settings = await getRequiredJiraSettings(app);
+  return withServerSpan(
+    app,
+    "jira.search",
+    {
+      maxResults: input.maxResults,
+      jqlPreview: input.jql.slice(0, 120)
+    },
+    async () => {
+      const settings = await getRequiredJiraSettings(app);
 
-  const searchParams = new URLSearchParams({
-    jql: input.jql,
-    fields: "summary",
-    maxResults: String(input.maxResults)
-  });
+      const searchParams = new URLSearchParams({
+        jql: input.jql,
+        fields: "summary",
+        maxResults: String(input.maxResults)
+      });
 
-  const response = await fetch(`${sanitizeBaseUrl(settings.baseUrl)}/rest/api/3/search/jql?${searchParams.toString()}`, {
-    headers: {
-      authorization: toJiraAuthorizationHeader(settings.email, settings.apiToken),
-      accept: "application/json"
-    }
-  });
+      const response = await fetch(`${sanitizeBaseUrl(settings.baseUrl)}/rest/api/3/search/jql?${searchParams.toString()}`, {
+        headers: {
+          authorization: toJiraAuthorizationHeader(settings.email, settings.apiToken),
+          accept: "application/json"
+        }
+      });
 
-  let body: unknown = null;
+      let body: unknown = null;
 
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
+      try {
+        body = await response.json();
+      } catch {
+        body = null;
+      }
 
-  if (!response.ok) {
-    const message = getJiraErrorMessage(body);
+      if (!response.ok) {
+        const message = getJiraErrorMessage(body);
 
-    if (response.status === 401 || response.status === 403) {
-      throw new AppError(
-        401,
-        "JIRA_AUTH_FAILED",
-        message ?? "Jira authentication failed. Check your email and API token"
-      );
-    }
-
-    if (response.status === 404) {
-      throw new AppError(400, "JIRA_URL_INVALID", message ?? "Jira URL looks invalid");
-    }
-
-    throw new AppError(502, "JIRA_REQUEST_FAILED", message ?? "Jira request failed");
-  }
-
-  const payload = (body ?? {}) as JiraSearchResponse;
-  const issues = Array.isArray(payload.issues) ? payload.issues : [];
-
-  return {
-    issues: issues
-      .map((issue) => {
-        if (!issue.key || !issue.fields?.summary) {
-          return null;
+        if (response.status === 401 || response.status === 403) {
+          throw new AppError(
+            401,
+            "JIRA_AUTH_FAILED",
+            message ?? "Jira authentication failed. Check your email and API token"
+          );
         }
 
-        return {
-          key: issue.key,
-          summary: issue.fields.summary
-        };
-      })
-      .filter((issue): issue is { key: string; summary: string } => issue !== null),
-    total: typeof payload.total === "number" ? payload.total : issues.length
-  };
+        if (response.status === 404) {
+          throw new AppError(400, "JIRA_URL_INVALID", message ?? "Jira URL looks invalid");
+        }
+
+        throw new AppError(502, "JIRA_REQUEST_FAILED", message ?? "Jira request failed");
+      }
+
+      const payload = (body ?? {}) as JiraSearchResponse;
+      const issues = Array.isArray(payload.issues) ? payload.issues : [];
+      const result = {
+        issues: issues
+          .map((issue) => {
+            if (!issue.key || !issue.fields?.summary) {
+              return null;
+            }
+
+            return {
+              key: issue.key,
+              summary: issue.fields.summary
+            };
+          })
+          .filter((issue): issue is { key: string; summary: string } => issue !== null),
+        total: typeof payload.total === "number" ? payload.total : issues.length
+      };
+
+      logServerEvent(app, "info", "jira.search.result", {
+        maxResults: input.maxResults,
+        returnedIssueCount: result.issues.length,
+        total: result.total
+      });
+
+      return result;
+    }
+  );
 }
 
 export async function listAssignedJiraIssues(app: FastifyInstance) {

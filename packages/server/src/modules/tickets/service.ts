@@ -20,6 +20,7 @@ import {
 } from "../../db/schema";
 import { AppError } from "../../shared/errors";
 import { getProjectFolderSetupInfo } from "../../shared/worktree-setup";
+import { logServerEvent, withServerSpan } from "../../shared/observability";
 
 const supportedTicketImageMimeTypes = new Map([
   ["image/png", "png"],
@@ -795,44 +796,62 @@ export async function createTicket(
     projectLinks: Array<{ projectId: number; relationship: string }>;
   }
 ) {
-  const now = nowIso();
-  const key = nextTicketKey(app);
-  assertUniqueProjectLinks(input.projectLinks);
-  assertUniqueJiraIssueLinks(input.jiraIssues);
-  await ensureProjectsExist(
+  return withServerSpan(
     app,
-    input.projectLinks.map((link) => link.projectId)
-  );
-  const ticket = app.db
-    .insert(tickets)
-    .values({
-      key,
+    "ticket.create",
+    {
       title: input.title,
-      description: input.description,
-      branch: deriveLegacyBranch(input.workspaces ?? [], input.branch ?? null),
       status: input.status,
       priority: input.priority,
-      dueAt: input.dueAt ?? null,
-      createdAt: now,
-      updatedAt: now
-    })
-    .returning()
-    .get();
+      projectLinkCount: input.projectLinks.length,
+      jiraIssueCount: input.jiraIssues.length,
+      workspaceCount: input.workspaces?.length ?? 0
+    },
+    async () => {
+      const now = nowIso();
+      const key = nextTicketKey(app);
+      assertUniqueProjectLinks(input.projectLinks);
+      assertUniqueJiraIssueLinks(input.jiraIssues);
+      await ensureProjectsExist(
+        app,
+        input.projectLinks.map((link) => link.projectId)
+      );
+      const ticket = app.db
+        .insert(tickets)
+        .values({
+          key,
+          title: input.title,
+          description: input.description,
+          branch: deriveLegacyBranch(input.workspaces ?? [], input.branch ?? null),
+          status: input.status,
+          priority: input.priority,
+          dueAt: input.dueAt ?? null,
+          createdAt: now,
+          updatedAt: now
+        })
+        .returning()
+        .get();
 
-  try {
-    await replaceProjectLinks(app, ticket.id, input.projectLinks);
-    await replaceWorkspaces(app, ticket.id, input.projectLinks, input.workspaces ?? []);
-    await replaceJiraIssueLinks(app, ticket.id, input.jiraIssues);
-  } catch (error) {
-    app.db.delete(tickets).where(eq(tickets.id, ticket.id)).run();
-    rethrowTicketConflict(error);
-  }
+      try {
+        await replaceProjectLinks(app, ticket.id, input.projectLinks);
+        await replaceWorkspaces(app, ticket.id, input.projectLinks, input.workspaces ?? []);
+        await replaceJiraIssueLinks(app, ticket.id, input.jiraIssues);
+      } catch (error) {
+        app.db.delete(tickets).where(eq(tickets.id, ticket.id)).run();
+        rethrowTicketConflict(error);
+      }
 
-  recordActivity(app, ticket.id, "ticket.created", `Ticket ${ticket.key} created`);
-  recordProjectLinkChanges(app, ticket.id, [], await loadTicketProjectLinks(app, ticket.id));
-  recordJiraIssueLinkChanges(app, ticket.id, [], input.jiraIssues);
+      recordActivity(app, ticket.id, "ticket.created", `Ticket ${ticket.key} created`);
+      recordProjectLinkChanges(app, ticket.id, [], await loadTicketProjectLinks(app, ticket.id));
+      recordJiraIssueLinkChanges(app, ticket.id, [], input.jiraIssues);
+      logServerEvent(app, "info", "ticket.create.persisted", {
+        ticketId: ticket.id,
+        ticketKey: ticket.key
+      });
 
-  return getTicketOrThrow(app, ticket.id);
+      return getTicketOrThrow(app, ticket.id);
+    }
+  );
 }
 
 export async function updateTicket(
@@ -855,188 +874,248 @@ export async function updateTicket(
     projectLinks: Array<{ projectId: number; relationship: string }>;
   }>
 ) {
-  const existing = await getTicketOrThrow(app, id);
-  const nextUpdatedAt = nowIso();
-  const nextLegacyBranch =
-    input.workspaces === undefined
-      ? input.branch === undefined
-        ? existing.branch
-        : input.branch
-      : deriveLegacyBranch(input.workspaces, input.branch === undefined ? existing.branch : input.branch);
+  return withServerSpan(
+    app,
+    "ticket.update",
+    {
+      ticketId: id,
+      changedFields: Object.keys(input)
+    },
+    async () => {
+      const existing = await getTicketOrThrow(app, id);
+      const nextUpdatedAt = nowIso();
+      const nextLegacyBranch =
+        input.workspaces === undefined
+          ? input.branch === undefined
+            ? existing.branch
+            : input.branch
+          : deriveLegacyBranch(input.workspaces, input.branch === undefined ? existing.branch : input.branch);
 
-  const updated = app.db
-    .update(tickets)
-    .set({
-      title: input.title ?? existing.title,
-      description: input.description ?? existing.description,
-      branch: nextLegacyBranch,
-      status: input.status ?? existing.status,
-      priority: input.priority ?? existing.priority,
-      dueAt: input.dueAt === undefined ? existing.dueAt : input.dueAt,
-      updatedAt: nextUpdatedAt
-    })
-    .where(eq(tickets.id, id))
-    .returning()
-    .get();
+      const updated = app.db
+        .update(tickets)
+        .set({
+          title: input.title ?? existing.title,
+          description: input.description ?? existing.description,
+          branch: nextLegacyBranch,
+          status: input.status ?? existing.status,
+          priority: input.priority ?? existing.priority,
+          dueAt: input.dueAt === undefined ? existing.dueAt : input.dueAt,
+          updatedAt: nextUpdatedAt
+        })
+        .where(eq(tickets.id, id))
+        .returning()
+        .get();
 
-  if (input.projectLinks) {
-    assertUniqueProjectLinks(input.projectLinks);
-    await ensureProjectsExist(
-      app,
-      input.projectLinks.map((link) => link.projectId)
-    );
-  }
+      if (input.projectLinks) {
+        assertUniqueProjectLinks(input.projectLinks);
+        await ensureProjectsExist(
+          app,
+          input.projectLinks.map((link) => link.projectId)
+        );
+      }
 
-  if (input.jiraIssues) {
-    assertUniqueJiraIssueLinks(input.jiraIssues);
-  }
+      if (input.jiraIssues) {
+        assertUniqueJiraIssueLinks(input.jiraIssues);
+      }
 
-  if (input.workspaces) {
-    await ensureWorkspaceFoldersExist(app, input.projectLinks ?? existing.projectLinks, input.workspaces);
-  }
+      if (input.workspaces) {
+        await ensureWorkspaceFoldersExist(app, input.projectLinks ?? existing.projectLinks, input.workspaces);
+      }
 
-  if (input.projectLinks) {
-    try {
-      await replaceProjectLinks(app, id, input.projectLinks);
-    } catch (error) {
-      rethrowTicketConflict(error);
+      if (input.projectLinks) {
+        try {
+          await replaceProjectLinks(app, id, input.projectLinks);
+        } catch (error) {
+          rethrowTicketConflict(error);
+        }
+
+        const previousLinks = existing.projectLinks.map((link) => ({
+          projectId: link.projectId,
+          relationship: link.relationship,
+          project: link.project
+        }));
+        const nextLinks = await loadTicketProjectLinks(app, id);
+        recordProjectLinkChanges(app, id, previousLinks, nextLinks);
+      }
+
+      if (input.workspaces) {
+        await replaceWorkspaces(app, id, input.projectLinks ?? existing.projectLinks, input.workspaces);
+      }
+
+      if (input.jiraIssues) {
+        try {
+          await replaceJiraIssueLinks(app, id, input.jiraIssues);
+        } catch (error) {
+          rethrowTicketConflict(error);
+        }
+
+        const previousIssues = existing.jiraIssues.map((issue) => ({
+          key: issue.key,
+          summary: issue.summary
+        }));
+        const nextIssues = (await loadTicketJiraIssueLinks(app, id)).map((issue) => ({
+          key: issue.issueKey,
+          summary: issue.issueSummary
+        }));
+        recordJiraIssueLinkChanges(app, id, previousIssues, nextIssues);
+      }
+
+      if (input.status && input.status !== existing.status) {
+        recordActivity(app, id, "ticket.status.changed", `Status changed to ${input.status}`);
+      }
+
+      if (input.priority && input.priority !== existing.priority) {
+        recordActivity(app, id, "ticket.priority.changed", `Priority changed to ${input.priority}`);
+      }
+
+      if (input.description !== undefined && input.description !== existing.description) {
+        await cleanupTicketImages(app, id, input.description);
+      }
+
+      return getTicketOrThrow(app, updated.id);
     }
-
-    const previousLinks = existing.projectLinks.map((link) => ({
-      projectId: link.projectId,
-      relationship: link.relationship,
-      project: link.project
-    }));
-    const nextLinks = await loadTicketProjectLinks(app, id);
-    recordProjectLinkChanges(app, id, previousLinks, nextLinks);
-  }
-
-  if (input.workspaces) {
-    await replaceWorkspaces(app, id, input.projectLinks ?? existing.projectLinks, input.workspaces);
-  }
-
-  if (input.jiraIssues) {
-    try {
-      await replaceJiraIssueLinks(app, id, input.jiraIssues);
-    } catch (error) {
-      rethrowTicketConflict(error);
-    }
-
-    const previousIssues = existing.jiraIssues.map((issue) => ({
-      key: issue.key,
-      summary: issue.summary
-    }));
-    const nextIssues = (await loadTicketJiraIssueLinks(app, id)).map((issue) => ({
-      key: issue.issueKey,
-      summary: issue.issueSummary
-    }));
-    recordJiraIssueLinkChanges(app, id, previousIssues, nextIssues);
-  }
-
-  if (input.status && input.status !== existing.status) {
-    recordActivity(app, id, "ticket.status.changed", `Status changed to ${input.status}`);
-  }
-
-  if (input.priority && input.priority !== existing.priority) {
-    recordActivity(app, id, "ticket.priority.changed", `Priority changed to ${input.priority}`);
-  }
-
-  if (input.description !== undefined && input.description !== existing.description) {
-    await cleanupTicketImages(app, id, input.description);
-  }
-
-  return getTicketOrThrow(app, updated.id);
+  );
 }
 
 export async function refreshTicketJiraIssues(app: FastifyInstance, id: number) {
-  const existing = await getTicketOrThrow(app, id);
-
-  if (!existing.jiraIssues.length) {
-    return existing;
-  }
-
-  const refreshedIssues = await getJiraIssuesByKeys(
+  return withServerSpan(
     app,
-    existing.jiraIssues.map((issue) => issue.key)
+    "ticket.jira.refresh",
+    {
+      ticketId: id
+    },
+    async () => {
+      const existing = await getTicketOrThrow(app, id);
+
+      if (!existing.jiraIssues.length) {
+        logServerEvent(app, "info", "ticket.jira.refresh.skipped", {
+          ticketId: id,
+          reason: "no_linked_issues"
+        });
+        return existing;
+      }
+
+      const refreshedIssues = await getJiraIssuesByKeys(
+        app,
+        existing.jiraIssues.map((issue) => issue.key)
+      );
+      const refreshedByKey = new Map(
+        refreshedIssues.map((issue) => [normalizeJiraIssueKey(issue.key), issue.summary.trim()])
+      );
+      const nextIssues = existing.jiraIssues.map((issue) => ({
+        key: issue.key,
+        summary: refreshedByKey.get(normalizeJiraIssueKey(issue.key)) ?? issue.summary
+      }));
+
+      await replaceJiraIssueLinks(app, id, nextIssues);
+
+      const changedCount = existing.jiraIssues.filter((issue) => {
+        const nextSummary = refreshedByKey.get(normalizeJiraIssueKey(issue.key));
+        return nextSummary !== undefined && nextSummary !== issue.summary;
+      }).length;
+
+      if (changedCount > 0) {
+        recordActivity(
+          app,
+          id,
+          "ticket.jira_issue_refreshed",
+          changedCount === 1 ? "Refreshed 1 Jira issue summary" : `Refreshed ${changedCount} Jira issue summaries`
+        );
+      }
+
+      logServerEvent(app, "info", "ticket.jira.refresh.result", {
+        ticketId: id,
+        linkedIssueCount: existing.jiraIssues.length,
+        changedCount
+      });
+
+      return getTicketOrThrow(app, id);
+    }
   );
-  const refreshedByKey = new Map(
-    refreshedIssues.map((issue) => [normalizeJiraIssueKey(issue.key), issue.summary.trim()])
-  );
-  const nextIssues = existing.jiraIssues.map((issue) => ({
-    key: issue.key,
-    summary: refreshedByKey.get(normalizeJiraIssueKey(issue.key)) ?? issue.summary
-  }));
-
-  await replaceJiraIssueLinks(app, id, nextIssues);
-
-  const changedCount = existing.jiraIssues.filter((issue) => {
-    const nextSummary = refreshedByKey.get(normalizeJiraIssueKey(issue.key));
-    return nextSummary !== undefined && nextSummary !== issue.summary;
-  }).length;
-
-  if (changedCount > 0) {
-    recordActivity(
-      app,
-      id,
-      "ticket.jira_issue_refreshed",
-      changedCount === 1 ? "Refreshed 1 Jira issue summary" : `Refreshed ${changedCount} Jira issue summaries`
-    );
-  }
-
-  return getTicketOrThrow(app, id);
 }
 
 export async function deleteTicket(app: FastifyInstance, id: number) {
-  const existing = await getTicketOrThrow(app, id);
+  return withServerSpan(
+    app,
+    "ticket.archive",
+    {
+      ticketId: id
+    },
+    async () => {
+      const existing = await getTicketOrThrow(app, id);
 
-  if (existing.archivedAt) {
-    return { ok: true };
-  }
+      if (existing.archivedAt) {
+        logServerEvent(app, "info", "ticket.archive.skipped", {
+          ticketId: id,
+          ticketKey: existing.key,
+          reason: "already_archived"
+        });
+        return { ok: true };
+      }
 
-  const archivedAt = nowIso();
-  app.db
-    .update(tickets)
-    .set({
-      archivedAt,
-      updatedAt: archivedAt
-    })
-    .where(eq(tickets.id, id))
-    .run();
-  recordActivity(app, id, "ticket.archived", `Ticket ${existing.key} moved to history`);
-  return { ok: true };
+      const archivedAt = nowIso();
+      app.db
+        .update(tickets)
+        .set({
+          archivedAt,
+          updatedAt: archivedAt
+        })
+        .where(eq(tickets.id, id))
+        .run();
+      recordActivity(app, id, "ticket.archived", `Ticket ${existing.key} moved to history`);
+      return { ok: true };
+    }
+  );
 }
 
 export async function saveTicketImage(app: FastifyInstance, ticketId: number, file: MultipartFile) {
-  await getTicketOrThrow(app, ticketId);
+  return withServerSpan(
+    app,
+    "ticket.image.upload",
+    {
+      ticketId,
+      filename: file.filename,
+      mimeType: file.mimetype
+    },
+    async () => {
+      await getTicketOrThrow(app, ticketId);
 
-  const extension = supportedTicketImageMimeTypes.get(file.mimetype);
+      const extension = supportedTicketImageMimeTypes.get(file.mimetype);
 
-  if (!extension) {
-    throw new AppError(400, "UNSUPPORTED_TICKET_IMAGE_TYPE", "Only PNG, JPEG, GIF, and WebP images are supported");
-  }
+      if (!extension) {
+        throw new AppError(400, "UNSUPPORTED_TICKET_IMAGE_TYPE", "Only PNG, JPEG, GIF, and WebP images are supported");
+      }
 
-  const buffer = await file.toBuffer();
+      const buffer = await file.toBuffer();
 
-  if (!buffer.byteLength) {
-    throw new AppError(400, "EMPTY_TICKET_IMAGE", "Image file is empty");
-  }
+      if (!buffer.byteLength) {
+        throw new AppError(400, "EMPTY_TICKET_IMAGE", "Image file is empty");
+      }
 
-  const ticketDirectory = getTicketUploadsDirectory(app, ticketId);
-  await mkdir(ticketDirectory, { recursive: true });
+      const ticketDirectory = getTicketUploadsDirectory(app, ticketId);
+      await mkdir(ticketDirectory, { recursive: true });
 
-  const filename = `${Date.now()}-${randomUUID().slice(0, 8)}-${sanitizeFilenameSegment(file.filename)}.${extension}`;
-  const targetPath = path.resolve(ticketDirectory, filename);
-  await writeFile(targetPath, buffer);
+      const filename = `${Date.now()}-${randomUUID().slice(0, 8)}-${sanitizeFilenameSegment(file.filename)}.${extension}`;
+      const targetPath = path.resolve(ticketDirectory, filename);
+      await writeFile(targetPath, buffer);
 
-  const alt = filenameToAltText(file.filename);
-  const url = `/api/tickets/${ticketId}/images/${filename}`;
+      const alt = filenameToAltText(file.filename);
+      const url = `/api/tickets/${ticketId}/images/${filename}`;
 
-  return {
-    alt,
-    filename,
-    url,
-    markdown: `![${escapeMarkdownText(alt)}](${url})`
-  };
+      logServerEvent(app, "info", "ticket.image.upload.persisted", {
+        ticketId,
+        filename,
+        sizeBytes: buffer.byteLength
+      });
+
+      return {
+        alt,
+        filename,
+        url,
+        markdown: `![${escapeMarkdownText(alt)}](${url})`
+      };
+    }
+  );
 }
 
 export async function streamTicketImage(app: FastifyInstance, ticketId: number, filename: string) {
