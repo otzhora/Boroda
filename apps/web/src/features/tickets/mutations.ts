@@ -105,12 +105,17 @@ export function useDeleteTicketMutation(options: {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => {
+    mutationFn: (input?: { force?: boolean }) => {
       if (options.ticketId === null) {
         throw new Error("No ticket selected");
       }
 
-      return apiClient<{ ok: true }>(`/api/tickets/${options.ticketId}`, {
+      const searchParams = new URLSearchParams();
+      if (input?.force) {
+        searchParams.set("force", "true");
+      }
+
+      return apiClient<{ ok: true }>(`/api/tickets/${options.ticketId}${searchParams.size ? `?${searchParams.toString()}` : ""}`, {
         method: "DELETE"
       });
     },

@@ -8,6 +8,17 @@ interface ErrorResponse {
   };
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+    public readonly code?: string,
+    public readonly details?: Record<string, unknown>
+  ) {
+    super(message);
+  }
+}
+
 export async function apiClient<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
@@ -48,7 +59,12 @@ export async function apiClient<T>(path: string, init?: RequestInit): Promise<T>
       payload = null;
     }
 
-    const error = new Error(payload?.error?.message ?? `Request failed: ${response.status}`);
+    const error = new ApiError(
+      payload?.error?.message ?? `Request failed: ${response.status}`,
+      response.status,
+      payload?.error?.code,
+      payload?.error?.details
+    );
     logClientError("api.request.failed", error, {
       method,
       path,
@@ -103,7 +119,12 @@ export async function apiClientBlob(path: string, init?: RequestInit): Promise<B
       payload = null;
     }
 
-    const error = new Error(payload?.error?.message ?? `Request failed: ${response.status}`);
+    const error = new ApiError(
+      payload?.error?.message ?? `Request failed: ${response.status}`,
+      response.status,
+      payload?.error?.code,
+      payload?.error?.details
+    );
     logClientError("api.blob_request.failed", error, {
       method,
       path,

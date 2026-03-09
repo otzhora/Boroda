@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +18,7 @@ before(async () => {
   tempRoot = await mkdtemp(path.join(os.tmpdir(), "boroda-m3-tests-"));
   process.env.BORODA_DB_PATH = path.join(tempRoot, "test.sqlite");
   process.env.BORODA_UPLOADS_PATH = path.join(tempRoot, "uploads");
+  process.env.BORODA_TERMINAL_BIN = "/bin/true";
 
   const [{ buildApp }, dbClient, importedSchema] = await Promise.all([
     import("./app"),
@@ -40,6 +42,7 @@ beforeEach(() => {
   app.db.delete(schema.ticketActivities).run();
   app.db.delete(schema.workContexts).run();
   app.db.delete(schema.ticketJiraIssueLinks).run();
+  app.db.delete(schema.ticketWorkspaces).run();
   app.db.delete(schema.ticketProjectLinks).run();
   app.db.delete(schema.tickets).run();
   app.db.delete(schema.projectFolders).run();
@@ -67,6 +70,96 @@ async function createProject(name: string, slug: string) {
 
   assert.equal(response.statusCode, 200);
   return response.json();
+}
+
+function git(cwd: string, ...args: string[]) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8"
+  });
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr || `git ${args.join(" ")} failed`);
+  }
+}
+
+async function createGitRepo(rootPath: string) {
+  await mkdir(rootPath, { recursive: true });
+  git(rootPath, "init", "--initial-branch=main");
+  git(rootPath, "config", "user.email", "boroda@example.test");
+  git(rootPath, "config", "user.name", "Boroda Tests");
+  await writeFile(path.join(rootPath, "README.md"), "main\n");
+  git(rootPath, "add", "README.md");
+  git(rootPath, "commit", "-m", "init");
+}
+
+async function createTicketWorkspaceFixture() {
+  const repoPath = path.join(tempRoot, `repo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const managedWorktreesPath = path.join(tempRoot, `managed-worktrees-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  process.env.BORODA_WORKTREES_PATH = managedWorktreesPath;
+
+  await createGitRepo(repoPath);
+
+  const project = await createProject("Workspace Project", `workspace-project-${Math.random().toString(36).slice(2, 8)}`);
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "repo",
+      path: repoPath,
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+
+  assert.equal(folderResponse.statusCode, 200);
+  const folder = folderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Archive workspace fixture",
+      description: "",
+      status: "READY",
+      priority: "MEDIUM",
+      projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }],
+      workspaces: [
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/archive-fixture",
+          baseBranch: "main",
+          role: "primary"
+        }
+      ]
+    }
+  });
+
+  assert.equal(ticketResponse.statusCode, 200);
+  const ticket = ticketResponse.json();
+  const workspace = ticket.workspaces[0];
+
+  const openResponse = await app.inject({
+    method: "POST",
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "terminal",
+      mode: "worktree",
+      folderId: folder.id,
+      workspaceId: workspace.id,
+      runSetup: false
+    }
+  });
+
+  assert.equal(openResponse.statusCode, 200);
+
+  return {
+    ticket,
+    workspace: {
+      ...workspace,
+      worktreePath: openResponse.json().directory as string
+    }
+  };
 }
 
 test("ticket CRUD supports multi-project links, filters, and activity writes", async () => {
@@ -302,6 +395,62 @@ test("ticket-project link endpoints enforce duplicate and primary constraints", 
 
   assert.equal(missingProjectResponse.statusCode, 404);
   assert.equal(missingProjectResponse.json().error.code, "PROJECT_NOT_FOUND");
+});
+
+test("archiving deletes clean managed worktrees", async () => {
+  const { ticket, workspace } = await createTicketWorkspaceFixture();
+
+  const archiveResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(archiveResponse.statusCode, 200);
+
+  const archivedTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(archivedTicketResponse.statusCode, 200);
+  assert.equal(typeof archivedTicketResponse.json().archivedAt, "string");
+  await assert.rejects(() => rm(workspace.worktreePath, { recursive: true }), /ENOENT/);
+});
+
+test("archiving blocks on dirty managed worktrees unless forced", async () => {
+  const { ticket, workspace } = await createTicketWorkspaceFixture();
+  await writeFile(path.join(workspace.worktreePath, "dirty.txt"), "pending changes\n");
+
+  const blockedArchiveResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(blockedArchiveResponse.statusCode, 409);
+  assert.equal(blockedArchiveResponse.json().error.code, "TICKET_ARCHIVE_DIRTY_WORKTREES");
+  assert.deepEqual(blockedArchiveResponse.json().error.details.dirtyWorktrees, [
+    {
+      workspaceId: workspace.id,
+      branchName: workspace.branchName,
+      worktreePath: workspace.worktreePath
+    }
+  ]);
+
+  const archivedTicketBeforeForceResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(archivedTicketBeforeForceResponse.statusCode, 200);
+  assert.equal(archivedTicketBeforeForceResponse.json().archivedAt, null);
+
+  const forcedArchiveResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/tickets/${ticket.id}?force=true`
+  });
+
+  assert.equal(forcedArchiveResponse.statusCode, 200);
+  await assert.rejects(() => rm(workspace.worktreePath, { recursive: true }), /ENOENT/);
 });
 
 test("refreshing linked Jira issues updates cached summaries", async () => {

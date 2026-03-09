@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { AppError } from "../../shared/errors";
 import {
+  archiveTicketQuerySchema,
   createTicketJiraIssueLinkSchema,
   createTicketProjectLinkSchema,
   createTicketSchema,
@@ -47,7 +48,8 @@ export const ticketRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete("/tickets/:id", async (request) => {
     const params = ticketIdParamSchema.parse(request.params);
-    return deleteTicket(app, params.id);
+    const query = archiveTicketQuerySchema.parse(request.query);
+    return deleteTicket(app, params.id, query);
   });
 
   app.post("/tickets/:id/images", async (request) => {

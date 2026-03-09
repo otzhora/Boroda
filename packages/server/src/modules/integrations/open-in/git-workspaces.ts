@@ -199,14 +199,19 @@ export function isWorkspaceDirty(worktreePath: string) {
   return result.stdout.length > 0;
 }
 
-export function removeWorkspaceWorktree(worktreePath: string) {
+export function removeWorkspaceWorktree(worktreePath: string, options?: { force?: boolean }) {
   const resolvedPath = ensureManagedWorktreePath(worktreePath);
 
   if (!fs.existsSync(resolvedPath)) {
     return;
   }
 
-  const result = tryGit(path.dirname(resolvedPath), ["worktree", "remove", resolvedPath]);
+  const result = tryGit(resolvedPath, [
+    "worktree",
+    "remove",
+    ...(options?.force ? ["--force"] : []),
+    resolvedPath
+  ]);
   if (!result.ok) {
     throw new AppError(409, "WORKSPACE_REMOVE_FAILED", "Boroda could not remove the managed workspace", {
       worktreePath: resolvedPath,

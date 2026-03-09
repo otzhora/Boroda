@@ -24,6 +24,7 @@ import {
   type TicketScope
 } from "../features/tickets/queries";
 import { getStoredAutoRunWorktreeSetup } from "../lib/user-preferences";
+import { ApiError } from "../lib/api-client";
 import type { Project, TicketListItem, TicketStatus } from "../lib/types";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
@@ -162,6 +163,34 @@ function formatTimestamp(value: string) {
     hour: "numeric",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function formatDirtyWorktreeArchivePrompt(error: ApiError) {
+  const dirtyWorktrees = Array.isArray(error.details?.dirtyWorktrees)
+    ? error.details.dirtyWorktrees.filter(
+        (
+          worktree
+        ): worktree is {
+          branchName?: unknown;
+          worktreePath?: unknown;
+        } => typeof worktree === "object" && worktree !== null
+      )
+    : [];
+
+  if (!dirtyWorktrees.length) {
+    return null;
+  }
+
+  const worktreeList = dirtyWorktrees
+    .map((worktree) => {
+      const branchName = typeof worktree.branchName === "string" && worktree.branchName.trim() ? worktree.branchName : "unknown";
+      const worktreePath =
+        typeof worktree.worktreePath === "string" && worktree.worktreePath.trim() ? worktree.worktreePath : "unknown path";
+      return `${branchName}: ${worktreePath}`;
+    })
+    .join("\n");
+
+  return `These worktrees have uncommitted changes and will be deleted:\n${worktreeList}\n\nDelete them and archive the ticket anyway?`;
 }
 
 function formatLastChange(ticket: TicketListItem) {
@@ -1028,7 +1057,22 @@ export function TicketsPage() {
           updateTicketMutation.mutate(toTicketPayload(editForm));
         }}
         onDelete={() => {
-          deleteTicketMutation.mutate();
+          void (async () => {
+            try {
+              await deleteTicketMutation.mutateAsync(undefined);
+            } catch (error) {
+              if (!(error instanceof ApiError) || error.code !== "TICKET_ARCHIVE_DIRTY_WORKTREES") {
+                return;
+              }
+
+              const confirmationMessage = formatDirtyWorktreeArchivePrompt(error);
+              if (!confirmationMessage || !window.confirm(confirmationMessage)) {
+                return;
+              }
+
+              await deleteTicketMutation.mutateAsync({ force: true });
+            }
+          })();
         }}
         onOpenInApp={async (target, mode, folderId, workspaceId) => {
           const runSetup = getStoredAutoRunWorktreeSetup();

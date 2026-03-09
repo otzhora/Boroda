@@ -1,4 +1,4 @@
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -7,6 +7,7 @@ import type { MultipartFile } from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 import { getConfig } from "../../config";
 import { getJiraIssuesByKeys } from "../integrations/jira/service";
+import { isWorkspaceDirty, removeWorkspaceWorktree } from "../integrations/open-in/git-workspaces";
 import {
   projectFolders,
   projects,
@@ -161,6 +162,29 @@ function recordActivity(
     metaJson: JSON.stringify(meta),
     createdAt: nowIso()
   }).run();
+}
+
+interface ArchiveCandidateWorkspace {
+  id: number;
+  branchName: string;
+  worktreePath: string;
+}
+
+function listArchivableWorktrees(
+  workspaces: Array<{
+    id: number;
+    branchName: string;
+    worktreePath: string | null;
+    createdByBoroda: boolean;
+  }>
+) {
+  return workspaces
+    .filter((workspace) => workspace.createdByBoroda && typeof workspace.worktreePath === "string" && workspace.worktreePath.trim().length > 0)
+    .map((workspace) => ({
+      id: workspace.id,
+      branchName: workspace.branchName,
+      worktreePath: workspace.worktreePath as string
+    }));
 }
 
 function isSqliteUniqueConstraintError(
@@ -1034,7 +1058,7 @@ export async function refreshTicketJiraIssues(app: FastifyInstance, id: number) 
   );
 }
 
-export async function deleteTicket(app: FastifyInstance, id: number) {
+export async function deleteTicket(app: FastifyInstance, id: number, options?: { force?: boolean }) {
   return withServerSpan(
     app,
     "ticket.archive",
@@ -1043,6 +1067,7 @@ export async function deleteTicket(app: FastifyInstance, id: number) {
     },
     async () => {
       const existing = await getTicketOrThrow(app, id);
+      const archivableWorktrees = listArchivableWorktrees(existing.workspaces);
 
       if (existing.archivedAt) {
         logServerEvent(app, "info", "ticket.archive.skipped", {
@@ -1051,6 +1076,30 @@ export async function deleteTicket(app: FastifyInstance, id: number) {
           reason: "already_archived"
         });
         return { ok: true };
+      }
+
+      const dirtyWorktrees = archivableWorktrees
+        .filter((workspace) => existsSync(workspace.worktreePath))
+        .filter((workspace) => isWorkspaceDirty(workspace.worktreePath))
+        .map((workspace) => ({
+          workspaceId: workspace.id,
+          branchName: workspace.branchName,
+          worktreePath: workspace.worktreePath
+        }));
+
+      if (dirtyWorktrees.length && !options?.force) {
+        throw new AppError(
+          409,
+          "TICKET_ARCHIVE_DIRTY_WORKTREES",
+          "One or more ticket worktrees have uncommitted changes",
+          { dirtyWorktrees }
+        );
+      }
+
+      for (const workspace of archivableWorktrees) {
+        removeWorkspaceWorktree(workspace.worktreePath, {
+          force: options?.force
+        });
       }
 
       const archivedAt = nowIso();

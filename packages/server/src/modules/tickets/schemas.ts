@@ -46,6 +46,10 @@ export const ticketIdParamSchema = z.object({
   id: z.coerce.number().int().positive()
 });
 
+export const archiveTicketQuerySchema = z.object({
+  force: z.coerce.boolean().optional().default(false)
+});
+
 export const ticketProjectLinkIdParamSchema = z.object({
   id: z.coerce.number().int().positive()
 });
