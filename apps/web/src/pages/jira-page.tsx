@@ -197,24 +197,6 @@ export function JiraPage() {
     setIssueSearchInput((current) => (current === issueSearch ? current : issueSearch));
   }, [issueSearch]);
 
-  useEffect(() => {
-    const normalizedInput = issueSearchInput.trim();
-
-    if (normalizedInput === issueSearch) {
-      return;
-    }
-
-    const nextSearchParams = new URLSearchParams(searchParams);
-
-    if (normalizedInput) {
-      nextSearchParams.set("q", issueSearchInput);
-    } else {
-      nextSearchParams.delete("q");
-    }
-
-    setSearchParams(nextSearchParams, { replace: true });
-  }, [issueSearch, issueSearchInput, searchParams, setSearchParams]);
-
   const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
     if (event.defaultPrevented) {
       return;
@@ -257,7 +239,7 @@ export function JiraPage() {
     };
   }, []);
 
-  const searchControl = (
+  const renderSearchControl = () => (
     <label className="min-w-0 flex-1 basis-[18rem] max-w-[32rem]">
       <span className="sr-only">Search</span>
       <input
@@ -271,14 +253,25 @@ export function JiraPage() {
         placeholder="Search…"
         value={issueSearchInput}
         onChange={(event) => {
-          setIssueSearchInput(event.target.value);
+          const nextSearch = event.target.value;
+          const nextSearchParams = new URLSearchParams(searchParams);
+
+          setIssueSearchInput(nextSearch);
+
+          if (nextSearch.trim()) {
+            nextSearchParams.set("q", nextSearch);
+          } else {
+            nextSearchParams.delete("q");
+          }
+
+          setSearchParams(nextSearchParams, { replace: true });
         }}
       />
     </label>
   );
 
   useEffect(() => {
-    setActions(hasHost ? searchControl : null);
+    setActions(hasHost ? renderSearchControl() : null);
     setRightActions(
       <Link to="/settings" className={headerActionButtonClassName}>
         Settings
@@ -289,7 +282,7 @@ export function JiraPage() {
       setActions(null);
       setRightActions(null);
     };
-  }, [hasHost, searchControl, setActions, setRightActions]);
+  }, [hasHost, issueSearchInput, searchParams, setActions, setRightActions]);
 
   const openQuickCreate = (issue: { key: string; summary: string }) => {
     setIssueToCreateFrom(issue);
@@ -331,7 +324,7 @@ export function JiraPage() {
             <span aria-hidden="true">/</span>
             <span>{linkedIssuesCount} linked</span>
           </div>
-          {!hasHost ? searchControl : null}
+          {!hasHost ? renderSearchControl() : null}
           <label className="min-w-[12rem]">
             <span className="sr-only">Sort Jira issues</span>
             <select
