@@ -2,10 +2,25 @@ import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../shared/errors";
 import { normalizeWslPath, resolvePathInfo } from "../../shared/path-utils";
+import { getProjectFolderSetupInfo, scaffoldProjectFolderWorktreeSetup } from "../../shared/worktree-setup";
 import { projectFolders, projects } from "../../db/schema";
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function enrichProjectFolder<T extends { path: string }>(folder: T) {
+  return {
+    ...folder,
+    setupInfo: getProjectFolderSetupInfo(folder.path)
+  };
+}
+
+function enrichProject<T extends { folders: Array<{ path: string }> }>(project: T) {
+  return {
+    ...project,
+    folders: project.folders.map((folder) => enrichProjectFolder(folder))
+  };
 }
 
 function isSqliteUniqueConstraintError(
@@ -44,7 +59,7 @@ export async function listProjects(app: FastifyInstance) {
     orderBy: (table, operators) => [operators.desc(table.updatedAt)]
   });
 
-  return items;
+  return items.map((project) => enrichProject(project));
 }
 
 export async function getProjectOrThrow(app: FastifyInstance, id: number) {
@@ -59,7 +74,7 @@ export async function getProjectOrThrow(app: FastifyInstance, id: number) {
     throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found");
   }
 
-  return project;
+  return enrichProject(project);
 }
 
 export async function createProject(
@@ -145,7 +160,7 @@ export async function createProjectFolder(
       .get();
 
     return {
-      ...folder,
+      ...enrichProjectFolder(folder),
       pathInfo
     };
   } catch (error) {
@@ -203,7 +218,7 @@ export async function updateProjectFolder(
       .get();
 
     return {
-      ...folder,
+      ...enrichProjectFolder(folder),
       pathInfo
     };
   } catch (error) {
@@ -224,4 +239,36 @@ export async function deleteProjectFolder(app: FastifyInstance, id: number) {
 
   app.db.delete(projectFolders).where(eq(projectFolders.id, id)).run();
   return { ok: true };
+}
+
+export async function scaffoldProjectFolderSetup(app: FastifyInstance, id: number) {
+  const existing = app.db
+    .select()
+    .from(projectFolders)
+    .where(eq(projectFolders.id, id))
+    .get();
+
+  if (!existing) {
+    throw new AppError(404, "PROJECT_FOLDER_NOT_FOUND", "Project folder not found");
+  }
+
+  if (!existing.existsOnDisk) {
+    throw new AppError(409, "PROJECT_FOLDER_NOT_AVAILABLE", "Project folder is not available on disk", {
+      folderId: id
+    });
+  }
+
+  const setupInfo = await scaffoldProjectFolderWorktreeSetup(existing.path);
+  const updatedAt = nowIso();
+  const folder = app.db
+    .update(projectFolders)
+    .set({ updatedAt })
+    .where(eq(projectFolders.id, id))
+    .returning()
+    .get();
+
+  return {
+    ...folder,
+    setupInfo
+  };
 }

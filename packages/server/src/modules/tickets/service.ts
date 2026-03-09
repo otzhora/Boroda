@@ -19,6 +19,7 @@ import {
   workContexts
 } from "../../db/schema";
 import { AppError } from "../../shared/errors";
+import { getProjectFolderSetupInfo } from "../../shared/worktree-setup";
 
 const supportedTicketImageMimeTypes = new Map([
   ["image/png", "png"],
@@ -297,7 +298,7 @@ async function ensureProjectsExist(app: FastifyInstance, projectIds: number[]) {
 }
 
 async function loadTicketProjectLinks(app: FastifyInstance, ticketId: number) {
-  return app.db.query.ticketProjectLinks.findMany({
+  const projectLinks = await app.db.query.ticketProjectLinks.findMany({
     where: eq(ticketProjectLinks.ticketId, ticketId),
     with: {
       project: {
@@ -307,6 +308,17 @@ async function loadTicketProjectLinks(app: FastifyInstance, ticketId: number) {
       }
     }
   });
+
+  return projectLinks.map((link) => ({
+    ...link,
+    project: {
+      ...link.project,
+      folders: link.project.folders.map((folder) => ({
+        ...folder,
+        setupInfo: getProjectFolderSetupInfo(folder.path)
+      }))
+    }
+  }));
 }
 
 async function loadTicketJiraIssueLinks(app: FastifyInstance, ticketId: number) {
@@ -317,7 +329,7 @@ async function loadTicketJiraIssueLinks(app: FastifyInstance, ticketId: number) 
 }
 
 async function loadTicketWorkspaces(app: FastifyInstance, ticketId: number) {
-  return app.db.query.ticketWorkspaces.findMany({
+  const workspaces = await app.db.query.ticketWorkspaces.findMany({
     where: eq(ticketWorkspaces.ticketId, ticketId),
     with: {
       projectFolder: {
@@ -328,6 +340,14 @@ async function loadTicketWorkspaces(app: FastifyInstance, ticketId: number) {
     },
     orderBy: [asc(ticketWorkspaces.id)]
   });
+
+  return workspaces.map((workspace) => ({
+    ...workspace,
+    projectFolder: {
+      ...workspace.projectFolder,
+      setupInfo: getProjectFolderSetupInfo(workspace.projectFolder.path)
+    }
+  }));
 }
 
 function normalizeWorkspaceRole(role: string | undefined) {

@@ -30,6 +30,10 @@ export interface ProjectFolder {
   kind: ProjectFolderKind;
   isPrimary: boolean;
   existsOnDisk: boolean;
+  setupInfo?: {
+    hasWorktreeSetup: boolean;
+    configPath: string | null;
+  };
   createdAt: string;
   updatedAt: string;
 }

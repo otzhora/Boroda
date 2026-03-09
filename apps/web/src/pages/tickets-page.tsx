@@ -23,6 +23,7 @@ import {
   type TicketFilters,
   type TicketScope
 } from "../features/tickets/queries";
+import { getStoredAutoRunWorktreeSetup } from "../lib/user-preferences";
 import type { Project, TicketListItem, TicketStatus } from "../lib/types";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
@@ -1030,12 +1031,13 @@ export function TicketsPage() {
           deleteTicketMutation.mutate();
         }}
         onOpenInApp={async (target, mode, folderId, workspaceId) => {
+          const runSetup = getStoredAutoRunWorktreeSetup();
           await openTicketInAppMutation.mutateAsync(
             folderId === undefined
-              ? { target, mode }
+              ? { target, mode, runSetup }
               : workspaceId === undefined
-                ? { target, mode, folderId }
-                : { target, mode, folderId, workspaceId }
+                ? { target, mode, folderId, runSetup }
+                : { target, mode, folderId, workspaceId, runSetup }
           );
         }}
         onRefreshJira={() => {

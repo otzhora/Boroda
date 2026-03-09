@@ -7,7 +7,12 @@ import {
   type UpdateJiraSettingsPayload
 } from "../features/jira/queries";
 import { apiClient, apiClientBlob } from "../lib/api-client";
-import { getStoredDefaultOpenInMode, setStoredDefaultOpenInMode } from "../lib/user-preferences";
+import {
+  getStoredAutoRunWorktreeSetup,
+  getStoredDefaultOpenInMode,
+  setStoredAutoRunWorktreeSetup,
+  setStoredDefaultOpenInMode
+} from "../lib/user-preferences";
 import type { OpenInMode } from "../lib/types";
 
 const railClassName = "lg:sticky lg:top-20 lg:self-start";
@@ -30,6 +35,7 @@ interface JiraSettingsFormState {
 
 interface GeneralSettingsFormState {
   defaultOpenInMode: OpenInMode;
+  autoRunWorktreeSetup: boolean;
 }
 
 function createEmptyJiraSettingsFormState(): JiraSettingsFormState {
@@ -48,7 +54,8 @@ export function SettingsPage() {
   const [isSavingGeneralSettings, setIsSavingGeneralSettings] = useState(false);
   const [jiraForm, setJiraForm] = useState<JiraSettingsFormState>(createEmptyJiraSettingsFormState());
   const [generalForm, setGeneralForm] = useState<GeneralSettingsFormState>(() => ({
-    defaultOpenInMode: getStoredDefaultOpenInMode()
+    defaultOpenInMode: getStoredDefaultOpenInMode(),
+    autoRunWorktreeSetup: getStoredAutoRunWorktreeSetup()
   }));
   const [generalSettingsStatus, setGeneralSettingsStatus] = useState<string | null>(null);
 
@@ -150,10 +157,11 @@ export function SettingsPage() {
 
     try {
       setStoredDefaultOpenInMode(generalForm.defaultOpenInMode);
+      setStoredAutoRunWorktreeSetup(generalForm.autoRunWorktreeSetup);
       setGeneralSettingsStatus(
-        generalForm.defaultOpenInMode === "folder"
-          ? "Folder is now the default open mode."
-          : "Worktree is now the default open mode."
+        `${generalForm.defaultOpenInMode === "folder" ? "Folder" : "Worktree"} is now the default open mode. ${
+          generalForm.autoRunWorktreeSetup ? "Fresh worktrees will run setup automatically." : "Fresh worktrees will skip setup."
+        }`
       );
     } finally {
       setIsSavingGeneralSettings(false);
@@ -225,7 +233,10 @@ export function SettingsPage() {
                         }`}
                         aria-pressed={isSelected}
                         onClick={() => {
-                          setGeneralForm({ defaultOpenInMode: mode });
+                          setGeneralForm((current) => ({
+                            ...current,
+                            defaultOpenInMode: mode
+                          }));
                           setGeneralSettingsStatus(null);
                         }}
                       >
@@ -241,8 +252,38 @@ export function SettingsPage() {
               </div>
             </div>
 
+            <div className="grid gap-3 border border-white/8 bg-white/[0.02] px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div className="min-w-0">
+                <label className="block text-sm text-ink-100" htmlFor="auto-run-worktree-setup">
+                  Auto-run worktree setup
+                </label>
+                <p className="m-0 mt-1 text-xs text-ink-300">
+                  When a Boroda-managed worktree is created for the first time, run `.boroda/worktree.setup.json` automatically.
+                </p>
+              </div>
+              <button
+                id="auto-run-worktree-setup"
+                type="button"
+                className={`inline-flex min-h-9 min-w-24 items-center justify-center rounded-[8px] border px-3 py-2 text-sm transition-colors ${
+                  generalForm.autoRunWorktreeSetup
+                    ? "border-white/12 bg-white text-canvas-975"
+                    : "border-white/8 bg-black/20 text-ink-200 hover:bg-white/[0.05] hover:text-ink-50"
+                }`}
+                aria-pressed={generalForm.autoRunWorktreeSetup}
+                onClick={() => {
+                  setGeneralForm((current) => ({
+                    ...current,
+                    autoRunWorktreeSetup: !current.autoRunWorktreeSetup
+                  }));
+                  setGeneralSettingsStatus(null);
+                }}
+              >
+                {generalForm.autoRunWorktreeSetup ? "Enabled" : "Disabled"}
+              </button>
+            </div>
+
             <p className={helperTextClassName} aria-live="polite">
-              {generalSettingsStatus ?? "Choose how Open In should default across tickets."}
+              {generalSettingsStatus ?? "Choose how Open In should default across tickets and whether fresh worktrees should run setup."}
             </p>
           </form>
         </section>

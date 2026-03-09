@@ -207,7 +207,13 @@ export function useMoveTicketStatusMutation(options: {
 
 export function useOpenTicketInAppMutation(ticketId: number | null) {
   return useMutation({
-    mutationFn: (input: { target: OpenInTarget; mode: OpenInMode; folderId?: number; workspaceId?: number }) => {
+    mutationFn: (input: {
+      target: OpenInTarget;
+      mode: OpenInMode;
+      folderId?: number;
+      workspaceId?: number;
+      runSetup: boolean;
+    }) => {
       if (ticketId === null) {
         throw new Error("No ticket selected");
       }

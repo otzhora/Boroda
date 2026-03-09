@@ -29,6 +29,7 @@ import {
 } from "../features/tickets/mutations";
 import { useTicketQuery } from "../features/tickets/queries";
 import { TICKET_PRIORITIES } from "../lib/constants";
+import { getStoredAutoRunWorktreeSetup } from "../lib/user-preferences";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
 const panelClassName =
@@ -571,12 +572,13 @@ export function BoardPage() {
           deleteTicketMutation.mutate();
         }}
         onOpenInApp={async (target, mode, folderId, workspaceId) => {
+          const runSetup = getStoredAutoRunWorktreeSetup();
           await openTicketInAppMutation.mutateAsync(
             folderId === undefined
-              ? { target, mode }
+              ? { target, mode, runSetup }
               : workspaceId === undefined
-                ? { target, mode, folderId }
-                : { target, mode, folderId, workspaceId }
+                ? { target, mode, folderId, runSetup }
+                : { target, mode, folderId, workspaceId, runSetup }
           );
         }}
         onRefreshJira={() => {

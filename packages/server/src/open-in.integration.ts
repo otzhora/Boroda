@@ -1,6 +1,6 @@
 // This integration harness is kept out of the default `src/*.test.ts` glob because
 // Node's test runner is currently aborting the file before assertions surface.
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -184,6 +184,24 @@ async function createGitWorkspaceRepo() {
   git(gitRepoFolderPath, "commit", "-m", "init");
 }
 
+async function writeWorktreeSetupConfig(
+  config: Record<string, unknown>,
+  scripts: Array<{ relativePath: string; content: string }>
+) {
+  await mkdir(path.join(gitRepoFolderPath, ".boroda", "scripts"), { recursive: true });
+  await writeFile(path.join(gitRepoFolderPath, ".boroda", "worktree.setup.json"), JSON.stringify(config, null, 2));
+
+  for (const script of scripts) {
+    const scriptPath = path.join(gitRepoFolderPath, script.relativePath);
+    await mkdir(path.dirname(scriptPath), { recursive: true });
+    await writeFile(scriptPath, script.content);
+    await chmod(scriptPath, 0o755);
+  }
+
+  git(gitRepoFolderPath, "add", ".boroda");
+  git(gitRepoFolderPath, "commit", "-m", "add worktree setup");
+}
+
 function serialTest(name: string, fn: () => Promise<void>) {
   return test(name, { concurrency: false }, fn);
 }
@@ -196,7 +214,8 @@ serialTest("opens VS Code for the primary linked project folder", async () => {
     method: "POST",
     url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
     payload: {
-      target: "vscode"
+      target: "vscode",
+      mode: "folder"
     }
   });
 
@@ -216,7 +235,8 @@ serialTest("opens Terminal for the primary linked project folder", async () => {
     method: "POST",
     url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
     payload: {
-      target: "terminal"
+      target: "terminal",
+      mode: "folder"
     }
   });
 
@@ -306,6 +326,7 @@ serialTest("opens Cursor for the selected linked project folder", async () => {
     url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
     payload: {
       target: "cursor",
+      mode: "folder",
       folderId: secondFolder.id
     }
   });
@@ -354,7 +375,8 @@ serialTest("returns 409 when the ticket has no available linked project folder",
     method: "POST",
     url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
     payload: {
-      target: "explorer"
+      target: "explorer",
+      mode: "folder"
     }
   });
 
@@ -432,7 +454,8 @@ serialTest("opens a Boroda-managed worktree when the ticket has one workspace fo
     method: "POST",
     url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
     payload: {
-      target: "vscode"
+      target: "vscode",
+      mode: "worktree"
     }
   });
 
@@ -444,6 +467,258 @@ serialTest("opens a Boroda-managed worktree when the ticket has one workspace fo
     payload.directory,
     path.join(tempRoot, "managed-worktrees", ticket.key, "managed-repo", "workspace", "feature-existing-worktree")
   );
+});
+
+serialTest("runs repo-local worktree setup on first managed worktree open", async () => {
+  resetOpenInState();
+  await createGitWorkspaceRepo();
+  await writeFile(path.join(gitRepoFolderPath, ".env.example"), "HELLO=world\n");
+  git(gitRepoFolderPath, "add", ".env.example");
+  git(gitRepoFolderPath, "commit", "-m", "add env example");
+  await writeWorktreeSetupConfig(
+    {
+      version: 1,
+      onCreate: ["copy-env"],
+      steps: {
+        "copy-env": {
+          script: ".boroda/scripts/copy-env.sh"
+        }
+      }
+    },
+    [
+      {
+        relativePath: ".boroda/scripts/copy-env.sh",
+        content: "#!/bin/sh\nset -eu\ncp .env.example .env\nprintf '%s' \"$BORODA_TICKET_KEY\" > .ticket-key\n"
+      }
+    ]
+  );
+
+  const projectResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Setup Repo",
+      slug: "setup-repo",
+      description: "",
+      color: "#355c7d"
+    }
+  });
+  const project = projectResponse.json();
+
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: gitRepoFolderPath,
+      defaultBranch: "main",
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+  const folder = folderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Open setup workspace",
+      description: "",
+      branch: "feature/setup-workspace",
+      workspaces: [
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/setup-workspace",
+          role: "primary"
+        }
+      ],
+      status: "READY",
+      priority: "HIGH",
+      projectLinks: [
+        {
+          projectId: project.id,
+          relationship: "PRIMARY"
+        }
+      ]
+    }
+  });
+  const ticket = ticketResponse.json();
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "vscode",
+      mode: "worktree"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  const worktreePath = response.json().directory;
+  assert.equal(await readFile(path.join(worktreePath, ".env"), "utf8"), "HELLO=world\n");
+  assert.equal(await readFile(path.join(worktreePath, ".ticket-key"), "utf8"), ticket.key);
+});
+
+serialTest("returns 409 when worktree setup config is invalid", async () => {
+  resetOpenInState();
+  await createGitWorkspaceRepo();
+  await writeWorktreeSetupConfig(
+    {
+      version: 1,
+      onCreate: ["copy-env"],
+      steps: {}
+    },
+    []
+  );
+
+  const projectResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Invalid Setup Repo",
+      slug: "invalid-setup-repo",
+      description: "",
+      color: "#355c7d"
+    }
+  });
+  const project = projectResponse.json();
+
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: gitRepoFolderPath,
+      defaultBranch: "main",
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+  const folder = folderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Open invalid setup workspace",
+      description: "",
+      branch: "feature/invalid-setup",
+      workspaces: [
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/invalid-setup",
+          role: "primary"
+        }
+      ],
+      status: "READY",
+      priority: "HIGH",
+      projectLinks: [
+        {
+          projectId: project.id,
+          relationship: "PRIMARY"
+        }
+      ]
+    }
+  });
+  const ticket = ticketResponse.json();
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "vscode",
+      mode: "worktree"
+    }
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error.code, "WORKTREE_SETUP_INVALID");
+});
+
+serialTest("returns 409 when a worktree setup step fails", async () => {
+  resetOpenInState();
+  await createGitWorkspaceRepo();
+  await writeWorktreeSetupConfig(
+    {
+      version: 1,
+      onCreate: ["fail-step"],
+      steps: {
+        "fail-step": {
+          script: ".boroda/scripts/fail.sh"
+        }
+      }
+    },
+    [
+      {
+        relativePath: ".boroda/scripts/fail.sh",
+        content: "#!/bin/sh\nprintf 'nope\\n' >&2\nexit 7\n"
+      }
+    ]
+  );
+
+  const projectResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Fail Setup Repo",
+      slug: "fail-setup-repo",
+      description: "",
+      color: "#355c7d"
+    }
+  });
+  const project = projectResponse.json();
+
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: gitRepoFolderPath,
+      defaultBranch: "main",
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+  const folder = folderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Open failing setup workspace",
+      description: "",
+      branch: "feature/fail-setup",
+      workspaces: [
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/fail-setup",
+          role: "primary"
+        }
+      ],
+      status: "READY",
+      priority: "HIGH",
+      projectLinks: [
+        {
+          projectId: project.id,
+          relationship: "PRIMARY"
+        }
+      ]
+    }
+  });
+  const ticket = ticketResponse.json();
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "vscode",
+      mode: "worktree"
+    }
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error.code, "WORKTREE_SETUP_FAILED");
+  assert.equal(response.json().error.details.exitCode, 7);
 });
 
 serialTest("returns 409 when multiple workspaces exist for the selected folder and no workspace is chosen", async () => {
@@ -508,7 +783,8 @@ serialTest("returns 409 when multiple workspaces exist for the selected folder a
     method: "POST",
     url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
     payload: {
-      target: "vscode"
+      target: "vscode",
+      mode: "worktree"
     }
   });
 

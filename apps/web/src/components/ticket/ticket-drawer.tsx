@@ -351,6 +351,7 @@ interface WorkspaceSummaryItem {
   projectName: string;
   projectColor: string;
   branchName: string;
+  hasWorktreeSetup: boolean;
 }
 
 const openInTargets: Array<{
@@ -498,13 +499,14 @@ function getWorkspaceSummaries(
     return [];
   }
 
-  const folderLookup = new Map<string, { projectName: string; projectColor: string }>();
+  const folderLookup = new Map<string, { projectName: string; projectColor: string; hasWorktreeSetup: boolean }>();
 
   for (const project of projects) {
     for (const folder of project.folders) {
       folderLookup.set(String(folder.id), {
         projectName: project.name,
-        projectColor: project.color
+        projectColor: project.color,
+        hasWorktreeSetup: folder.setupInfo?.hasWorktreeSetup === true
       });
     }
   }
@@ -516,7 +518,8 @@ function getWorkspaceSummaries(
       (ticketWorkspace
         ? {
             projectName: ticketWorkspace.projectFolder.project.name,
-            projectColor: ticketWorkspace.projectFolder.project.color
+            projectColor: ticketWorkspace.projectFolder.project.color,
+            hasWorktreeSetup: false
           }
         : null);
 
@@ -524,7 +527,8 @@ function getWorkspaceSummaries(
       key: String(workspace.id ?? `${workspace.projectFolderId}-${index}`),
       projectName: folderInfo?.projectName ?? "Unlinked project",
       projectColor: folderInfo?.projectColor ?? "#6b7280",
-      branchName: workspace.branchName.trim() || "No branch"
+      branchName: workspace.branchName.trim() || "No branch",
+      hasWorktreeSetup: folderInfo?.hasWorktreeSetup ?? false
     };
   });
 }
@@ -537,18 +541,65 @@ function WorkspaceSummaryList(props: { items: WorkspaceSummaryItem[] }) {
   return (
     <div className="overflow-hidden rounded-lg border border-white/8">
       {props.items.map((workspace) => (
-        <div key={workspace.key} className="flex items-center justify-between gap-3 border-b border-white/8 px-3 py-2.5 last:border-b-0">
-          <span
-            className="inline-flex min-h-7 items-center rounded-md border border-white/8 bg-canvas-950 px-2.5 text-sm text-ink-200"
-            style={getProjectBadgeStyle(workspace.projectColor)}
-          >
-            {workspace.projectName}
-          </span>
-          <span className="min-w-0 truncate text-sm text-ink-200">{workspace.branchName}</span>
+        <div key={workspace.key} className="grid gap-1 border-b border-white/8 px-3 py-2.5 last:border-b-0">
+          <div className="flex items-center justify-between gap-3">
+            <span
+              className="inline-flex min-h-7 items-center rounded-md border border-white/8 bg-canvas-950 px-2.5 text-sm text-ink-200"
+              style={getProjectBadgeStyle(workspace.projectColor)}
+            >
+              {workspace.projectName}
+            </span>
+            <span className="min-w-0 truncate text-sm text-ink-200">{workspace.branchName}</span>
+          </div>
+          <p className="m-0 text-[0.8rem] text-ink-300">
+            {workspace.hasWorktreeSetup
+              ? "Fresh worktrees for this folder can run repo-local setup."
+              : "No repo-local worktree setup configured for this folder."}
+          </p>
         </div>
       ))}
     </div>
   );
+}
+
+function parseActivityMeta(metaJson: string) {
+  try {
+    return JSON.parse(metaJson) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function TicketActivityDetails(props: { activity: Ticket["activities"][number] }) {
+  const meta = parseActivityMeta(props.activity.metaJson);
+
+  if (!meta) {
+    return null;
+  }
+
+  if (props.activity.type === "ticket.workspace_setup_ran") {
+    const steps = Array.isArray(meta.steps) ? meta.steps.filter((value): value is string => typeof value === "string") : [];
+
+    if (!steps.length) {
+      return null;
+    }
+
+    return <p className="m-0 text-[0.8rem] text-ink-300">Steps: {steps.join(", ")}</p>;
+  }
+
+  if (props.activity.type === "ticket.workspace_setup_failed") {
+    const errorCode = typeof meta.errorCode === "string" ? meta.errorCode : null;
+    const stderr = typeof meta.stderr === "string" && meta.stderr.trim() ? meta.stderr.trim() : null;
+
+    return (
+      <div className="grid gap-1">
+        {errorCode ? <p className="m-0 text-[0.8rem] text-ink-300">Error: {errorCode}</p> : null}
+        {stderr ? <p className="m-0 break-words text-[0.8rem] text-red-100">{stderr}</p> : null}
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function countWorkspaceBaseBranchErrors(form: TicketFormState, projects: Project[]) {
@@ -1208,6 +1259,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                     {ticket.activities.map((activity) => (
                       <div className="grid gap-1 border-b border-white/8 pb-3 last:border-b-0 last:pb-0" key={activity.id}>
                         <p className="m-0 text-sm text-ink-50">{activity.message}</p>
+                        <TicketActivityDetails activity={activity} />
                         <span className="text-[0.8rem] text-ink-300">{formatDateTime(activity.createdAt)}</span>
                       </div>
                     ))}

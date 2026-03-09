@@ -227,6 +227,18 @@ function getFolderStatusClassName(existsOnDisk: boolean) {
   }`;
 }
 
+function getWorktreeSetupStatusClassName(hasWorktreeSetup: boolean) {
+  return `${chipClassName} ${
+    hasWorktreeSetup
+      ? "border-sky-400/24 bg-sky-400/10 text-sky-100"
+      : "border-white/12 bg-white/[0.04] text-ink-200"
+  }`;
+}
+
+function hasWorktreeSetup(folder: ProjectFolder) {
+  return folder.setupInfo?.hasWorktreeSetup === true;
+}
+
 function getProjectStatusClassName(folderCount: number) {
   return `${chipClassName} ${
     folderCount > 0
@@ -425,6 +437,10 @@ export function ProjectsPage() {
         kind: payload.kind,
         isPrimary: payload.isPrimary,
         existsOnDisk: false,
+        setupInfo: {
+          hasWorktreeSetup: false,
+          configPath: null
+        },
         createdAt: timestamp,
         updatedAt: timestamp
       };
@@ -667,12 +683,42 @@ export function ProjectsPage() {
     }
   });
 
+  const scaffoldWorktreeSetupMutation = useMutation<
+    ProjectFolder,
+    Error,
+    { projectId: number; folderId: number }
+  >({
+    mutationFn: ({ folderId }) =>
+      apiClient<ProjectFolder>(`/api/project-folders/${folderId}/worktree-setup/scaffold`, {
+        method: "POST"
+      }),
+    onSuccess: (folder, variables) => {
+      updateProjectList(queryClient, (projects) =>
+        sortProjects(
+          projects.map((project) =>
+            project.id === variables.projectId
+              ? {
+                  ...project,
+                  updatedAt: folder.updatedAt,
+                  folders: sortFolders(project.folders.map((item) => (item.id === folder.id ? { ...item, ...folder } : item)))
+                }
+              : project
+          )
+        )
+      );
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY });
+    }
+  });
+
   const projectError =
     createProjectMutation.error?.message ?? updateProjectMutation.error?.message;
   const folderError =
     createFolderMutation.error?.message ??
     updateFolderMutation.error?.message ??
-    deleteFolderMutation.error?.message;
+    deleteFolderMutation.error?.message ??
+    scaffoldWorktreeSetupMutation.error?.message;
   const validateError = validatePathMutation.error?.message;
   const deleteError = deleteProjectMutation.error?.message;
 
@@ -1251,6 +1297,9 @@ export function ProjectsPage() {
                                           <span className={getFolderStatusClassName(folder.existsOnDisk)}>
                                             {folder.existsOnDisk ? "On disk" : "Missing"}
                                           </span>
+                                          <span className={getWorktreeSetupStatusClassName(hasWorktreeSetup(folder))}>
+                                            {hasWorktreeSetup(folder) ? "Worktree setup" : "No setup"}
+                                          </span>
                                         </div>
                                         <p className="m-0 break-words font-mono text-[0.84rem] text-ink-200">
                                           {folder.path}
@@ -1259,9 +1308,31 @@ export function ProjectsPage() {
                                           <span>Default branch: {folder.defaultBranch || "Not set"}</span>
                                           <span>Updated {formatDateTime(folder.updatedAt)}</span>
                                         </div>
+                                        <p className="m-0 text-sm text-ink-300">
+                                          {hasWorktreeSetup(folder)
+                                            ? "Fresh Boroda worktrees can run repo-local setup from .boroda/worktree.setup.json."
+                                            : "No repo-local worktree setup yet. Scaffold a starter config to copy common env files into fresh worktrees."}
+                                        </p>
                                       </div>
 
                                       <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                                        <button
+                                          type="button"
+                                          className={secondaryButtonClassName}
+                                          disabled={scaffoldWorktreeSetupMutation.isPending || !folder.existsOnDisk}
+                                          onClick={() => {
+                                            scaffoldWorktreeSetupMutation.mutate({
+                                              projectId: project.id,
+                                              folderId: folder.id
+                                            });
+                                          }}
+                                        >
+                                          {scaffoldWorktreeSetupMutation.isPending
+                                            ? "Scaffolding…"
+                                            : hasWorktreeSetup(folder)
+                                              ? "Re-scaffold setup"
+                                              : "Scaffold setup"}
+                                        </button>
                                         <button
                                           type="button"
                                           className={secondaryButtonClassName}

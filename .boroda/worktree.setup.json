@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "onCreate": [
+    "copy-env"
+  ],
+  "steps": {
+    "copy-env": {
+      "script": ".boroda/scripts/copy-env.sh"
+    }
+  }
+}

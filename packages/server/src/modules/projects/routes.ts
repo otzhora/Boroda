@@ -14,6 +14,7 @@ import {
   deleteProjectFolder,
   getProjectOrThrow,
   listProjects,
+  scaffoldProjectFolderSetup,
   updateProject,
   updateProjectFolder
 } from "./service";
@@ -58,5 +59,9 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     const params = projectFolderIdParamSchema.parse(request.params);
     return deleteProjectFolder(app, params.id);
   });
-};
 
+  app.post("/project-folders/:id/worktree-setup/scaffold", async (request) => {
+    const params = projectFolderIdParamSchema.parse(request.params);
+    return scaffoldProjectFolderSetup(app, params.id);
+  });
+};

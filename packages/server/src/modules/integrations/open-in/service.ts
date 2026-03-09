@@ -5,7 +5,7 @@ import { mkdir } from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import { getConfig } from "../../../config";
-import { ticketWorkspaces } from "../../../db/schema";
+import { ticketActivities, ticketWorkspaces } from "../../../db/schema";
 import { AppError } from "../../../shared/errors";
 import { getTicketOrThrow } from "../../tickets/service";
 import {
@@ -14,6 +14,7 @@ import {
   ensureWorkspaceWorktree,
   validateWorkspaceWorktree
 } from "./git-workspaces";
+import { runWorktreeSetup } from "./worktree-setup";
 
 export type OpenInTarget = "explorer" | "vscode" | "cursor" | "terminal";
 export type OpenInMode = "folder" | "worktree";
@@ -35,6 +36,7 @@ interface OpenTicketInAppInput {
   mode: OpenInMode;
   folderId?: number;
   workspaceId?: number;
+  runSetup: boolean;
 }
 
 interface PreferredFolderCandidate {
@@ -79,6 +81,26 @@ interface WindowsTerminalProfile {
   name?: string;
   source?: string;
   commandline?: string;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function recordTicketActivity(
+  app: FastifyInstance,
+  ticketId: number,
+  type: string,
+  message: string,
+  meta: Record<string, unknown> = {}
+) {
+  app.db.insert(ticketActivities).values({
+    ticketId,
+    type,
+    message,
+    metaJson: JSON.stringify(meta),
+    createdAt: nowIso()
+  }).run();
 }
 
 function sortProjectLinks(links: PreferredFolderCandidate[]) {
@@ -380,12 +402,14 @@ async function resolveWorkspaceDirectory(
   app: FastifyInstance,
   ticket: Awaited<ReturnType<typeof getTicketOrThrow>>,
   folderId: number,
-  workspace: TicketWorkspaceCandidate
+  workspace: TicketWorkspaceCandidate,
+  input: OpenTicketInAppInput
 ) {
   const repoRoot = ensureGitRepo(workspace.projectFolder.path);
   const folderDefaultBranch = workspace.projectFolder.defaultBranch?.trim() || null;
   const detectedDefaultBranch = detectRemoteDefaultBranch(repoRoot);
   const baseBranch = workspace.baseBranch?.trim() || folderDefaultBranch;
+  const shouldRunSetup = workspace.worktreePath === null && input.runSetup;
 
   if (folderDefaultBranch && detectedDefaultBranch && folderDefaultBranch !== detectedDefaultBranch) {
     throw new AppError(409, "WORKSPACE_DEFAULT_BRANCH_INVALID", "The configured default branch does not match the repository default branch", {
@@ -416,6 +440,46 @@ async function resolveWorkspaceDirectory(
         branchName: workspace.branchName,
         baseBranch
       });
+
+  if (shouldRunSetup) {
+    try {
+      const executedSteps = runWorktreeSetup({
+        worktreePath: ensuredPath,
+        ticketKey: ticket.key,
+        branchName: workspace.branchName,
+        repoPath: repoRoot
+      });
+
+      if (executedSteps.length > 0) {
+        recordTicketActivity(
+          app,
+          ticket.id,
+          "ticket.workspace_setup_ran",
+          executedSteps.length === 1
+            ? `Ran worktree setup step ${executedSteps[0]}`
+            : `Ran ${executedSteps.length} worktree setup steps`,
+          {
+            projectFolderId: folderId,
+            workspaceId: workspace.id,
+            worktreePath: ensuredPath,
+            steps: executedSteps
+          }
+        );
+      }
+    } catch (error) {
+      if (error instanceof AppError) {
+        recordTicketActivity(app, ticket.id, "ticket.workspace_setup_failed", "Worktree setup failed", {
+          projectFolderId: folderId,
+          workspaceId: workspace.id,
+          worktreePath: ensuredPath,
+          errorCode: error.code,
+          ...error.details
+        });
+      }
+
+      throw error;
+    }
+  }
 
   const now = new Date().toISOString();
   app.db
@@ -485,7 +549,7 @@ export async function openTicketInApp(app: FastifyInstance, ticketId: number, in
       });
     }
 
-    directory = await resolveWorkspaceDirectory(app, ticket, selectedFolder.id, selectedWorkspace);
+    directory = await resolveWorkspaceDirectory(app, ticket, selectedFolder.id, selectedWorkspace, input);
   }
 
   return openInApp({
