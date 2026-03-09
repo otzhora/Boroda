@@ -1592,7 +1592,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                   className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-red-400/20 bg-red-950/28 px-3 py-1.5 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/40 disabled:cursor-progress disabled:opacity-70"
                   onClick={onDelete}
                   disabled={isDeleting}
-                  aria-label={isDeleting ? "Deleting ticket" : "Delete ticket"}
+                  aria-label={isDeleting ? "Moving ticket to history" : "Move ticket to history"}
                 >
                   {isDeleting ? (
                     <span
@@ -1600,7 +1600,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                       aria-hidden="true"
                     />
                   ) : null}
-                  Delete ticket
+                  {isDeleting ? "Moving to history…" : "Move to history"}
                 </button>
               </section>
             </div>

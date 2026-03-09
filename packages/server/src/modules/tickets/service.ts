@@ -19,7 +19,6 @@ import {
   workContexts
 } from "../../db/schema";
 import { AppError } from "../../shared/errors";
-import { isWorkspaceDirty, removeWorkspaceWorktree } from "../integrations/open-in/git-workspaces";
 
 const supportedTicketImageMimeTypes = new Map([
   ["image/png", "png"],
@@ -144,10 +143,6 @@ async function cleanupTicketImages(
   } catch {
     return;
   }
-}
-
-async function removeTicketImageDirectory(app: FastifyInstance, ticketId: number) {
-  await rm(getTicketUploadsDirectory(app, ticketId), { recursive: true, force: true });
 }
 
 function recordActivity(
@@ -442,32 +437,6 @@ async function replaceWorkspaces(
       }))
     )
     .run();
-}
-
-async function cleanupTicketWorkspaces(app: FastifyInstance, ticketId: number) {
-  const workspaces = await loadTicketWorkspaces(app, ticketId);
-  const dirtyWorkspaces = workspaces.filter(
-    (workspace) => workspace.createdByBoroda && workspace.worktreePath && isWorkspaceDirty(workspace.worktreePath)
-  );
-
-  if (dirtyWorkspaces.length) {
-    throw new AppError(409, "TICKET_WORKSPACES_DIRTY", "One or more managed workspaces have uncommitted changes", {
-      workspaces: dirtyWorkspaces.map((workspace) => ({
-        id: workspace.id,
-        branchName: workspace.branchName,
-        worktreePath: workspace.worktreePath,
-        projectFolderId: workspace.projectFolderId
-      }))
-    });
-  }
-
-  for (const workspace of workspaces) {
-    if (!workspace.createdByBoroda || !workspace.worktreePath) {
-      continue;
-    }
-
-    removeWorkspaceWorktree(workspace.worktreePath);
-  }
 }
 
 function recordProjectLinkChanges(
@@ -908,10 +877,22 @@ export async function refreshTicketJiraIssues(app: FastifyInstance, id: number) 
 }
 
 export async function deleteTicket(app: FastifyInstance, id: number) {
-  await getTicketOrThrow(app, id);
-  await cleanupTicketWorkspaces(app, id);
-  app.db.delete(tickets).where(eq(tickets.id, id)).run();
-  await removeTicketImageDirectory(app, id);
+  const existing = await getTicketOrThrow(app, id);
+
+  if (existing.archivedAt) {
+    return { ok: true };
+  }
+
+  const archivedAt = nowIso();
+  app.db
+    .update(tickets)
+    .set({
+      archivedAt,
+      updatedAt: archivedAt
+    })
+    .where(eq(tickets.id, id))
+    .run();
+  recordActivity(app, id, "ticket.archived", `Ticket ${existing.key} moved to history`);
   return { ok: true };
 }
 

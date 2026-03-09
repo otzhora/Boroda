@@ -143,6 +143,41 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   assert.ok(activityTypes.includes("ticket.project_unlinked"));
   assert.ok(activityTypes.includes("ticket.jira_issue_linked"));
   assert.ok(activityTypes.includes("ticket.jira_issue_unlinked"));
+
+  const archiveResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/tickets/${createdTicket.id}`
+  });
+
+  assert.equal(archiveResponse.statusCode, 200);
+
+  const activeListResponse = await app.inject({
+    method: "GET",
+    url: "/api/tickets"
+  });
+
+  assert.equal(activeListResponse.statusCode, 200);
+  assert.equal(activeListResponse.json().length, 0);
+
+  const archivedTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${createdTicket.id}`
+  });
+
+  assert.equal(archivedTicketResponse.statusCode, 200);
+  const archivedTicket = archivedTicketResponse.json();
+  assert.equal(typeof archivedTicket.archivedAt, "string");
+  assert.ok(archivedTicket.activities.some((activity: { type: string }) => activity.type === "ticket.archived"));
+
+  const boardResponse = await app.inject({
+    method: "GET",
+    url: "/api/board"
+  });
+
+  assert.equal(boardResponse.statusCode, 200);
+  const board = boardResponse.json();
+  const visibleTickets = board.columns.flatMap((column: { tickets: Array<{ id: number }> }) => column.tickets);
+  assert.equal(visibleTickets.length, 0);
 });
 
 test("ticket-project link endpoints enforce duplicate and primary constraints", async () => {
@@ -497,7 +532,7 @@ test("ticket image uploads can be pasted and rendered back from local storage", 
   assert.equal(imageResponse.body, "fake-image");
 });
 
-test("ticket image cleanup removes orphaned files on description update and ticket delete", async () => {
+test("ticket image cleanup removes orphaned files on description update and keeps remaining files after moving ticket to history", async () => {
   const ticketResponse = await app.inject({
     method: "POST",
     url: "/api/tickets",
@@ -561,17 +596,25 @@ test("ticket image cleanup removes orphaned files on description update and tick
 
   assert.equal(retainedSecondImageResponse.statusCode, 200);
 
-  const deleteTicketResponse = await app.inject({
+  const archiveTicketResponse = await app.inject({
     method: "DELETE",
     url: `/api/tickets/${ticket.id}`
   });
 
-  assert.equal(deleteTicketResponse.statusCode, 200);
+  assert.equal(archiveTicketResponse.statusCode, 200);
 
-  const deletedSecondImageResponse = await app.inject({
+  const retainedSecondImageAfterArchiveResponse = await app.inject({
     method: "GET",
     url: secondImage.url
   });
 
-  assert.equal(deletedSecondImageResponse.statusCode, 404);
+  assert.equal(retainedSecondImageAfterArchiveResponse.statusCode, 200);
+
+  const archivedTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(archivedTicketResponse.statusCode, 200);
+  assert.equal(typeof archivedTicketResponse.json().archivedAt, "string");
 });
