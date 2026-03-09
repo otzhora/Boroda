@@ -11,6 +11,7 @@ interface ModalDialogProps {
   initialFocusRef?: RefObject<HTMLElement | null>;
   size?: "default" | "wide";
   variant?: "default" | "flat";
+  placement?: "center" | "right";
   showHeader?: boolean;
   showCloseButton?: boolean;
 }
@@ -41,6 +42,7 @@ export function ModalDialog({
   initialFocusRef,
   size = "default",
   variant = "default",
+  placement = "center",
   showHeader = true,
   showCloseButton = true
 }: ModalDialogProps) {
@@ -52,7 +54,9 @@ export function ModalDialog({
   const onEscapeKeyDownRef = useRef(onEscapeKeyDown);
   const [hasBodyOverflow, setHasBodyOverflow] = useState(false);
   const headerLayoutClass =
-    size === "wide" && showCloseButton
+    placement === "right" && showCloseButton
+      ? "flex items-start justify-between gap-3 px-5 py-4 sm:px-6"
+      : size === "wide" && showCloseButton
       ? "grid items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1.7fr)_minmax(17rem,20rem)] xl:gap-8"
       : showCloseButton
         ? "flex items-start justify-between gap-3"
@@ -63,11 +67,23 @@ export function ModalDialog({
       : "min-h-0 overflow-x-hidden overflow-y-auto";
   const panelClassName =
     variant === "flat"
-      ? `grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-[10px] border border-white/10 bg-canvas-925 shadow-[0_8px_24px_rgba(0,0,0,0.24)] ${
-          size === "wide" ? "max-w-[94rem]" : "max-w-3xl"
+      ? `grid w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden border border-white/10 bg-canvas-925 shadow-[0_8px_24px_rgba(0,0,0,0.24)] ${
+          placement === "right"
+            ? size === "wide"
+              ? "h-full max-h-screen max-w-[56rem] rounded-none sm:rounded-l-[10px]"
+              : "h-full max-h-screen max-w-3xl rounded-none sm:rounded-l-[10px]"
+            : size === "wide"
+              ? "max-h-[96vh] max-w-[94rem] rounded-[10px]"
+              : "max-h-[96vh] max-w-3xl rounded-[10px]"
         }`
-      : `grid max-h-[96vh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden rounded-[10px] border border-white/8 bg-canvas-925 px-4 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.24)] sm:px-6 sm:py-6 ${
-          size === "wide" ? "max-w-[94rem]" : "max-w-2xl"
+      : `grid w-full min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden border border-white/8 bg-canvas-925 px-4 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.24)] sm:px-6 sm:py-6 ${
+          placement === "right"
+            ? size === "wide"
+              ? "h-full max-h-screen max-w-[56rem] rounded-none sm:rounded-l-[10px]"
+              : "h-full max-h-screen max-w-2xl rounded-none sm:rounded-l-[10px]"
+            : size === "wide"
+              ? "max-h-[96vh] max-w-[94rem] rounded-[10px]"
+              : "max-h-[96vh] max-w-2xl rounded-[10px]"
         }`;
   const titleClassName =
     variant === "flat"
@@ -218,7 +234,11 @@ export function ModalDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-4 py-4 sm:px-6"
+      className={
+        placement === "right"
+          ? "fixed inset-0 z-50 grid justify-items-end bg-black/72"
+          : "fixed inset-0 z-50 grid place-items-center bg-black/72 px-4 py-4 sm:px-6"
+      }
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -235,7 +255,7 @@ export function ModalDialog({
         tabIndex={-1}
       >
         {showHeader ? (
-          <div className="w-full">
+          <div className={`w-full ${placement === "right" ? "border-b border-white/8" : ""}`}>
             <div className={headerLayoutClass}>
               <div className="min-w-0">
                 {header ? (

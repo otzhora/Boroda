@@ -169,7 +169,7 @@ export function toTicketPayload(form: TicketFormState) {
       projectFolderId: Number(workspace.projectFolderId),
       branchName: workspace.branchName.trim(),
       baseBranch: toOptionalApiText(workspace.baseBranch),
-      role: workspace.role.trim() || "primary"
+      role: "primary"
     }))
     .filter((workspace) => Number.isInteger(workspace.projectFolderId) && workspace.projectFolderId > 0 && workspace.branchName.length > 0);
 

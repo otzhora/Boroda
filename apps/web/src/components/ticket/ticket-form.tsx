@@ -407,82 +407,74 @@ export function TicketWorkspaceFields({ value, projects, projectLinks, onChange 
   return (
     <div className="grid gap-3">
       {value.length ? (
-        value.map((workspace, index) => (
-          <div key={workspace.id ?? `${workspace.projectFolderId}-${index}`} className="grid gap-3 rounded-xl border border-white/8 bg-black/10 p-3">
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-              <label className="grid gap-2">
-                <span className={labelClassName}>Folder</span>
-                <select
-                  className={inputClassName}
-                  value={workspace.projectFolderId}
-                  onChange={(event) =>
-                    onChange(
-                      value.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, projectFolderId: event.target.value } : item
-                      )
-                    )
-                  }
-                >
-                  <option value="">Choose folder…</option>
-                  {folderOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-2">
-                <span className={labelClassName}>Role</span>
-                <input
-                  className={inputClassName}
-                  value={workspace.role}
-                  onChange={(event) =>
-                    onChange(value.map((item, itemIndex) => (itemIndex === index ? { ...item, role: event.target.value } : item)))
-                  }
-                  placeholder="primary"
-                />
-              </label>
-            </div>
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-              <label className="grid gap-2">
-                <span className={labelClassName}>Branch</span>
-                <input
-                  className={inputClassName}
-                  value={workspace.branchName}
-                  onChange={(event) =>
-                    onChange(value.map((item, itemIndex) => (itemIndex === index ? { ...item, branchName: event.target.value } : item)))
-                  }
-                  placeholder="feature/ticket-context…"
-                />
-              </label>
-              <label className="grid gap-2">
-                <span className={labelClassName}>Base branch</span>
-                <input
-                  className={inputClassName}
-                  value={workspace.baseBranch}
-                  onChange={(event) =>
-                    onChange(value.map((item, itemIndex) => (itemIndex === index ? { ...item, baseBranch: event.target.value } : item)))
-                  }
-                  placeholder="Uses folder default branch"
-                />
-              </label>
-              <div className="flex items-end">
+        <div className="overflow-hidden rounded-lg border border-white/8">
+          {value.map((workspace, index) => (
+            <div key={workspace.id ?? `${workspace.projectFolderId}-${index}`} className="grid gap-3 border-b border-white/8 px-3 py-3 last:border-b-0">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-ink-50">Workspace {index + 1}</span>
                 <button
                   type="button"
-                  className={secondaryButtonClassName}
+                  className="inline-flex min-h-9 items-center justify-center rounded-md border border-white/10 px-3 py-1.5 text-sm font-medium text-ink-100 transition-colors hover:bg-white/[0.05]"
                   onClick={() => onChange(value.filter((_, itemIndex) => itemIndex !== index))}
                 >
                   Remove
                 </button>
               </div>
+              <div className="grid gap-3">
+                <label className="grid gap-2">
+                  <span className={labelClassName}>Folder</span>
+                  <select
+                    className={inputClassName}
+                    value={workspace.projectFolderId}
+                    onChange={(event) =>
+                      onChange(
+                        value.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, projectFolderId: event.target.value } : item
+                        )
+                      )
+                    }
+                  >
+                    <option value="">Choose folder…</option>
+                    {folderOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                <label className="grid gap-2">
+                  <span className={labelClassName}>Branch</span>
+                  <input
+                    className={inputClassName}
+                    value={workspace.branchName}
+                    onChange={(event) =>
+                      onChange(value.map((item, itemIndex) => (itemIndex === index ? { ...item, branchName: event.target.value } : item)))
+                    }
+                    placeholder="feature/ticket-context…"
+                  />
+                </label>
+                <label className="grid gap-2">
+                  <span className={labelClassName}>Base branch</span>
+                  <input
+                    className={inputClassName}
+                    value={workspace.baseBranch}
+                    onChange={(event) =>
+                      onChange(value.map((item, itemIndex) => (itemIndex === index ? { ...item, baseBranch: event.target.value } : item)))
+                    }
+                    placeholder="Uses folder default branch"
+                  />
+                </label>
+              </div>
+              {workspace.projectFolderId ? (
+                <p className="m-0 text-sm text-ink-300">
+                  {folderOptions.find((option) => option.id === workspace.projectFolderId)?.hint ?? "Folder not available"}
+                </p>
+              ) : null}
             </div>
-            {workspace.projectFolderId ? (
-              <p className="m-0 text-sm text-ink-300">
-                {folderOptions.find((option) => option.id === workspace.projectFolderId)?.hint ?? "Folder not available"}
-              </p>
-            ) : null}
-          </div>
-        ))
+          ))}
+        </div>
       ) : (
         <p className="m-0 text-sm text-ink-300">No workspaces yet.</p>
       )}

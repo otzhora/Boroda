@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type FocusEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
@@ -17,14 +18,13 @@ import { getStoredDefaultOpenInMode } from "../../lib/user-preferences";
 import { ModalDialog } from "../ui/modal-dialog";
 import {
   TicketDescriptionField,
-  TicketProjectLinksField,
   TicketTitleField,
-  TicketWorkspaceFields,
   inputClassName,
   labelClassName
 } from "./ticket-form";
 import { JiraIssueSelector } from "./jira-issue-selector";
 import { MarkdownDescription } from "./markdown-description";
+import { TicketWorkspaceDrawer } from "./ticket-workspace-drawer";
 import { WorkContextEditor } from "./work-context-editor";
 
 interface TicketDrawerProps {
@@ -48,9 +48,9 @@ interface TicketDrawerProps {
 }
 
 const sectionClassName = "grid gap-3 border-b border-white/8 pb-4";
-const railSectionClassName = "grid min-w-0 gap-3 border-b border-white/8 pb-4 last:border-b-0 last:pb-0";
+const railSectionClassName = "grid min-w-0 gap-3 border-b border-white/8 pb-5 last:border-b-0 last:pb-0";
 const detailTabClassName =
-  "inline-flex min-h-10 items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
+  "inline-flex min-h-10 items-center justify-center border-b-2 border-transparent px-1 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
 
 const detailTabs = [
   { id: "contexts", label: "Work contexts" },
@@ -58,15 +58,7 @@ const detailTabs = [
 ] as const;
 
 type DetailTabId = (typeof detailTabs)[number]["id"];
-type EditableSectionId =
-  | "title"
-  | "description"
-  | "branch"
-  | "jiraIssues"
-  | "status"
-  | "priority"
-  | "dueAt"
-  | "projectLinks";
+type EditableSectionId = "title" | "description" | "jiraIssues" | "status" | "priority" | "dueAt";
 
 type OpenInFeedbackState =
   | { phase: "idle" }
@@ -75,7 +67,7 @@ type OpenInFeedbackState =
   | { phase: "error"; appLabel: string; modeLabel: string; message: string };
 
 const editableReadRegionClassName =
-  "grid min-w-0 gap-3 rounded-xl border border-transparent p-2.5 transition-colors hover:border-white/10 hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
+  "grid min-w-0 gap-3 rounded-lg border border-transparent p-2 transition-colors hover:border-white/8 hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
 const nestedInteractiveSelector = "a, button, input, select, textarea, [role='button'], [role='tab']";
 const disclosureRowClassName =
   "flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-transparent px-1 py-1.5 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
@@ -133,7 +125,7 @@ function getOpenInModeLabel(mode: OpenInMode) {
 function MetaRow(props: { label: string; value: string }) {
   return (
     <div className="grid gap-1 border-b border-white/8 pb-2.5 last:border-b-0 last:pb-0">
-      <span className="text-[0.8rem] font-medium uppercase tracking-[0.12em] text-ink-300">{props.label}</span>
+      <span className="text-sm text-ink-300">{props.label}</span>
       <span className="text-sm font-medium text-ink-50">{props.value}</span>
     </div>
   );
@@ -141,7 +133,7 @@ function MetaRow(props: { label: string; value: string }) {
 
 function MetaFieldEditor(props: { label: string; children: ReactNode }) {
   return (
-    <div className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+    <div className="grid gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
       <span className={labelClassName}>{props.label}</span>
       {props.children}
     </div>
@@ -354,6 +346,13 @@ interface WorkspaceOption {
   folderLabel: string;
 }
 
+interface WorkspaceSummaryItem {
+  key: string;
+  projectName: string;
+  projectColor: string;
+  branchName: string;
+}
+
 const openInTargets: Array<{
   id: OpenInTarget;
   label: string;
@@ -441,6 +440,135 @@ function getWorkspaceOptions(ticket: Ticket | undefined, folderId: number | null
     }));
 }
 
+function normalizeHexColor(color: string) {
+  const value = color.trim();
+
+  if (!/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
+    return null;
+  }
+
+  if (value.length === 4) {
+    return `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
+  }
+
+  return value;
+}
+
+function hexToRgb(color: string) {
+  const normalized = normalizeHexColor(color);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const value = normalized.slice(1);
+  return {
+    r: Number.parseInt(value.slice(0, 2), 16),
+    g: Number.parseInt(value.slice(2, 4), 16),
+    b: Number.parseInt(value.slice(4, 6), 16)
+  };
+}
+
+function mixChannel(base: number, target: number, ratio: number) {
+  return Math.round(base * (1 - ratio) + target * ratio);
+}
+
+function getProjectBadgeStyle(color: string): CSSProperties | undefined {
+  const rgb = hexToRgb(color);
+
+  if (!rgb) {
+    return undefined;
+  }
+
+  const textColor = `rgb(${mixChannel(rgb.r, 255, 0.74)} ${mixChannel(rgb.g, 255, 0.74)} ${mixChannel(rgb.b, 255, 0.74)})`;
+
+  return {
+    backgroundColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.12)`,
+    borderColor: `rgb(${rgb.r} ${rgb.g} ${rgb.b} / 0.3)`,
+    color: textColor
+  };
+}
+
+function getWorkspaceSummaries(
+  ticket: Ticket | undefined,
+  form: TicketFormState,
+  projects: Project[]
+): WorkspaceSummaryItem[] {
+  if (!form.workspaces.length) {
+    return [];
+  }
+
+  const folderLookup = new Map<string, { projectName: string; projectColor: string }>();
+
+  for (const project of projects) {
+    for (const folder of project.folders) {
+      folderLookup.set(String(folder.id), {
+        projectName: project.name,
+        projectColor: project.color
+      });
+    }
+  }
+
+  return form.workspaces.map((workspace, index) => {
+    const ticketWorkspace = ticket?.workspaces.find((item) => item.id === workspace.id);
+    const folderInfo =
+      folderLookup.get(workspace.projectFolderId) ??
+      (ticketWorkspace
+        ? {
+            projectName: ticketWorkspace.projectFolder.project.name,
+            projectColor: ticketWorkspace.projectFolder.project.color
+          }
+        : null);
+
+    return {
+      key: String(workspace.id ?? `${workspace.projectFolderId}-${index}`),
+      projectName: folderInfo?.projectName ?? "Unlinked project",
+      projectColor: folderInfo?.projectColor ?? "#6b7280",
+      branchName: workspace.branchName.trim() || "No branch"
+    };
+  });
+}
+
+function WorkspaceSummaryList(props: { items: WorkspaceSummaryItem[] }) {
+  if (!props.items.length) {
+    return <p className="m-0 text-sm text-ink-300">No workspaces yet.</p>;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-white/8">
+      {props.items.map((workspace) => (
+        <div key={workspace.key} className="flex items-center justify-between gap-3 border-b border-white/8 px-3 py-2.5 last:border-b-0">
+          <span
+            className="inline-flex min-h-7 items-center rounded-md border border-white/8 bg-canvas-950 px-2.5 text-sm text-ink-200"
+            style={getProjectBadgeStyle(workspace.projectColor)}
+          >
+            {workspace.projectName}
+          </span>
+          <span className="min-w-0 truncate text-sm text-ink-200">{workspace.branchName}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function countWorkspaceBaseBranchErrors(form: TicketFormState, projects: Project[]) {
+  const folderLookup = new Map<string, { defaultBranch: string | null }>();
+
+  for (const project of projects) {
+    for (const folder of project.folders) {
+      folderLookup.set(String(folder.id), { defaultBranch: folder.defaultBranch });
+    }
+  }
+
+  return form.workspaces.filter((workspace) => {
+    if (!workspace.branchName.trim()) {
+      return false;
+    }
+
+    return !folderLookup.get(workspace.projectFolderId)?.defaultBranch?.trim();
+  }).length;
+}
+
 export function TicketDrawer(props: TicketDrawerProps) {
   const {
     ticketId,
@@ -464,7 +592,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const [activeEditor, setActiveEditor] = useState<EditableSectionId | null>(null);
   const [activeDetailTab, setActiveDetailTab] = useState<DetailTabId>("contexts");
   const [isJiraSectionExpanded, setIsJiraSectionExpanded] = useState(true);
-  const [isLinkedProjectsSectionExpanded, setIsLinkedProjectsSectionExpanded] = useState(false);
+  const [isWorkspaceDrawerOpen, setIsWorkspaceDrawerOpen] = useState(false);
   const [isOpenInMenuOpen, setIsOpenInMenuOpen] = useState(false);
   const [openInMenuSide, setOpenInMenuSide] = useState<"top" | "bottom">("bottom");
   const [openInMenuMaxHeight, setOpenInMenuMaxHeight] = useState<number>(320);
@@ -491,7 +619,6 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const firstWorkspaceOptionRef = useRef<HTMLButtonElement>(null);
   const detailTabsId = useId();
   const jiraSectionId = useId();
-  const linkedProjectsSectionId = useId();
   const openInMenuId = useId();
   const preferredProjectFolder = getPreferredProjectFolder(ticket);
   const availableTerminalFolders = useMemo(() => getAvailableTerminalFolders(ticket), [ticket]);
@@ -501,12 +628,14 @@ export function TicketDrawer(props: TicketDrawerProps) {
   );
   const jiraSettingsQuery = useJiraSettingsQuery();
   const jiraBaseUrl = jiraSettingsQuery.data?.baseUrl ? trimTrailingSlash(jiraSettingsQuery.data.baseUrl) : "";
+  const workspaceSummaries = useMemo(() => getWorkspaceSummaries(ticket, form, projects), [ticket, form, projects]);
+  const workspaceBaseBranchErrorCount = useMemo(() => countWorkspaceBaseBranchErrors(form, projects), [form, projects]);
 
   useEffect(() => {
     setActiveEditor(null);
     setActiveDetailTab("contexts");
     setIsJiraSectionExpanded(true);
-    setIsLinkedProjectsSectionExpanded(false);
+    setIsWorkspaceDrawerOpen(false);
     setIsOpenInMenuOpen(false);
     setSelectedOpenTarget("vscode");
     setSelectedOpenMode(getStoredDefaultOpenInMode());
@@ -793,15 +922,11 @@ export function TicketDrawer(props: TicketDrawerProps) {
 
   const metadata = useMemo(
     () => ({
-      branch:
-        form.workspaces[0]?.branchName.trim() ||
-        form.branch.trim() ||
-        "No workspace branch",
       status: statusLabelMap[form.status],
       priority: form.priority,
       dueAt: formatDateTime(ticket?.dueAt ?? null)
     }),
-    [form.branch, form.priority, form.status, form.workspaces, ticket?.dueAt]
+    [form.priority, form.status, ticket?.dueAt]
   );
 
   const openEditor = (section: EditableSectionId) => {
@@ -950,6 +1075,10 @@ export function TicketDrawer(props: TicketDrawerProps) {
       }
       description={undefined}
       onEscapeKeyDown={() => {
+        if (isWorkspaceDrawerOpen || isFolderPickerOpen || workspacePickerFolderId !== null) {
+          return false;
+        }
+
         if (!activeEditor) {
           return;
         }
@@ -1012,7 +1141,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                   </div>
                   {form.description ? (
                     <div
-                      className="min-w-0 rounded-xl border border-white/8 bg-black/10 p-3"
+                      className="min-w-0 rounded-lg border border-white/8 bg-white/[0.02] p-3"
                       role="region"
                       aria-label="Ticket description"
                     >
@@ -1028,11 +1157,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
             <section className="grid content-start gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 pb-3">
                 <h4 className="m-0 text-base font-semibold text-ink-50">Additional details</h4>
-                <div
-                  className="inline-flex min-h-10 flex-wrap rounded-[12px] border border-white/8 bg-black/40 p-1"
-                  role="tablist"
-                  aria-label="Ticket detail sections"
-                >
+                <div className="inline-flex min-h-10 flex-wrap gap-4 border-b border-white/8" role="tablist" aria-label="Ticket detail sections">
                   {detailTabs.map((tab, index) => {
                     const isActive = activeDetailTab === tab.id;
 
@@ -1049,9 +1174,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                         aria-controls={`${detailTabsId}-${tab.id}-panel`}
                         tabIndex={isActive ? 0 : -1}
                         className={`${detailTabClassName} ${
-                          isActive
-                            ? "bg-white text-canvas-975"
-                            : "text-ink-300 hover:bg-white/[0.05] hover:text-ink-100"
+                          isActive ? "border-white text-ink-50" : "text-ink-300 hover:text-ink-100"
                         }`}
                         onClick={() => {
                           setActiveDetailTab(tab.id);
@@ -1074,7 +1197,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                 className={
                   activeDetailTab === "contexts"
                     ? "min-w-0"
-                    : "min-w-0 rounded-xl border border-white/8 bg-black/10 p-3 pb-4"
+                    : "min-w-0 rounded-lg border border-white/8 bg-white/[0.02] p-3 pb-4"
                 }
                 tabIndex={0}
               >
@@ -1102,7 +1225,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                 <section className={railSectionClassName}>
                   <div className="flex items-center justify-between gap-3">
                     <h4 className="m-0 text-base font-semibold text-ink-50">Open</h4>
-                    <div className="inline-flex min-h-9 flex-wrap rounded-[8px] border border-white/8 bg-black/20 p-0.5">
+                    <div className="inline-flex min-h-9 flex-wrap border border-white/8">
                       {(["folder", "worktree"] as const).map((mode) => {
                         const isSelected = selectedOpenMode === mode;
                         const isDisabled = mode === "worktree" && !hasAnyWorktree;
@@ -1111,7 +1234,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                           <button
                             key={mode}
                             type="button"
-                            className={`inline-flex min-h-8 min-w-20 items-center justify-center rounded-[6px] px-2.5 py-1.5 text-sm transition-colors ${
+                            className={`inline-flex min-h-8 min-w-20 items-center justify-center border-r border-white/8 px-2.5 py-1.5 text-sm transition-colors last:border-r-0 ${
                               isSelected ? "bg-white text-canvas-975" : "text-ink-200 hover:bg-white/[0.05] hover:text-ink-50"
                             } disabled:cursor-not-allowed disabled:opacity-45`}
                             aria-pressed={isSelected}
@@ -1132,7 +1255,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                       <button
                         ref={openInActionButtonRef}
                         type="button"
-                        className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-l-lg border px-3 py-2 text-sm font-medium transition-[background-color,border-color,color,transform,opacity] duration-200 ease-out motion-reduce:transition-none disabled:cursor-progress ${
+                        className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-l-md border px-3 py-2 text-sm font-medium transition-[background-color,border-color,color,opacity] duration-200 ease-out motion-reduce:transition-none disabled:cursor-progress ${
                           openInFeedback.phase === "success"
                             ? "border-accent-500/50 bg-accent-500/18 text-accent-700 motion-safe:animate-[open-in-success-flash_720ms_ease-out]"
                             : openInFeedback.phase === "error"
@@ -1183,7 +1306,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                       <button
                         ref={openInToggleButtonRef}
                         type="button"
-                        className="inline-flex min-h-10 min-w-11 items-center justify-center rounded-r-lg border border-l-0 border-white/10 bg-white/[0.10] px-3 py-2 text-ink-100 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
+                        className="inline-flex min-h-10 min-w-11 items-center justify-center rounded-r-md border border-l-0 border-white/10 bg-white/[0.10] px-3 py-2 text-ink-100 transition-colors hover:bg-white/[0.14] disabled:cursor-progress disabled:opacity-70"
                         aria-label="Choose open-in app"
                         aria-haspopup="dialog"
                         aria-expanded={isOpenInMenuOpen}
@@ -1219,7 +1342,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                         id={openInMenuId}
                         ref={openInMenuRef}
                         data-side={openInMenuSide}
-                        className={`absolute right-0 z-20 grid w-[min(23rem,calc(100vw-4rem))] gap-1 overflow-y-auto rounded-[18px] border border-white/10 bg-canvas-900 p-2 shadow-[0_24px_72px_rgba(0,0,0,0.42)] ${
+                        className={`absolute right-0 z-20 grid w-[min(23rem,calc(100vw-4rem))] gap-1 overflow-y-auto rounded-lg border border-white/10 bg-canvas-900 p-2 shadow-[0_12px_28px_rgba(0,0,0,0.28)] ${
                           openInMenuSide === "top" ? "bottom-[calc(100%+0.45rem)]" : "top-[calc(100%+0.45rem)]"
                         }`}
                         role="dialog"
@@ -1229,17 +1352,17 @@ export function TicketDrawer(props: TicketDrawerProps) {
                         onKeyDown={handleOpenInMenuKeyDown}
                       >
                         <div className="px-2 pb-1 pt-1">
-                          <p className="m-0 text-[0.78rem] font-semibold uppercase tracking-[0.12em] text-ink-300">Choose app</p>
+                          <p className="m-0 text-sm font-medium text-ink-300">Choose app</p>
                         </div>
                         {openInTargets.map((target) => {
                           return (
-                            <div key={target.id} className="grid gap-1 rounded-[14px] border border-transparent bg-white/[0.02] p-1">
+                            <div key={target.id} className="grid gap-1 border border-transparent p-1">
                               <button
                                 ref={(element) => {
                                   openInAppButtonRefs.current[target.id] = element;
                                 }}
                                 type="button"
-                                className="grid min-h-11 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-[12px] px-3 py-2 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+                                className="grid min-h-11 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-white/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
                                 aria-pressed={selectedOpenTarget === target.id}
                                 onClick={() => {
                                   handleOpenInTarget(target.id);
@@ -1250,7 +1373,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                                   <span className="block truncate text-sm font-semibold text-ink-50">{target.label}</span>
                                   <span className="block truncate text-[0.82rem] text-ink-300">{target.description}</span>
                                 </span>
-                                <span className="text-[0.76rem] font-medium uppercase tracking-[0.1em] text-ink-400">
+                                <span className="text-[0.8rem] font-medium text-ink-400">
                                   {selectedOpenTarget === target.id ? "Selected" : "Use"}
                                 </span>
                               </button>
@@ -1268,32 +1391,21 @@ export function TicketDrawer(props: TicketDrawerProps) {
                   <h4 className="m-0 text-base font-semibold text-ink-50">Details</h4>
                 </div>
 
-                {activeEditor === "branch" ? (
-                  <div
-                    ref={(element) => {
-                      editorRootRefs.current.branch = element;
-                    }}
-                  >
-                    <MetaFieldEditor label="Workspaces">
-                      <TicketWorkspaceFields
-                        value={form.workspaces}
-                        projects={projects}
-                        projectLinks={form.projectLinks}
-                        onChange={(workspaces) =>
-                          onChange((current) => ({
-                            ...current,
-                            workspaces,
-                            branch: workspaces[0]?.branchName ?? current.branch
-                          }))
-                        }
-                      />
-                    </MetaFieldEditor>
-                  </div>
-                ) : (
-                  <EditableReadRegion label="Edit ticket workspaces" onActivate={() => openEditor("branch")} className="p-0">
-                    <MetaRow label="Workspace branch" value={metadata.branch} />
-                  </EditableReadRegion>
-                )}
+                <button
+                  type="button"
+                  className="rounded-lg border border-white/8 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+                  onClick={() => {
+                    setIsWorkspaceDrawerOpen(true);
+                  }}
+                  aria-label="Edit ticket workspaces"
+                >
+                  <WorkspaceSummaryList items={workspaceSummaries} />
+                </button>
+                {workspaceBaseBranchErrorCount ? (
+                  <p className="m-0 text-sm text-red-100">
+                    {workspaceBaseBranchErrorCount} workspace{workspaceBaseBranchErrorCount === 1 ? "" : "s"} missing a folder default branch.
+                  </p>
+                ) : null}
 
                 {activeEditor === "status" ? (
                   <div
@@ -1395,10 +1507,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                     onToggle={() => {
                       setIsJiraSectionExpanded((current) => !current);
                     }}
-                    className="rounded-xl border border-sky-400/10 bg-sky-400/[0.05] px-3 py-2 hover:border-sky-300/16 hover:bg-sky-400/[0.08]"
-                    labelClassName="text-sky-50"
-                    descriptionClassName="text-sky-100/70"
-                    chevronClassName="text-sky-200/70"
+                    className="border border-transparent px-0 py-1 hover:bg-transparent"
                   />
                   {isJiraSectionExpanded ? (
                     activeEditor === "jiraIssues" ? (
@@ -1435,19 +1544,19 @@ export function TicketDrawer(props: TicketDrawerProps) {
                                 return (
                                   <div
                                     key={issue.id}
-                                    className="min-w-0 rounded-xl border border-sky-400/12 bg-sky-400/[0.04] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(125,211,252,0.05)]"
+                                    className="min-w-0 rounded-md border border-white/8 px-3 py-2.5"
                                   >
                                     {href ? (
                                       <a
                                         href={href}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="text-sm font-semibold text-sky-50 no-underline hover:text-white"
+                                        className="text-sm font-semibold text-ink-50 no-underline hover:text-white"
                                       >
                                         {issue.key}
                                       </a>
                                     ) : (
-                                      <span className="text-sm font-semibold text-sky-50">{issue.key}</span>
+                                      <span className="text-sm font-semibold text-ink-50">{issue.key}</span>
                                     )}
                                     <p className="m-0 mt-1 min-w-0 break-words text-sm text-ink-200">
                                       {issue.summary || "No Jira summary cached."}
@@ -1462,7 +1571,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                           <div className="mt-2 flex justify-end">
                             <button
                               type="button"
-                              className="text-sm font-medium text-sky-100/70 transition-colors hover:text-sky-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+                              className="text-sm font-medium text-ink-300 transition-colors hover:text-ink-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
                               onClick={onRefreshJira}
                               disabled={isRefreshingJira}
                               aria-label={isRefreshingJira ? "Refreshing linked issues" : "Refresh linked issues"}
@@ -1475,96 +1584,6 @@ export function TicketDrawer(props: TicketDrawerProps) {
                     )
                   ) : null}
                 </div>
-              </section>
-
-              <section className={railSectionClassName}>
-                <DisclosureRow
-                  label="Linked projects"
-                  description={
-                    ticket.projectLinks.length
-                      ? `${ticket.projectLinks.length} linked project${ticket.projectLinks.length === 1 ? "" : "s"}`
-                      : "No linked projects"
-                  }
-                  expanded={isLinkedProjectsSectionExpanded}
-                  onToggle={() => {
-                    setIsLinkedProjectsSectionExpanded((current) => !current);
-                  }}
-                  className="rounded-xl border border-amber-300/10 bg-amber-200/[0.04] px-3 py-2 hover:border-amber-200/16 hover:bg-amber-200/[0.07]"
-                  labelClassName="text-amber-50"
-                  descriptionClassName="text-amber-100/70"
-                  chevronClassName="text-amber-100/70"
-                />
-
-                {isLinkedProjectsSectionExpanded ? (
-                  <div id={linkedProjectsSectionId}>
-                    {activeEditor === "projectLinks" ? (
-                      <div
-                        ref={(element) => {
-                          editorRootRefs.current.projectLinks = element;
-                        }}
-                      >
-                        <TicketProjectLinksField
-                          value={form.projectLinks}
-                          projects={projects}
-                          onChange={(projectLinks) =>
-                            onChange((current) => ({
-                              ...current,
-                              projectLinks
-                            }))
-                          }
-                        />
-                      </div>
-                    ) : ticket.projectLinks.length ? (
-                      <EditableReadRegion
-                        label="Edit linked projects"
-                        onActivate={() => {
-                          openEditor("projectLinks");
-                        }}
-                        className="grid min-w-0 gap-2 p-0"
-                      >
-                        {ticket.projectLinks.map((link) => (
-                          <div
-                            className="grid min-w-0 gap-2 rounded-xl border border-amber-300/12 bg-amber-200/[0.035] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(251,191,36,0.04)]"
-                            key={link.id}
-                          >
-                            <div className="min-w-0">
-                              <p className="m-0 text-sm font-medium text-amber-50">
-                                {link.project.name} <span className="ml-2 text-[0.82rem] text-amber-100/65">{link.relationship}</span>
-                              </p>
-                              <p className="m-0 mt-1 text-sm text-ink-300">
-                                {link.project.description || "No project description."}
-                              </p>
-                            </div>
-                            <div className="grid min-w-0 gap-2">
-                              {link.project.folders.length ? (
-                                link.project.folders.map((folder) => (
-                                  <div className="min-w-0" key={folder.id}>
-                                    <strong className="text-sm font-semibold text-amber-50">{folder.label}</strong>
-                                    <p className="m-0 mt-1 min-w-0 break-all font-mono text-[0.88rem] text-ink-300">
-                                      {folder.path}
-                                    </p>
-                                  </div>
-                                ))
-                              ) : (
-                                <p className="m-0 text-sm text-ink-200">No folders attached to this project.</p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </EditableReadRegion>
-                    ) : (
-                      <EditableReadRegion
-                        label="Edit linked projects"
-                        onActivate={() => {
-                          openEditor("projectLinks");
-                        }}
-                        className="rounded-xl border border-amber-300/12 bg-amber-200/[0.035]"
-                      >
-                        <p className="m-0 text-sm text-ink-200">No projects linked to this ticket.</p>
-                      </EditableReadRegion>
-                    )}
-                  </div>
-                ) : null}
               </section>
 
               <section className={railSectionClassName}>
@@ -1588,6 +1607,18 @@ export function TicketDrawer(props: TicketDrawerProps) {
           </aside>
         </div>
       )}
+
+      <TicketWorkspaceDrawer
+        open={isWorkspaceDrawerOpen}
+        form={form}
+        projects={projects}
+        isSaving={isSaving}
+        onChange={onChange}
+        onSave={onSave}
+        onClose={() => {
+          setIsWorkspaceDrawerOpen(false);
+        }}
+      />
 
       <ModalDialog
         open={isFolderPickerOpen}

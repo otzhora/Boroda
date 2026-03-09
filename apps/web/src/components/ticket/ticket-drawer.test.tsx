@@ -372,21 +372,23 @@ describe("TicketDrawer", () => {
     expect(screen.getByText("Follow-up issue")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh linked issues" })).toBeInTheDocument();
     expect(screen.queryByText("Core payment services")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Expand Linked projects" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Edit ticket workspaces" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Expand Linked projects" }));
+    await user.click(screen.getByRole("button", { name: "Edit ticket workspaces" }));
 
-    expect(screen.getByText("Core payment services")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Collapse Linked projects" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("dialog", { name: "Code setup" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Expand linked projects" }));
+    expect(screen.getByRole("button", { name: "Collapse linked projects" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Payments Backend")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Collapse Jira issues" }));
     expect(screen.queryByRole("button", { name: "Refresh linked issues" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Collapse Linked projects" }));
+    await user.click(screen.getByRole("button", { name: "Close dialog" }));
 
     expect(screen.queryByText("Follow-up issue")).not.toBeInTheDocument();
     expect(screen.queryByText("Core payment services")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Expand Jira issues" })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByRole("button", { name: "Expand Linked projects" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: "Edit ticket workspaces" })).toBeInTheDocument();
   });
 
   it("leaves edit mode after a successful save", async () => {
@@ -527,11 +529,87 @@ describe("TicketDrawer", () => {
     render(
       <TicketDrawer
         ticketId={ticket.id}
-        ticket={{ ...ticket, branch: "feature/existing-branch" }}
+        ticket={{
+          ...ticket,
+          branch: "feature/existing-branch",
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "api",
+                    path: "/home/otzhora/projects/payments-backend",
+                    defaultBranch: "main",
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ]
+        }}
         isLoading={false}
         isError={false}
-        form={toTicketForm({ ...ticket, branch: "feature/existing-branch" })}
-        projects={[project]}
+        form={toTicketForm({
+          ...ticket,
+          branch: "feature/existing-branch",
+          projectLinks: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              projectId: project.id,
+              relationship: "PRIMARY",
+              createdAt: "2026-02-28T12:00:00.000Z",
+              project: {
+                ...project,
+                folders: [
+                  {
+                    id: 42,
+                    projectId: project.id,
+                    label: "api",
+                    path: "/home/otzhora/projects/payments-backend",
+                    defaultBranch: "main",
+                    kind: "APP",
+                    isPrimary: true,
+                    existsOnDisk: true,
+                    createdAt: "2026-02-28T12:00:00.000Z",
+                    updatedAt: "2026-02-28T12:00:00.000Z"
+                  }
+                ]
+              }
+            }
+          ]
+        })}
+        projects={[
+          {
+            ...project,
+            folders: [
+              {
+                id: 42,
+                projectId: project.id,
+                label: "api",
+                path: "/home/otzhora/projects/payments-backend",
+                defaultBranch: "main",
+                kind: "APP",
+                isPrimary: true,
+                existsOnDisk: true,
+                createdAt: "2026-02-28T12:00:00.000Z",
+                updatedAt: "2026-02-28T12:00:00.000Z"
+              }
+            ]
+          }
+        ]}
         isSaving={false}
         saveSuccessCount={0}
         isDeleting={false}
@@ -550,7 +628,9 @@ describe("TicketDrawer", () => {
 
     await user.click(screen.getByRole("button", { name: "Edit ticket workspaces" }));
 
+    expect(screen.getByRole("dialog", { name: "Code setup" })).toBeInTheDocument();
     expect(screen.getByDisplayValue("feature/existing-branch")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Expand linked projects" }));
     expect(screen.getByRole("combobox")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit ticket status" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit ticket priority" })).toBeInTheDocument();
@@ -1333,7 +1413,7 @@ describe("TicketDrawer", () => {
 
     const layout = container.querySelector("div.grid.w-full.items-start");
     const additionalDetailsSection = screen.getByRole("heading", { name: "Additional details" }).closest("section");
-    const linkedProjectsAside = screen.getByRole("button", { name: "Expand Linked projects" }).closest("aside");
+    const linkedProjectsAside = screen.getByRole("button", { name: "Edit ticket workspaces" }).closest("aside");
 
     expect(layout).toBeInTheDocument();
     expect(layout?.firstElementChild).toHaveClass("content-start");
