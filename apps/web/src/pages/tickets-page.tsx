@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
 import { useAppHeader } from "../app/router";
 import { BOARD_STATUS_ORDER, statusLabelMap, TICKET_PRIORITIES } from "../lib/constants";
@@ -163,34 +164,6 @@ function formatTimestamp(value: string) {
     hour: "numeric",
     minute: "2-digit"
   }).format(new Date(value));
-}
-
-function formatDirtyWorktreeArchivePrompt(error: ApiError) {
-  const dirtyWorktrees = Array.isArray(error.details?.dirtyWorktrees)
-    ? error.details.dirtyWorktrees.filter(
-        (
-          worktree
-        ): worktree is {
-          branchName?: unknown;
-          worktreePath?: unknown;
-        } => typeof worktree === "object" && worktree !== null
-      )
-    : [];
-
-  if (!dirtyWorktrees.length) {
-    return null;
-  }
-
-  const worktreeList = dirtyWorktrees
-    .map((worktree) => {
-      const branchName = typeof worktree.branchName === "string" && worktree.branchName.trim() ? worktree.branchName : "unknown";
-      const worktreePath =
-        typeof worktree.worktreePath === "string" && worktree.worktreePath.trim() ? worktree.worktreePath : "unknown path";
-      return `${branchName}: ${worktreePath}`;
-    })
-    .join("\n");
-
-  return `These worktrees have uncommitted changes and will be deleted:\n${worktreeList}\n\nDelete them and archive the ticket anyway?`;
 }
 
 function formatLastChange(ticket: TicketListItem) {
@@ -589,6 +562,7 @@ export function TicketsPage() {
   const [editForm, setEditForm] = useState<TicketFormState>(createEmptyTicketForm());
   const [ticketSaveSuccessCount, setTicketSaveSuccessCount] = useState(0);
   const [filterHotkeySignal, setFilterHotkeySignal] = useState(0);
+  const [dirtyWorktreesToConfirm, setDirtyWorktreesToConfirm] = useState<DirtyWorktreeDescriptor[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const parsedFilters = parseTicketFilters(searchParams);
@@ -1065,12 +1039,12 @@ export function TicketsPage() {
                 return;
               }
 
-              const confirmationMessage = formatDirtyWorktreeArchivePrompt(error);
-              if (!confirmationMessage || !window.confirm(confirmationMessage)) {
+              const dirtyWorktrees = extractDirtyWorktrees(error.details);
+              if (!dirtyWorktrees.length) {
                 return;
               }
 
-              await deleteTicketMutation.mutateAsync({ force: true });
+              setDirtyWorktreesToConfirm(dirtyWorktrees);
             }
           })();
         }}
@@ -1089,6 +1063,25 @@ export function TicketsPage() {
         }}
         onClose={() => {
           setSelectedTicketId(null);
+        }}
+      />
+
+      <ArchiveWorktreeDialog
+        open={dirtyWorktreesToConfirm.length > 0}
+        worktrees={dirtyWorktreesToConfirm}
+        isDeleting={deleteTicketMutation.isPending}
+        onCancel={() => {
+          if (deleteTicketMutation.isPending) {
+            return;
+          }
+
+          setDirtyWorktreesToConfirm([]);
+        }}
+        onConfirm={() => {
+          void (async () => {
+            await deleteTicketMutation.mutateAsync({ force: true });
+            setDirtyWorktreesToConfirm([]);
+          })();
         }}
       />
     </section>

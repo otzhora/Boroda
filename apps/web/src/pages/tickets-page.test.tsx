@@ -258,7 +258,6 @@ describe("TicketsPage", () => {
 
   it("retries archive with force after confirming dirty worktrees", async () => {
     const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     mocks.deleteMutateAsync.mockRejectedValueOnce(
       new ApiError("One or more ticket worktrees have uncommitted changes", 409, "TICKET_ARCHIVE_DIRTY_WORKTREES", {
@@ -276,10 +275,13 @@ describe("TicketsPage", () => {
     await user.click(screen.getByRole("button", { name: "Open ticket BRD-12 Fix drawer save state" }));
     await user.click(screen.getByRole("button", { name: "Archive ticket" }));
 
-    expect(confirmSpy).toHaveBeenCalledWith(
-      "These worktrees have uncommitted changes and will be deleted:\nfeature/archive-fixture: /tmp/managed/feature/archive-fixture\n\nDelete them and archive the ticket anyway?"
-    );
+    expect(await screen.findByRole("dialog", { name: "Delete dirty worktrees" })).toBeInTheDocument();
+    expect(screen.getByText("feature/archive-fixture")).toBeInTheDocument();
+    expect(screen.getByText("/tmp/managed/feature/archive-fixture")).toBeInTheDocument();
     expect(mocks.deleteMutateAsync).toHaveBeenNthCalledWith(1, undefined);
+
+    await user.click(screen.getByRole("button", { name: "Delete and archive" }));
+
     expect(mocks.deleteMutateAsync).toHaveBeenNthCalledWith(2, { force: true });
   });
 

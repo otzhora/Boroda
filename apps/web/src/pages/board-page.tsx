@@ -7,6 +7,7 @@ import {
   QuickTicketForm,
   type QuickTicketFormState
 } from "../components/board/quick-ticket-form";
+import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
 import { ModalDialog } from "../components/ui/modal-dialog";
 import { OverflowMenu } from "../components/ui/overflow-menu";
@@ -90,34 +91,6 @@ function parseTicketId(value: string | null) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function formatDirtyWorktreeArchivePrompt(error: ApiError) {
-  const dirtyWorktrees = Array.isArray(error.details?.dirtyWorktrees)
-    ? error.details.dirtyWorktrees.filter(
-        (
-          worktree
-        ): worktree is {
-          branchName?: unknown;
-          worktreePath?: unknown;
-        } => typeof worktree === "object" && worktree !== null
-      )
-    : [];
-
-  if (!dirtyWorktrees.length) {
-    return null;
-  }
-
-  const worktreeList = dirtyWorktrees
-    .map((worktree) => {
-      const branchName = typeof worktree.branchName === "string" && worktree.branchName.trim() ? worktree.branchName : "unknown";
-      const worktreePath =
-        typeof worktree.worktreePath === "string" && worktree.worktreePath.trim() ? worktree.worktreePath : "unknown path";
-      return `${branchName}: ${worktreePath}`;
-    })
-    .join("\n");
-
-  return `These worktrees have uncommitted changes and will be deleted:\n${worktreeList}\n\nDelete them and archive the ticket anyway?`;
-}
-
 export function BoardPage() {
   const { setActions, setRightActions, hasHost } = useAppHeader();
   const queryClient = useQueryClient();
@@ -128,6 +101,7 @@ export function BoardPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => parseTicketId(searchParams.get("ticketId")));
   const [editForm, setEditForm] = useState<TicketFormState>(createEmptyTicketForm());
   const [ticketSaveSuccessCount, setTicketSaveSuccessCount] = useState(0);
+  const [dirtyWorktreesToConfirm, setDirtyWorktreesToConfirm] = useState<DirtyWorktreeDescriptor[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const quickCreateTitleRef = useRef<HTMLInputElement>(null);
   const deferredBoardFilters = useDeferredValue(boardFilters);
@@ -606,12 +580,12 @@ export function BoardPage() {
                 return;
               }
 
-              const confirmationMessage = formatDirtyWorktreeArchivePrompt(error);
-              if (!confirmationMessage || !window.confirm(confirmationMessage)) {
+              const dirtyWorktrees = extractDirtyWorktrees(error.details);
+              if (!dirtyWorktrees.length) {
                 return;
               }
 
-              await deleteTicketMutation.mutateAsync({ force: true });
+              setDirtyWorktreesToConfirm(dirtyWorktrees);
             }
           })();
         }}
@@ -630,6 +604,25 @@ export function BoardPage() {
         }}
         onClose={() => {
           setSelectedTicketId(null);
+        }}
+      />
+
+      <ArchiveWorktreeDialog
+        open={dirtyWorktreesToConfirm.length > 0}
+        worktrees={dirtyWorktreesToConfirm}
+        isDeleting={deleteTicketMutation.isPending}
+        onCancel={() => {
+          if (deleteTicketMutation.isPending) {
+            return;
+          }
+
+          setDirtyWorktreesToConfirm([]);
+        }}
+        onConfirm={() => {
+          void (async () => {
+            await deleteTicketMutation.mutateAsync({ force: true });
+            setDirtyWorktreesToConfirm([]);
+          })();
         }}
       />
     </section>

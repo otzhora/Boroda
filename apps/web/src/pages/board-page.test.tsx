@@ -4,6 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+import { ApiError } from "../lib/api-client";
 
 const mocks = vi.hoisted(() => ({
   useBoardQuery: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   createMutate: vi.fn(),
   updateMutate: vi.fn(),
   deleteMutate: vi.fn(),
+  deleteMutateAsync: vi.fn(),
   moveMutate: vi.fn(),
   openTerminalMutate: vi.fn(),
   refreshJiraMutate: vi.fn()
@@ -43,6 +45,7 @@ vi.mock("../features/tickets/mutations", () => ({
   })),
   useDeleteTicketMutation: vi.fn(() => ({
     mutate: mocks.deleteMutate,
+    mutateAsync: mocks.deleteMutateAsync,
     isPending: false,
     error: null
   })),
@@ -66,9 +69,11 @@ vi.mock("../features/tickets/mutations", () => ({
 vi.mock("../components/ticket/ticket-drawer", () => ({
   TicketDrawer: ({
     ticketId,
+    onDelete,
     onClose
   }: {
     ticketId: number | null;
+    onDelete: () => void;
     onClose: () => void;
   }) => {
     useEffect(() => {
@@ -95,6 +100,9 @@ vi.mock("../components/ticket/ticket-drawer", () => ({
 
     return (
       <div data-testid="ticket-drawer">
+        <button type="button" onClick={onDelete}>
+          Archive ticket
+        </button>
         <button type="button" onClick={onClose}>
           Close drawer
         </button>
@@ -145,6 +153,7 @@ describe("BoardPage", () => {
     mocks.createMutate.mockReset();
     mocks.updateMutate.mockReset();
     mocks.deleteMutate.mockReset();
+    mocks.deleteMutateAsync.mockReset();
     mocks.moveMutate.mockReset();
     mocks.openTerminalMutate.mockReset();
     mocks.refreshJiraMutate.mockReset();
@@ -338,5 +347,34 @@ describe("BoardPage", () => {
 
     expect(mocks.useTicketQuery).toHaveBeenLastCalledWith(12);
     expect(screen.getByTestId("ticket-drawer")).toBeInTheDocument();
+  });
+
+  it("shows an in-app confirmation before forcing archive of dirty worktrees", async () => {
+    const user = userEvent.setup();
+
+    mocks.deleteMutateAsync.mockRejectedValueOnce(
+      new ApiError("One or more ticket worktrees have uncommitted changes", 409, "TICKET_ARCHIVE_DIRTY_WORKTREES", {
+        dirtyWorktrees: [
+          {
+            branchName: "feature/archive-fixture",
+            worktreePath: "/tmp/managed/feature/archive-fixture"
+          }
+        ]
+      })
+    );
+    mocks.deleteMutateAsync.mockResolvedValueOnce({ ok: true });
+
+    renderBoardPage({ initialEntries: ["/?ticketId=12"] });
+
+    await user.click(screen.getByRole("button", { name: "Archive ticket" }));
+
+    expect(await screen.findByRole("dialog", { name: "Delete dirty worktrees" })).toBeInTheDocument();
+    expect(screen.getByText("feature/archive-fixture")).toBeInTheDocument();
+    expect(screen.getByText("/tmp/managed/feature/archive-fixture")).toBeInTheDocument();
+    expect(mocks.deleteMutateAsync).toHaveBeenNthCalledWith(1, undefined);
+
+    await user.click(screen.getByRole("button", { name: "Delete and archive" }));
+
+    expect(mocks.deleteMutateAsync).toHaveBeenNthCalledWith(2, { force: true });
   });
 });
