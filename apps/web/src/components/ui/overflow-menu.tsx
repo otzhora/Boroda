@@ -5,6 +5,7 @@ interface OverflowMenuProps {
   children: ReactNode;
   align?: "left" | "right";
   buttonText?: string;
+  buttonContent?: ReactNode;
   buttonClassName?: string;
   menuClassName?: string;
 }
@@ -14,6 +15,7 @@ export function OverflowMenu({
   children,
   align = "right",
   buttonText,
+  buttonContent,
   buttonClassName,
   menuClassName
 }: OverflowMenuProps) {
@@ -61,7 +63,9 @@ export function OverflowMenu({
           setIsOpen((current) => !current);
         }}
       >
-        {buttonText ? (
+        {buttonContent ? (
+          buttonContent
+        ) : buttonText ? (
           <span>{buttonText}</span>
         ) : (
           <>

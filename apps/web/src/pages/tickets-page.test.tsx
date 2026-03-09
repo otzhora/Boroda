@@ -1,0 +1,267 @@
+import { useEffect } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+
+const mocks = vi.hoisted(() => ({
+  useProjectsQuery: vi.fn(),
+  useTicketsQuery: vi.fn(),
+  useTicketQuery: vi.fn(),
+  refetchTickets: vi.fn(),
+  updateMutate: vi.fn(),
+  deleteMutate: vi.fn(),
+  openTerminalMutateAsync: vi.fn(),
+  refreshJiraMutate: vi.fn()
+}));
+
+vi.mock("../features/projects/queries", () => ({
+  useProjectsQuery: mocks.useProjectsQuery
+}));
+
+vi.mock("../features/tickets/queries", () => ({
+  useTicketsQuery: mocks.useTicketsQuery,
+  useTicketQuery: mocks.useTicketQuery
+}));
+
+vi.mock("../features/tickets/mutations", () => ({
+  useUpdateTicketMutation: vi.fn(() => ({
+    mutate: mocks.updateMutate,
+    isPending: false,
+    error: null
+  })),
+  useDeleteTicketMutation: vi.fn(() => ({
+    mutate: mocks.deleteMutate,
+    isPending: false,
+    error: null
+  })),
+  useOpenTicketInAppMutation: vi.fn(() => ({
+    mutateAsync: mocks.openTerminalMutateAsync,
+    isPending: false,
+    error: null
+  })),
+  useRefreshTicketJiraLinksMutation: vi.fn(() => ({
+    mutate: mocks.refreshJiraMutate,
+    isPending: false,
+    error: null
+  }))
+}));
+
+vi.mock("../components/ticket/ticket-drawer", () => ({
+  TicketDrawer: ({
+    ticketId,
+    onClose
+  }: {
+    ticketId: number | null;
+    onClose: () => void;
+  }) => {
+    useEffect(() => {
+      if (ticketId === null) {
+        return;
+      }
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+        }
+      };
+
+      document.addEventListener("keydown", handleKeyDown);
+
+      return () => {
+        document.removeEventListener("keydown", handleKeyDown);
+      };
+    }, [ticketId]);
+
+    if (ticketId === null) {
+      return null;
+    }
+
+    return (
+      <div data-testid="ticket-drawer">
+        <button type="button" onClick={onClose}>
+          Close drawer
+        </button>
+      </div>
+    );
+  }
+}));
+
+import { TicketsPage } from "./tickets-page";
+
+function renderTicketsPage(options?: { initialEntries?: string[] }) {
+  const queryClient = new QueryClient();
+
+  return render(
+    <MemoryRouter initialEntries={options?.initialEntries ?? ["/tickets"]}>
+      <QueryClientProvider client={queryClient}>
+        <TicketsPage />
+      </QueryClientProvider>
+    </MemoryRouter>
+  );
+}
+
+describe("TicketsPage", () => {
+  beforeEach(() => {
+    mocks.useProjectsQuery.mockReset();
+    mocks.useTicketsQuery.mockReset();
+    mocks.useTicketQuery.mockReset();
+    mocks.refetchTickets.mockReset();
+    mocks.updateMutate.mockReset();
+    mocks.deleteMutate.mockReset();
+    mocks.openTerminalMutateAsync.mockReset();
+    mocks.refreshJiraMutate.mockReset();
+
+    mocks.useProjectsQuery.mockReturnValue({
+      data: [
+        {
+          id: 1,
+          name: "Payments Backend",
+          slug: "payments-backend",
+          description: "",
+          color: "#355c7d",
+          createdAt: "",
+          updatedAt: "",
+          folders: []
+        }
+      ]
+    });
+
+    mocks.useTicketsQuery.mockReturnValue({
+      data: [
+        {
+          id: 12,
+          key: "BRD-12",
+          title: "Fix drawer save state",
+          description: "",
+          branch: null,
+          status: "IN_PROGRESS",
+          priority: "HIGH",
+          dueAt: null,
+          createdAt: "",
+          updatedAt: "2026-03-06T10:00:00.000Z",
+          archivedAt: null,
+          contextsCount: 2,
+          projectBadges: [
+            {
+              id: 1,
+              name: "Payments Backend",
+              color: "#355c7d",
+              relationship: "PRIMARY"
+            }
+          ],
+          jiraIssues: [{ key: "PAY-128", summary: "Fix drawer save state" }]
+        },
+        {
+          id: 21,
+          key: "BRD-21",
+          title: "Archive export mismatch",
+          description: "",
+          branch: null,
+          status: "READY",
+          priority: "LOW",
+          dueAt: null,
+          createdAt: "",
+          updatedAt: "2026-03-07T10:00:00.000Z",
+          archivedAt: null,
+          contextsCount: 0,
+          projectBadges: [],
+          jiraIssues: [{ key: "OPS-42", summary: "Archive export mismatch" }]
+        }
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetchTickets
+    });
+
+    mocks.useTicketQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: false
+    });
+  });
+
+  it("updates tickets filters from search, scope, and dropdown filters", async () => {
+    const user = userEvent.setup();
+
+    renderTicketsPage();
+
+    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({ q: undefined, scope: "active" });
+
+    await user.type(screen.getByLabelText("Search"), "drawer");
+    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({ q: "drawer", scope: "active" });
+
+    await user.click(screen.getByRole("tab", { name: "Archived" }));
+    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({ q: "drawer", scope: "archived" });
+
+    await user.click(screen.getByRole("button", { name: "Filter" }));
+    await user.click(screen.getByLabelText("Done"));
+    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({
+      q: "drawer",
+      scope: "archived",
+      status: ["DONE"]
+    });
+
+    await user.click(screen.getByRole("button", { name: "Jira issue" }));
+    await user.type(screen.getByLabelText("Jira issue filter"), "PAY");
+    await user.click(screen.getByLabelText("PAY-128"));
+    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({
+      q: "drawer",
+      jiraIssue: ["PAY-128"],
+      scope: "archived",
+      status: ["DONE"]
+    });
+  });
+
+  it("cycles sort from ascending to descending to default", async () => {
+    const user = userEvent.setup();
+
+    renderTicketsPage();
+
+    const rowsBefore = screen.getAllByRole("button", { name: /Open ticket /i });
+    expect(rowsBefore[0]).toHaveAccessibleName("Open ticket BRD-12 Fix drawer save state");
+
+    await user.click(screen.getByRole("button", { name: "Priority, not sorted" }));
+    expect(screen.getByRole("button", { name: "Priority, ascending" })).toBeInTheDocument();
+    let rows = screen.getAllByRole("button", { name: /Open ticket /i });
+    expect(rows[0]).toHaveAccessibleName("Open ticket BRD-21 Archive export mismatch");
+
+    await user.click(screen.getByRole("button", { name: "Priority, ascending" }));
+    expect(screen.getByRole("button", { name: "Priority, descending" })).toBeInTheDocument();
+    rows = screen.getAllByRole("button", { name: /Open ticket /i });
+    expect(rows[0]).toHaveAccessibleName("Open ticket BRD-12 Fix drawer save state");
+
+    await user.click(screen.getByRole("button", { name: "Priority, descending" }));
+    expect(screen.getByRole("button", { name: "Priority, not sorted" })).toBeInTheDocument();
+    rows = screen.getAllByRole("button", { name: /Open ticket /i });
+    expect(rows[0]).toHaveAccessibleName("Open ticket BRD-12 Fix drawer save state");
+  });
+
+  it("opens the shared ticket drawer from a list row", async () => {
+    const user = userEvent.setup();
+
+    renderTicketsPage();
+    await user.click(screen.getByRole("button", { name: "Open ticket BRD-12 Fix drawer save state" }));
+
+    expect(await screen.findByTestId("ticket-drawer")).toBeInTheDocument();
+  });
+
+  it("focuses the search field from the board-style hotkeys", async () => {
+    const user = userEvent.setup();
+
+    renderTicketsPage();
+    const searchInput = screen.getByLabelText("Search");
+
+    expect(searchInput).not.toHaveFocus();
+
+    await user.keyboard("/");
+    expect(searchInput).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(searchInput).not.toHaveFocus();
+
+    await user.keyboard("{Control>}k{/Control}");
+    expect(searchInput).toHaveFocus();
+  });
+});

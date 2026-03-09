@@ -83,7 +83,7 @@ function normalizeProjectLinks(projectLinks: TicketProjectLinkFormState[]) {
     })
     .map((link, index) => ({
       ...link,
-      relationship: index === 0 ? "PRIMARY" : "RELATED"
+      relationship: index === 0 ? ("PRIMARY" as const) : ("RELATED" as const)
     }));
 }
 

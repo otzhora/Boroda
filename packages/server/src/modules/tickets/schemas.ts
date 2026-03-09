@@ -34,6 +34,14 @@ const workspaceSchema = z.object({
   role: workspaceRoleField
 });
 
+function toArray(value: unknown) {
+  if (value === undefined) {
+    return [];
+  }
+
+  return Array.isArray(value) ? value : [value];
+}
+
 export const ticketIdParamSchema = z.object({
   id: z.coerce.number().int().positive()
 });
@@ -43,10 +51,15 @@ export const ticketProjectLinkIdParamSchema = z.object({
 });
 
 export const ticketQuerySchema = z.object({
-  status: statusEnum.optional(),
-  priority: priorityEnum.optional(),
-  projectId: z.coerce.number().int().positive().optional(),
-  q: z.string().optional()
+  status: z.preprocess((value) => toArray(value), z.array(statusEnum).default([])),
+  priority: z.preprocess((value) => toArray(value), z.array(priorityEnum).default([])),
+  projectId: z.preprocess(
+    (value) => toArray(value),
+    z.array(z.coerce.number().int().positive()).default([])
+  ),
+  q: z.string().optional(),
+  jiraIssue: z.preprocess((value) => toArray(value), z.array(z.string().trim().min(1)).default([])),
+  scope: z.enum(["active", "archived", "all"]).default("active")
 });
 
 export const createTicketSchema = z.object({

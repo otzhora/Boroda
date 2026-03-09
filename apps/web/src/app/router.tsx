@@ -4,6 +4,7 @@ import { BoardPage } from "../pages/board-page";
 import { JiraPage } from "../pages/jira-page";
 import { ProjectsPage } from "../pages/projects-page";
 import { SettingsPage } from "../pages/settings-page";
+import { TicketsPage } from "../pages/tickets-page";
 
 interface AppHeaderContextValue {
   actions: ReactNode;
@@ -52,6 +53,9 @@ function AppShell() {
                 <NavLink to="/" className={navLinkClassName}>
                   Board
                 </NavLink>
+                <NavLink to="/tickets" className={navLinkClassName}>
+                  Tickets
+                </NavLink>
                 <NavLink to="/projects" className={navLinkClassName}>
                   Projects
                 </NavLink>
@@ -84,6 +88,7 @@ const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <BoardPage /> },
+      { path: "tickets", element: <TicketsPage /> },
       { path: "projects", element: <ProjectsPage /> },
       { path: "jira", element: <JiraPage /> },
       { path: "settings", element: <SettingsPage /> }

@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { MultipartFile } from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 import { getConfig } from "../../config";
@@ -568,23 +568,38 @@ async function replaceJiraIssueLinks(
 
 export async function listTickets(
   app: FastifyInstance,
-  filters: { status?: string; priority?: string; projectId?: number; q?: string }
+  filters: {
+    status: string[];
+    priority: string[];
+    projectId: number[];
+    q?: string;
+    jiraIssue: string[];
+    scope: "active" | "archived" | "all";
+  }
 ) {
-  const queryFilters = [sql`${tickets.archivedAt} is null`];
+  const queryFilters =
+    filters.scope === "active"
+      ? [sql`${tickets.archivedAt} is null`]
+      : filters.scope === "archived"
+        ? [sql`${tickets.archivedAt} is not null`]
+        : [];
 
-  if (filters.status) {
-    queryFilters.push(eq(tickets.status, filters.status));
+  if (filters.status.length) {
+    queryFilters.push(inArray(tickets.status, filters.status));
   }
 
-  if (filters.priority) {
-    queryFilters.push(eq(tickets.priority, filters.priority));
+  if (filters.priority.length) {
+    queryFilters.push(inArray(tickets.priority, filters.priority));
   }
 
   if (filters.q) {
     queryFilters.push(
       sql`(
+        ${tickets.key} like ${`%${filters.q}%`}
+        or
         ${tickets.title} like ${`%${filters.q}%`}
-        or ${tickets.description} like ${`%${filters.q}%`}
+        or
+        ${tickets.description} like ${`%${filters.q}%`}
         or exists (
           select 1
           from ticket_jira_issue_links
@@ -598,11 +613,29 @@ export async function listTickets(
     );
   }
 
-  if (filters.projectId) {
+  if (filters.jiraIssue.length) {
+    const jiraIssueClauses = filters.jiraIssue.map(
+      (jiraIssue) => sql`(
+        ticket_jira_issue_links.issue_key like ${`%${jiraIssue}%`}
+        or ticket_jira_issue_links.issue_summary like ${`%${jiraIssue}%`}
+      )`
+    );
+
+    queryFilters.push(
+      sql`exists (
+        select 1
+        from ticket_jira_issue_links
+        where ticket_jira_issue_links.ticket_id = ${tickets.id}
+          and (${sql.join(jiraIssueClauses, sql` or `)})
+      )`
+    );
+  }
+
+  if (filters.projectId.length) {
     const linked = app.db
       .select({ ticketId: ticketProjectLinks.ticketId })
       .from(ticketProjectLinks)
-      .where(eq(ticketProjectLinks.projectId, filters.projectId))
+      .where(inArray(ticketProjectLinks.projectId, filters.projectId))
       .all()
       .map((row) => row.ticketId);
 
@@ -613,12 +646,69 @@ export async function listTickets(
     queryFilters.push(inArray(tickets.id, linked));
   }
 
-  return app.db
+  const matchingTickets = app.db
     .select()
     .from(tickets)
-    .where(and(...queryFilters))
+    .where(queryFilters.length ? and(...queryFilters) : undefined)
     .orderBy(desc(tickets.updatedAt))
     .all();
+
+  const ids = matchingTickets.map((ticket) => ticket.id);
+  const links = ids.length
+    ? app.db
+        .select({
+          ticketId: ticketProjectLinks.ticketId,
+          projectId: projects.id,
+          projectName: projects.name,
+          projectColor: projects.color,
+          relationship: ticketProjectLinks.relationship
+        })
+        .from(ticketProjectLinks)
+        .innerJoin(projects, eq(ticketProjectLinks.projectId, projects.id))
+        .where(inArray(ticketProjectLinks.ticketId, ids))
+        .all()
+    : [];
+  const jiraIssueLinks = ids.length
+    ? app.db
+        .select({
+          ticketId: ticketJiraIssueLinks.ticketId,
+          key: ticketJiraIssueLinks.issueKey,
+          summary: ticketJiraIssueLinks.issueSummary
+        })
+        .from(ticketJiraIssueLinks)
+        .where(inArray(ticketJiraIssueLinks.ticketId, ids))
+        .all()
+    : [];
+  const contextCounts = ids.length
+    ? app.db
+        .select({
+          ticketId: workContexts.ticketId,
+          count: sql<number>`count(*)`
+        })
+        .from(workContexts)
+        .where(inArray(workContexts.ticketId, ids))
+        .groupBy(workContexts.ticketId)
+        .all()
+    : [];
+
+  return matchingTickets.map((ticket) => ({
+    ...ticket,
+    contextsCount: contextCounts.find((item) => item.ticketId === ticket.id)?.count ?? 0,
+    projectBadges: links
+      .filter((link) => link.ticketId === ticket.id)
+      .map((link) => ({
+        id: link.projectId,
+        name: link.projectName,
+        color: link.projectColor,
+        relationship: link.relationship
+      })),
+    jiraIssues: jiraIssueLinks
+      .filter((issue) => issue.ticketId === ticket.id)
+      .map((issue) => ({
+        key: issue.key,
+        summary: issue.summary
+      }))
+  }));
 }
 
 export async function getTicketOrThrow(app: FastifyInstance, id: number) {

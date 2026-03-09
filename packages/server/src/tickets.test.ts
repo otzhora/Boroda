@@ -110,6 +110,14 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   assert.equal(filteredTickets.length, 1);
   assert.equal(filteredTickets[0].id, createdTicket.id);
 
+  const jiraFilteredListResponse = await app.inject({
+    method: "GET",
+    url: "/api/tickets?jiraIssue=PAY-128"
+  });
+
+  assert.equal(jiraFilteredListResponse.statusCode, 200);
+  assert.equal(jiraFilteredListResponse.json().length, 1);
+
   const updateResponse = await app.inject({
     method: "PATCH",
     url: `/api/tickets/${createdTicket.id}`,
@@ -158,6 +166,24 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
 
   assert.equal(activeListResponse.statusCode, 200);
   assert.equal(activeListResponse.json().length, 0);
+
+  const archivedListResponse = await app.inject({
+    method: "GET",
+    url: "/api/tickets?scope=archived&q=BRD-1"
+  });
+
+  assert.equal(archivedListResponse.statusCode, 200);
+  const archivedTickets = archivedListResponse.json();
+  assert.equal(archivedTickets.length, 1);
+  assert.equal(archivedTickets[0].id, createdTicket.id);
+
+  const allListResponse = await app.inject({
+    method: "GET",
+    url: "/api/tickets?scope=all"
+  });
+
+  assert.equal(allListResponse.statusCode, 200);
+  assert.equal(allListResponse.json().length, 1);
 
   const archivedTicketResponse = await app.inject({
     method: "GET",

@@ -57,6 +57,7 @@ export function useCreateTicketMutation(options: {
       options.onReset();
       options.onCreated(ticket);
       void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
@@ -86,6 +87,7 @@ export function useUpdateTicketMutation(options: {
     onSuccess: (ticket) => {
       options.onUpdated(toTicketForm(ticket));
       void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
@@ -117,6 +119,7 @@ export function useDeleteTicketMutation(options: {
       options.onDeleted();
       options.onReset(createEmptyTicketForm());
       void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
@@ -232,6 +235,7 @@ export function useRefreshTicketJiraLinksMutation(ticketId: number | null) {
     },
     onSuccess: (ticket) => {
       void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
       void queryClient.invalidateQueries({ queryKey: ticketQueryKey(ticket.id) });
     }

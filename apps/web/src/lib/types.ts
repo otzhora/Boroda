@@ -147,6 +147,14 @@ export interface TicketListItem {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  contextsCount: number;
+  projectBadges: Array<{
+    id: number;
+    name: string;
+    color: string;
+    relationship: TicketProjectRelationship;
+  }>;
+  jiraIssues: JiraIssueLinkSummary[];
 }
 
 export interface TicketWorkspace {
