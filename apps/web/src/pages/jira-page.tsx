@@ -30,6 +30,10 @@ const issueToggleButtonClassName =
 const spinnerClassName = "h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent";
 const emptyPanelClassName = "rounded-[10px] border border-white/8 bg-canvas-925 px-4 py-4";
 const issueChipClassName = "inline-flex min-h-6 items-center rounded-[8px] border px-2 py-0.5 text-xs font-medium";
+const issueCountChipClassName =
+  `${issueChipClassName} w-[12.5rem] justify-center border-white/10 bg-white/[0.04] text-center text-ink-200`;
+const issueKeyClassName =
+  "inline-flex w-[9ch] shrink-0 font-mono text-sm font-medium tabular-nums text-[#6ea8ff]";
 
 type JiraIssueSort = "needs-boroda" | "linked-first" | "jira-order" | "jira-key";
 
@@ -272,12 +276,7 @@ export function JiraPage() {
               const jiraHref = baseUrl ? `${baseUrl}/browse/${issue.key}` : null;
               const isExpanded = expandedIssueKeys.includes(issue.key);
               const panelId = `jira-issue-links-${issue.key}`;
-              const linkedCountLabel =
-                issue.borodaTickets.length > 0
-                  ? issue.borodaTickets.length === 1
-                    ? "1 linked Boroda ticket"
-                    : `${issue.borodaTickets.length} linked Boroda tickets`
-                  : "No linked Boroda tickets";
+              const linkedCountLabel = `${issue.borodaTickets.length} Boroda ticket${issue.borodaTickets.length === 1 ? "" : "s"}`;
 
               return (
                 <li className={issueArticleClassName} key={issue.key}>
@@ -299,8 +298,10 @@ export function JiraPage() {
                         <span className={isExpanded ? "-translate-y-px" : ""}>{isExpanded ? "⌄" : "›"}</span>
                       </span>
                       <div
-                        className={`h-3 w-3 shrink-0 rounded-[3px] ${
-                          issue.borodaTickets.length > 0 ? "bg-emerald-300/70" : "bg-ink-300/45"
+                        className={`h-3.5 w-3.5 shrink-0 rounded-[4px] border shadow-[0_0_0_1px_rgba(0,0,0,0.22)] ${
+                          issue.borodaTickets.length > 0
+                            ? "border-emerald-300/60 bg-emerald-300/80 shadow-emerald-500/20"
+                            : "border-amber-300/50 bg-amber-300/80 shadow-amber-500/20"
                         }`}
                       />
                       <div className="flex min-w-0 items-center gap-3">
@@ -309,7 +310,7 @@ export function JiraPage() {
                             href={jiraHref}
                             target="_blank"
                             rel="noreferrer"
-                            className="shrink-0 font-mono text-sm font-medium text-[#6ea8ff] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50"
+                            className={`${issueKeyClassName} underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50`}
                             aria-label={`Open Jira issue ${issue.key}`}
                             onClick={(event) => {
                               event.stopPropagation();
@@ -318,21 +319,17 @@ export function JiraPage() {
                             {issue.key}
                           </a>
                         ) : (
-                          <span className="shrink-0 font-mono text-sm font-medium text-[#6ea8ff]">{issue.key}</span>
+                          <span className={issueKeyClassName}>{issue.key}</span>
                         )}
                         <p className="m-0 min-w-0 truncate text-[0.95rem] leading-6 text-ink-100">{issue.summary}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                        <span
-                          className={`${issueChipClassName} ${
-                            issue.borodaTickets.length > 0
-                              ? "border-emerald-400/24 bg-emerald-400/10 text-emerald-100"
-                              : "border-amber-300/24 bg-amber-300/10 text-amber-100"
-                          }`}
-                        >
-                          {issue.borodaTickets.length > 0 ? "Linked" : "Needs Boroda"}
-                        </span>
-                        <span className={`${issueChipClassName} border-white/10 bg-white/[0.04] text-ink-200`}>
+                        {issue.borodaTickets.length === 0 ? (
+                          <span className={`${issueChipClassName} border-amber-300/24 bg-amber-300/10 text-amber-100`}>
+                            Needs Boroda
+                          </span>
+                        ) : null}
+                        <span className={issueCountChipClassName}>
                           {linkedCountLabel}
                         </span>
                       </div>

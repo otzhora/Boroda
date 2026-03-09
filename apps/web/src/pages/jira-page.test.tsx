@@ -152,7 +152,7 @@ describe("JiraPage", () => {
     });
   });
 
-  it("renders color-coded status chips and defaults to needs-boroda sorting", () => {
+  it("renders only the needs-boroda status chip and defaults to needs-boroda sorting", () => {
     renderJiraPage();
 
     expect(screen.getByRole("link", { name: "Open Jira issue PAY-128" })).toHaveAttribute(
@@ -167,11 +167,9 @@ describe("JiraPage", () => {
         .getAllByText("Needs Boroda")
         .find((element) => element.tagName === "SPAN")
     ).toHaveClass("border-amber-300/24", "bg-amber-300/10");
-    expect(
-      screen
-        .getAllByText("Linked")
-        .find((element) => element.tagName === "SPAN")
-    ).toHaveClass("border-emerald-400/24", "bg-emerald-400/10");
+    expect(screen.queryByText("Linked")).not.toBeInTheDocument();
+    expect(screen.getByText("1 Boroda ticket")).toHaveClass("w-[12.5rem]");
+    expect(screen.getByText("0 Boroda tickets")).toHaveClass("w-[12.5rem]");
   });
 
   it("re-sorts Jira issues from the sort control", async () => {
