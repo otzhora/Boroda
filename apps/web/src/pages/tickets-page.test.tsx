@@ -135,6 +135,7 @@ function renderTicketsPage(options?: { initialEntries?: string[] }) {
 
 describe("TicketsPage", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     mocks.useProjectsQuery.mockReset();
     mocks.useBoardColumnsQuery.mockReset();
     mocks.useTicketsQuery.mockReset();
@@ -280,6 +281,33 @@ describe("TicketsPage", () => {
     expect(screen.getByRole("button", { name: "Priority, not sorted" })).toBeInTheDocument();
     rows = screen.getAllByRole("button", { name: /Open ticket /i });
     expect(rows[0]).toHaveAccessibleName("Open ticket BRD-12 Fix drawer save state");
+  });
+
+  it("shows standup state in the subtitle and keeps clear all scoped to ticket filters", async () => {
+    const user = userEvent.setup();
+
+    window.localStorage.setItem("boroda.lastStandupCompletedAt", "2026-03-10T06:06:00.000Z");
+
+    renderTicketsPage();
+
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+    expect(screen.getByText("2 tickets in current")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "For standup" }));
+
+    expect(screen.getByText(/0 tickets in current · Since last standup:/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Search"), "drawer");
+
+    const filterButton = screen.getByRole("button", { name: "Filter" });
+    expect(filterButton.className).toContain("bg-accent-500");
+
+    await user.click(filterButton);
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+    expect(screen.getByText(/0 tickets in current · Since last standup:/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filter" }).className).not.toContain("bg-accent-500");
   });
 
   it("opens the shared ticket drawer from a list row", async () => {

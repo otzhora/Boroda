@@ -1,7 +1,8 @@
-import { useDeferredValue, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
+import { SectionedFilterDropdown } from "../components/ui/sectioned-filter-dropdown";
 import { useAppHeader } from "../app/router";
 import { TICKET_PRIORITIES, formatStatusLabel } from "../lib/constants";
 import { useBoardColumnsQuery, type BoardFilters } from "../features/board/queries";
@@ -334,12 +335,8 @@ function FilterDropdown(props: {
   onClearFilters: () => void;
   hotkeySignal: number;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [section, setSection] = useState<FilterSection>("status");
   const [projectSearch, setProjectSearch] = useState("");
   const [jiraSearch, setJiraSearch] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const titleId = useId();
   const hasFilters = hasTicketFilters(props.filters);
 
   const filteredProjects = useMemo(() => {
@@ -362,93 +359,24 @@ function FilterDropdown(props: {
     return props.jiraIssues.filter((issue) => issue.toLowerCase().includes(searchValue));
   }, [jiraSearch, props.jiraIssues]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-        return;
-      }
-
-      if (event.shiftKey && event.key.toLowerCase() === "f") {
-        event.preventDefault();
-        setIsOpen(false);
-      }
-    };
-
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (props.hotkeySignal === 0) {
-      return;
-    }
-
-    setIsOpen((current) => !current);
-  }, [props.hotkeySignal]);
-
-  const sectionButtonClassName = (current: FilterSection) =>
-    `flex w-full items-center justify-between rounded-[8px] px-3 py-2 text-left text-sm ${
-      section === current
-        ? "bg-canvas-900 text-ink-50"
-        : "text-ink-200 hover:bg-white/[0.03] hover:text-ink-50"
-    }`;
-
   return (
-    <div className="relative" ref={containerRef}>
-      <button
-        type="button"
-        className={`${filterButtonClassName} ${hasFilters ? "border-accent-500/40 text-ink-50" : ""}`}
-        aria-haspopup="dialog"
-        aria-expanded={isOpen}
-        aria-controls={isOpen ? titleId : undefined}
-        onClick={() => {
-          setIsOpen((current) => !current);
-        }}
-      >
-        Filter
-      </button>
-      {isOpen ? (
-        <div
-          id={titleId}
-          role="dialog"
-          aria-label="Ticket filters"
-          className="absolute right-0 top-[calc(100%+0.5rem)] z-30 grid w-[min(52rem,calc(100vw-2.5rem))] grid-rows-[auto_1fr_auto] overflow-hidden rounded-[10px] border border-white/8 bg-canvas-925 shadow-[0_8px_24px_rgba(0,0,0,0.24)]"
-        >
-          <div className="grid min-h-[22rem] grid-cols-[13rem_minmax(0,1fr)]">
-            <div className="border-r border-white/8 p-3">
-              <div className="grid gap-1">
-                <button type="button" className={sectionButtonClassName("status")} onClick={() => setSection("status")}>
-                  Status
-                </button>
-                <button type="button" className={sectionButtonClassName("priority")} onClick={() => setSection("priority")}>
-                  Priority
-                </button>
-                <button type="button" className={sectionButtonClassName("project")} onClick={() => setSection("project")}>
-                  Project
-                </button>
-                <button type="button" className={sectionButtonClassName("jira")} onClick={() => setSection("jira")}>
-                  Jira issue
-                </button>
-              </div>
-            </div>
-            <div className="p-4">
-              {section === "status" ? (
+    <SectionedFilterDropdown
+      title="Ticket filters"
+      hotkeySignal={props.hotkeySignal}
+      hasFilters={hasFilters}
+      sections={[
+        { id: "status", label: "Status" },
+        { id: "priority", label: "Priority" },
+        { id: "project", label: "Project" },
+        { id: "jira", label: "Jira issue" }
+      ]}
+      initialSection="status"
+      activeButtonClassName={primaryButtonClassName}
+      inactiveButtonClassName={filterButtonClassName}
+      onClear={props.onClearFilters}
+      renderSection={(section) => {
+        if (section === "status") {
+          return (
                 <div className="grid gap-2">
                   <span className="text-sm font-medium text-ink-100">Status</span>
                   <div className="grid gap-1">
@@ -473,8 +401,11 @@ function FilterDropdown(props: {
                     })}
                   </div>
                 </div>
-              ) : null}
-              {section === "priority" ? (
+          );
+        }
+
+        if (section === "priority") {
+          return (
                 <div className="grid gap-2">
                   <span className="text-sm font-medium text-ink-100">Priority</span>
                   <div className="grid gap-1">
@@ -499,8 +430,11 @@ function FilterDropdown(props: {
                     })}
                   </div>
                 </div>
-              ) : null}
-              {section === "project" ? (
+          );
+        }
+
+        if (section === "project") {
+          return (
                 <div className="grid gap-2">
                   <span className="text-sm font-medium text-ink-100">Project</span>
                   <input
@@ -535,8 +469,11 @@ function FilterDropdown(props: {
                     {filteredProjects.length === 0 ? <p className="m-0 px-2 py-1 text-sm text-ink-300">No projects match</p> : null}
                   </div>
                 </div>
-              ) : null}
-              {section === "jira" ? (
+          );
+        }
+
+        if (section === "jira") {
+          return (
                 <div className="grid gap-2">
                   <span className="text-sm font-medium text-ink-100">Jira issue</span>
                   <input
@@ -571,18 +508,12 @@ function FilterDropdown(props: {
                     {filteredJiraIssues.length === 0 ? <p className="m-0 px-2 py-1 text-sm text-ink-300">No Jira issues on the board</p> : null}
                   </div>
                 </div>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex items-center justify-between border-t border-white/8 px-4 py-3">
-            <button type="button" className="text-sm text-ink-200 hover:text-ink-50" onClick={props.onClearFilters}>
-              Clear all
-            </button>
-            <div className="text-sm text-ink-300">Press Shift + F to open and close</div>
-          </div>
-        </div>
-      ) : null}
-    </div>
+          );
+        }
+
+        return null;
+      }}
+    />
   );
 }
 
@@ -679,7 +610,7 @@ export function TicketsPage() {
 
     return [...issueKeys].sort((left, right) => left.localeCompare(right));
   }, [activeBoardTicketsQuery.data]);
-  const filtersApplied = hasTicketFilters(parsedFilters) || standupOnly;
+  const ticketFiltersApplied = hasTicketFilters(parsedFilters);
   const statusFilterKey = parsedFilters.status?.join(",") ?? "";
   const priorityFilterKey = parsedFilters.priority?.join(",") ?? "";
   const projectFilterKey = parsedFilters.projectId?.join(",") ?? "";
@@ -783,7 +714,7 @@ export function TicketsPage() {
     setSearchParams(nextSearchParams, { replace: true });
   };
 
-  const clearFilters = () => {
+  const clearTicketFilters = () => {
     updateFilters((nextSearchParams) => {
       nextSearchParams.delete("q");
       nextSearchParams.delete("status");
@@ -792,8 +723,12 @@ export function TicketsPage() {
       nextSearchParams.delete("jiraIssue");
       nextSearchParams.delete("scope");
     });
-    setStandupOnly(false);
     setSearchInputValue("");
+  };
+
+  const clearFilters = () => {
+    clearTicketFilters();
+    setStandupOnly(false);
   };
 
   const handleSort = (field: TicketSortField) => {
@@ -825,7 +760,7 @@ export function TicketsPage() {
   });
 
   const renderSearchControl = () => (
-    <label className="min-w-0 flex-1 basis-[18rem] max-w-[32rem]">
+    <label className="shrink-0">
       <span className="sr-only">Search</span>
       <input
         ref={searchInputRef}
@@ -848,28 +783,40 @@ export function TicketsPage() {
     </label>
   );
 
+  const renderFilterControls = () => (
+    <div className="flex shrink-0 items-center">
+      <FilterDropdown
+        filters={parsedFilters}
+        projects={projects}
+        statuses={boardColumns}
+        jiraIssues={boardJiraIssues}
+        onUpdateFilters={updateFilters}
+        onClearFilters={clearTicketFilters}
+        hotkeySignal={filterHotkeySignal}
+      />
+    </div>
+  );
+
+  const renderHeaderActions = () => (
+    <div className="flex min-w-0 items-center justify-center gap-2">
+      {renderSearchControl()}
+      {renderFilterControls()}
+    </div>
+  );
+
   useEffect(() => {
     setActions(
       hasHost ? (
-        <>
-          {renderSearchControl()}
-          <FilterDropdown
-            filters={parsedFilters}
-            projects={projects}
-            statuses={boardColumns}
-            jiraIssues={boardJiraIssues}
-            onUpdateFilters={updateFilters}
-            onClearFilters={clearFilters}
-            hotkeySignal={filterHotkeySignal}
-          />
-        </>
+        renderHeaderActions()
       ) : null
     );
     setRightActions(
       <>
-        <button type="button" className={primaryButtonClassName} onClick={handleMarkStandupDone}>
-          Standup done
-        </button>
+        {standupOnly ? (
+          <button type="button" className={primaryButtonClassName} onClick={handleMarkStandupDone}>
+            Standup done
+          </button>
+        ) : null}
         <Link to="/settings" className={secondaryButtonClassName}>
           Settings
         </Link>
@@ -893,6 +840,7 @@ export function TicketsPage() {
     searchInputValue,
     setActions,
     setRightActions,
+    standupOnly,
     statusFilterKey
   ]);
 
@@ -903,8 +851,8 @@ export function TicketsPage() {
           <h1 className="m-0 text-base font-semibold text-ink-50">Tickets</h1>
           <p className="m-0 text-sm text-ink-300">
             {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} in {scopeLabel(parsedFilters.scope ?? "active").toLowerCase()}
+            {standupOnly ? ` · ${formatStandupWindowLabel(standupWindowStart, hasSavedStandup)}` : ""}
           </p>
-          {standupOnly ? <p className="m-0 text-sm text-ink-200">{formatStandupWindowLabel(standupWindowStart, hasSavedStandup)}</p> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Ticket scope">
           {(["active", "archived", "all"] as const).map((scope) => (
@@ -923,11 +871,6 @@ export function TicketsPage() {
               {scopeLabel(scope)}
             </button>
           ))}
-          {filtersApplied ? (
-            <button type="button" className={secondaryButtonClassName} onClick={clearFilters}>
-              Clear filters
-            </button>
-          ) : null}
           <button
             type="button"
             className={standupOnly ? primaryButtonClassName : secondaryButtonClassName}
@@ -950,15 +893,7 @@ export function TicketsPage() {
       {!hasHost ? (
         <section className={`${softPanelClassName} grid-cols-[minmax(0,1fr)_auto] items-center gap-3`}>
           {renderSearchControl()}
-          <FilterDropdown
-            filters={parsedFilters}
-            projects={projects}
-            statuses={boardColumns}
-            jiraIssues={boardJiraIssues}
-            onUpdateFilters={updateFilters}
-            onClearFilters={clearFilters}
-            hotkeySignal={filterHotkeySignal}
-          />
+          {renderFilterControls()}
         </section>
       ) : null}
 
@@ -982,14 +917,16 @@ export function TicketsPage() {
       {!ticketsQuery.isLoading && !ticketsQuery.isError && tickets.length === 0 ? (
         <section className={`${panelClassName} h-full content-start`} aria-live="polite">
           <h2 className="m-0 text-lg font-semibold text-ink-50">
-            {filtersApplied ? "No tickets match these filters" : "No tickets available"}
+            {ticketFiltersApplied ? "No tickets match these filters" : standupOnly ? "No tickets updated for standup" : "No tickets available"}
           </h2>
           <p className="m-0 max-w-[44rem] text-sm text-ink-200">
-            {filtersApplied
+            {ticketFiltersApplied
               ? "Clear the current filters or switch scope to review a different slice of work."
+              : standupOnly
+                ? "Turn off standup mode or switch scope to review a different slice of work."
               : "Create a ticket from the board or import your local sample data to populate the list."}
           </p>
-          {filtersApplied ? (
+          {ticketFiltersApplied ? (
             <div className="flex flex-wrap gap-3">
               <button type="button" className={secondaryButtonClassName} onClick={clearFilters}>
                 Clear filters

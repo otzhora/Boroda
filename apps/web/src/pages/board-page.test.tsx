@@ -279,19 +279,26 @@ describe("BoardPage", () => {
     await user.type(screen.getByLabelText("Search"), "bug");
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({ q: "bug" });
 
-    await user.click(screen.getByRole("button", { name: "Filters applied" }));
-    await user.selectOptions(screen.getByLabelText("Project"), "2");
+    const filterButton = screen.getByRole("button", { name: "Filter" });
+    expect(filterButton.className).toContain("bg-accent-500");
+
+    await user.click(filterButton);
+    const dialog = screen.getByRole("dialog", { name: "Board filters" });
+    await user.click(within(dialog).getByRole("button", { name: "Project" }));
+    await user.click(within(dialog).getByLabelText("Infra"));
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({ q: "bug", projectId: 2 });
 
-    await user.selectOptions(screen.getByLabelText("Priority"), "HIGH");
+    await user.click(within(dialog).getByRole("button", { name: "Priority" }));
+    await user.click(within(dialog).getByLabelText("HIGH"));
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({
       q: "bug",
       projectId: 2,
       priority: "HIGH"
     });
 
-    await user.click(screen.getAllByRole("button", { name: "Clear filters" })[0]);
+    await user.click(within(dialog).getByRole("button", { name: "Clear all" }));
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({});
+    expect(screen.getByRole("button", { name: "Filter" }).className).not.toContain("bg-accent-500");
   });
 
   it("submits quick create with a primary project link", async () => {

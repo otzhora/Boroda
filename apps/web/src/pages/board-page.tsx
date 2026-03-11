@@ -9,8 +9,8 @@ import {
 } from "../components/board/quick-ticket-form";
 import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
+import { SectionedFilterDropdown } from "../components/ui/sectioned-filter-dropdown";
 import { ModalDialog } from "../components/ui/modal-dialog";
-import { OverflowMenu } from "../components/ui/overflow-menu";
 import { useAppHeader } from "../app/router";
 import {
   useCreateBoardColumnMutation,
@@ -96,6 +96,110 @@ function parseTicketId(value: string | null) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function BoardFilterDropdown(props: {
+  filters: BoardFilters;
+  projects: Array<{ id: number; name: string }>;
+  onUpdateFilters: (updater: (current: BoardFilters) => BoardFilters) => void;
+  onClearFilters: () => void;
+  hotkeySignal: number;
+}) {
+  const [projectSearch, setProjectSearch] = useState("");
+  const hasFilters = hasBoardFilters(props.filters);
+
+  const filteredProjects = props.projects.filter((project) =>
+    project.name.toLowerCase().includes(projectSearch.trim().toLowerCase())
+  );
+
+  return (
+    <SectionedFilterDropdown
+      title="Board filters"
+      hotkeySignal={props.hotkeySignal}
+      hasFilters={hasFilters}
+      sections={[
+        { id: "project", label: "Project" },
+        { id: "priority", label: "Priority" }
+      ]}
+      initialSection="project"
+      activeButtonClassName={primaryButtonClassName}
+      inactiveButtonClassName={secondaryButtonClassName}
+      onClear={props.onClearFilters}
+      renderSection={(section) => {
+        if (section === "project") {
+          return (
+                <div className="grid gap-2">
+                  <span className="text-sm font-medium text-ink-100">Project</span>
+                  <input
+                    className={inputClassName}
+                    aria-label="Project filter"
+                    placeholder="Search projects…"
+                    value={projectSearch}
+                    onChange={(event) => {
+                      setProjectSearch(event.target.value);
+                    }}
+                  />
+                  <div className="grid max-h-[16rem] gap-1 overflow-auto pr-1">
+                    {filteredProjects.map((project) => {
+                      const checked = props.filters.projectId === project.id;
+
+                      return (
+                        <label key={project.id} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={checked}
+                            onChange={() => {
+                              props.onUpdateFilters((current) => ({
+                                ...current,
+                                projectId: checked ? undefined : project.id
+                              }));
+                            }}
+                          />
+                          <span className="min-w-0 truncate">{project.name}</span>
+                        </label>
+                      );
+                    })}
+                    {filteredProjects.length === 0 ? <p className="m-0 px-2 py-1 text-sm text-ink-300">No projects match</p> : null}
+                  </div>
+                </div>
+          );
+        }
+
+        if (section === "priority") {
+          return (
+                <div className="grid gap-2">
+                  <span className="text-sm font-medium text-ink-100">Priority</span>
+                  <div className="grid gap-1">
+                    {TICKET_PRIORITIES.map((priority) => {
+                      const checked = props.filters.priority === priority;
+
+                      return (
+                        <label key={priority} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={checked}
+                            onChange={() => {
+                              props.onUpdateFilters((current) => ({
+                                ...current,
+                                priority: checked ? undefined : priority
+                              }));
+                            }}
+                          />
+                          <span>{priority}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+          );
+        }
+
+        return null;
+      }}
+    />
+  );
+}
+
 export function BoardPage() {
   const { setActions, setRightActions, hasHost } = useAppHeader();
   const queryClient = useQueryClient();
@@ -113,6 +217,7 @@ export function BoardPage() {
   const [editForm, setEditForm] = useState<TicketFormState>(createEmptyTicketForm());
   const [ticketSaveSuccessCount, setTicketSaveSuccessCount] = useState(0);
   const [dirtyWorktreesToConfirm, setDirtyWorktreesToConfirm] = useState<DirtyWorktreeDescriptor[]>([]);
+  const [filterHotkeySignal, setFilterHotkeySignal] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const quickCreateTitleRef = useRef<HTMLInputElement>(null);
   const deferredBoardFilters = useDeferredValue(boardFilters);
@@ -248,6 +353,12 @@ export function BoardPage() {
       return;
     }
 
+    if (!isTypingTarget(event.target) && event.shiftKey && event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      setFilterHotkeySignal((current) => current + 1);
+      return;
+    }
+
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
 
@@ -298,88 +409,37 @@ export function BoardPage() {
   }, []);
 
   useEffect(() => {
-    const filtersButtonLabel = boardHasFilters ? "Filters applied" : "Filters";
+    const renderSearchControl = () => (
+      <label className="shrink-0">
+        <span className="sr-only">Search</span>
+        <input
+          ref={searchInputRef}
+          className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
+          placeholder="Search…"
+          value={boardFilters.q ?? ""}
+          onChange={(event) => {
+            const value = event.target.value;
+            setBoardFilters((current) => ({
+              ...current,
+              q: value || undefined
+            }));
+          }}
+        />
+      </label>
+    );
 
-    setActions(
-      <>
-        <label className="min-w-0 flex-1 basis-[18rem] max-w-[32rem]">
-          <span className="sr-only">Search</span>
-          <input
-            ref={searchInputRef}
-            className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
-            placeholder="Search…"
-            value={boardFilters.q ?? ""}
-            onChange={(event) => {
-              const value = event.target.value;
-              setBoardFilters((current) => ({
-                ...current,
-                q: value || undefined
-              }));
-            }}
-          />
-        </label>
-        <OverflowMenu
-          buttonLabel={filtersButtonLabel}
-          buttonText={filtersButtonLabel}
-          buttonClassName={secondaryButtonClassName}
-          menuClassName="absolute top-[calc(100%+0.5rem)] z-30 grid min-w-[280px] gap-3 rounded-[10px] border border-white/8 bg-canvas-925 p-3 shadow-[0_8px_24px_rgba(0,0,0,0.24)]"
-        >
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-ink-100">Project</span>
-            <select
-              className={inputClassName}
-              aria-label="Project"
-              value={boardFilters.projectId ? String(boardFilters.projectId) : ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                setBoardFilters((current) => ({
-                  ...current,
-                  projectId: value ? Number(value) : undefined
-                }));
-              }}
-            >
-              <option value="">All projects</option>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-medium text-ink-100">Priority</span>
-            <select
-              className={inputClassName}
-              aria-label="Priority"
-              value={boardFilters.priority ?? ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                setBoardFilters((current) => ({
-                  ...current,
-                  priority: value ? (value as BoardFilters["priority"]) : undefined
-                }));
-              }}
-            >
-              <option value="">All priorities</option>
-              {TICKET_PRIORITIES.map((priority) => (
-                <option key={priority} value={priority}>
-                  {priority}
-                </option>
-              ))}
-            </select>
-          </label>
-          {boardHasFilters ? (
-            <button
-              type="button"
-              className={secondaryButtonClassName}
-              onClick={() => {
-                setBoardFilters(EMPTY_BOARD_FILTERS);
-              }}
-            >
-              Clear filters
-            </button>
-          ) : null}
-        </OverflowMenu>
+    const renderHeaderActions = () => (
+      <div className="flex min-w-0 items-center justify-center gap-2">
+        {renderSearchControl()}
+        <BoardFilterDropdown
+          filters={boardFilters}
+          projects={projects}
+          onUpdateFilters={setBoardFilters}
+          onClearFilters={() => {
+            setBoardFilters(EMPTY_BOARD_FILTERS);
+          }}
+          hotkeySignal={filterHotkeySignal}
+        />
         <button
           type="button"
           className={primaryButtonClassName}
@@ -389,7 +449,11 @@ export function BoardPage() {
         >
           Create
         </button>
-      </>
+      </div>
+    );
+
+    setActions(
+      renderHeaderActions()
     );
     setRightActions(
       <Link to="/settings" className={secondaryButtonClassName}>
@@ -406,7 +470,7 @@ export function BoardPage() {
     boardFilters.projectId,
     boardFilters.q,
     boardHasFilters,
-    inputClassName,
+    filterHotkeySignal,
     projects,
     setActions,
     setRightActions
@@ -422,11 +486,11 @@ export function BoardPage() {
 
       {!hasHost ? (
         <section className={`${softPanelClassName} grid-cols-[minmax(0,1fr)_auto] items-center gap-3`}>
-          <label className="min-w-0">
+          <label className="shrink-0">
             <span className="sr-only">Search</span>
             <input
               ref={searchInputRef}
-              className={`${inputClassName} transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
+              className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
               placeholder="Search…"
               value={boardFilters.q ?? ""}
               onChange={(event) => {
@@ -438,68 +502,26 @@ export function BoardPage() {
               }}
             />
           </label>
-          <OverflowMenu
-            buttonLabel={boardHasFilters ? "Filters applied" : "Filters"}
-            buttonText={boardHasFilters ? "Filters applied" : "Filters"}
-            buttonClassName={secondaryButtonClassName}
-            menuClassName="absolute top-[calc(100%+0.5rem)] right-0 z-30 grid min-w-[280px] gap-3 rounded-[10px] border border-white/8 bg-canvas-925 p-3 shadow-[0_8px_24px_rgba(0,0,0,0.24)]"
-          >
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-ink-100">Project</span>
-              <select
-                className={inputClassName}
-                aria-label="Project"
-                value={boardFilters.projectId ? String(boardFilters.projectId) : ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setBoardFilters((current) => ({
-                    ...current,
-                    projectId: value ? Number(value) : undefined
-                  }));
-                }}
-              >
-                <option value="">All projects</option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-ink-100">Priority</span>
-              <select
-                className={inputClassName}
-                aria-label="Priority"
-                value={boardFilters.priority ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setBoardFilters((current) => ({
-                    ...current,
-                    priority: value ? (value as BoardFilters["priority"]) : undefined
-                  }));
-                }}
-              >
-                <option value="">All priorities</option>
-                {TICKET_PRIORITIES.map((priority) => (
-                  <option key={priority} value={priority}>
-                    {priority}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {boardHasFilters ? (
-              <button
-                type="button"
-                className={secondaryButtonClassName}
-                onClick={() => {
-                  setBoardFilters(EMPTY_BOARD_FILTERS);
-                }}
-              >
-                Clear filters
-              </button>
-            ) : null}
-          </OverflowMenu>
+          <div className="flex items-center gap-2">
+            <BoardFilterDropdown
+              filters={boardFilters}
+              projects={projects}
+              onUpdateFilters={setBoardFilters}
+              onClearFilters={() => {
+                setBoardFilters(EMPTY_BOARD_FILTERS);
+              }}
+              hotkeySignal={filterHotkeySignal}
+            />
+            <button
+              type="button"
+              className={primaryButtonClassName}
+              onClick={() => {
+                setIsQuickCreateOpen(true);
+              }}
+            >
+              Create
+            </button>
+          </div>
         </section>
       ) : null}
 

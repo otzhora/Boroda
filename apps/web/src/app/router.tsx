@@ -46,8 +46,8 @@ function AppShell() {
           Skip to content
         </a>
         <header className="sticky top-0 z-40 border-b border-white/8 bg-canvas-950">
-          <div className="relative grid min-h-14 w-full grid-cols-[1fr_auto_1fr] items-center gap-4 px-5">
-            <div className="flex min-w-0 items-center gap-8 justify-self-start">
+          <div className="relative flex min-h-14 w-full items-center justify-between gap-4 px-5">
+            <div className="flex min-w-0 items-center gap-8">
               <h1 className="m-0 text-base font-semibold text-ink-50">Boroda</h1>
               <nav className="flex items-center gap-5" aria-label="Primary">
                 <NavLink to="/" className={navLinkClassName}>
@@ -64,10 +64,14 @@ function AppShell() {
                 </NavLink>
               </nav>
             </div>
-            <div className="flex min-w-0 w-[min(100%,44rem)] items-center justify-center gap-2 justify-self-center">
-              {actions}
+            <div className="pointer-events-none absolute inset-y-0 left-1/2 flex w-full max-w-[44rem] -translate-x-1/2 items-center justify-center px-4">
+              <div className="pointer-events-auto flex min-w-0 items-center justify-center gap-2">
+                {actions}
+              </div>
             </div>
-            <div className="flex min-w-0 items-center justify-end gap-2 justify-self-end">{rightActions}</div>
+            <div className="flex min-w-0 items-center justify-end gap-2">
+              {rightActions}
+            </div>
           </div>
         </header>
         <main
