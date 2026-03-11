@@ -1176,6 +1176,21 @@ export async function unarchiveTicket(app: FastifyInstance, id: number) {
       }
 
       const restoredAt = nowIso();
+      const archivedLinkedProjectIds = existing.projectLinks
+        .filter((link) => link.project.archivedAt)
+        .map((link) => link.projectId);
+
+      if (archivedLinkedProjectIds.length) {
+        app.db
+          .update(projects)
+          .set({
+            archivedAt: null,
+            updatedAt: restoredAt
+          })
+          .where(inArray(projects.id, archivedLinkedProjectIds))
+          .run();
+      }
+
       app.db
         .update(tickets)
         .set({

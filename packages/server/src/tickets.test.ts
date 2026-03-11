@@ -317,6 +317,71 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   assert.equal(visibleTickets[0].id, createdTicket.id);
 });
 
+test("unarchiving a ticket also restores linked archived projects", async () => {
+  const linkedProject = await createProject("Restore Parent Project", "restore-parent-project");
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Restore linked project with ticket",
+      description: "",
+      status: "READY",
+      priority: "MEDIUM",
+      projectLinks: [{ projectId: linkedProject.id, relationship: "PRIMARY" }]
+    }
+  });
+
+  assert.equal(ticketResponse.statusCode, 200);
+  const ticket = ticketResponse.json();
+
+  const archiveProjectResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/projects/${linkedProject.id}`
+  });
+
+  assert.equal(archiveProjectResponse.statusCode, 200);
+
+  const archivedProjectResponse = await app.inject({
+    method: "GET",
+    url: `/api/projects/${linkedProject.id}`
+  });
+
+  assert.equal(archivedProjectResponse.statusCode, 200);
+  assert.equal(typeof archivedProjectResponse.json().archivedAt, "string");
+
+  const archivedTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(archivedTicketResponse.statusCode, 200);
+  assert.equal(typeof archivedTicketResponse.json().archivedAt, "string");
+
+  const unarchiveTicketResponse = await app.inject({
+    method: "POST",
+    url: `/api/tickets/${ticket.id}/unarchive`
+  });
+
+  assert.equal(unarchiveTicketResponse.statusCode, 200);
+
+  const restoredProjectResponse = await app.inject({
+    method: "GET",
+    url: `/api/projects/${linkedProject.id}`
+  });
+
+  assert.equal(restoredProjectResponse.statusCode, 200);
+  assert.equal(restoredProjectResponse.json().archivedAt, null);
+
+  const restoredTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(restoredTicketResponse.statusCode, 200);
+  assert.equal(restoredTicketResponse.json().archivedAt, null);
+});
+
 test("ticket-project link endpoints enforce duplicate and primary constraints", async () => {
   const appProject = await createProject("App", "app");
   const infraProject = await createProject("Infra", "infra");
