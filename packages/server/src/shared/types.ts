@@ -1,11 +1,4 @@
-export type TicketStatus =
-  | "INBOX"
-  | "READY"
-  | "IN_PROGRESS"
-  | "BLOCKED"
-  | "IN_REVIEW"
-  | "MANUAL_UI"
-  | "DONE";
+export type TicketStatus = string;
 
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type ProjectFolderKind = "APP" | "BACKEND" | "TERRAFORM" | "INFRA" | "DOCS" | "OTHER";

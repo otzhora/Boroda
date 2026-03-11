@@ -28,13 +28,22 @@ const ticketSchema = z.object({
   title: z.string(),
   description: z.string(),
   branch: z.string().nullable(),
-  status: z.enum(["INBOX", "READY", "IN_PROGRESS", "BLOCKED", "IN_REVIEW", "MANUAL_UI", "DONE"]),
+  status: z.string().trim().min(1),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]),
   dueAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   archivedAt: z.string().nullable(),
   jiraTicket: z.string().nullable().optional()
+});
+
+const boardColumnSchema = z.object({
+  id: z.number().int().positive().optional(),
+  status: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  position: z.number().int().nonnegative(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional()
 });
 
 const ticketProjectLinkSchema = z.object({
@@ -96,6 +105,7 @@ export const importWorkspaceSchema = z.object({
       sequences: z.array(sequenceSchema),
       projects: z.array(projectSchema),
       projectFolders: z.array(projectFolderSchema),
+      boardColumns: z.array(boardColumnSchema).default([]),
       tickets: z.array(ticketSchema),
       ticketProjectLinks: z.array(ticketProjectLinkSchema),
       ticketJiraIssueLinks: z.array(ticketJiraIssueLinkSchema).default([]),

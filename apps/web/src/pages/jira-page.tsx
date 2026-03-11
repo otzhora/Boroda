@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAppHeader } from "../app/router";
+import { useBoardColumnsQuery } from "../features/board/queries";
 import { useAssignedJiraIssueLinksQuery, useJiraSettingsQuery } from "../features/jira/queries";
 import { useProjectsQuery } from "../features/projects/queries";
 import { useCreateTicketMutation } from "../features/tickets/mutations";
@@ -147,6 +148,7 @@ export function JiraPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const settingsQuery = useJiraSettingsQuery();
   const issuesQuery = useAssignedJiraIssueLinksQuery();
+  const boardColumnsQuery = useBoardColumnsQuery();
   const projectsQuery = useProjectsQuery();
   const ticketsQuery = useTicketsQuery();
   const [issueSearchInput, setIssueSearchInput] = useState(() => normalizeIssueSearch(searchParams.get("q")));
@@ -158,13 +160,15 @@ export function JiraPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const quickCreateTitleRef = useRef<HTMLInputElement>(null);
   const linkExistingSearchRef = useRef<HTMLInputElement>(null);
+  const boardColumns = boardColumnsQuery.data?.columns ?? [];
+  const defaultBoardStatus = boardColumns[0]?.status ?? "INBOX";
   const createTicketMutation = useCreateTicketMutation({
     boardFilters: {},
     onCreated: () => {
       setIssueToCreateFrom(null);
     },
     onReset: () => {
-      setQuickCreateForm(createEmptyQuickTicketForm());
+      setQuickCreateForm(createEmptyQuickTicketForm(defaultBoardStatus));
     }
   });
   const addTicketJiraLinkMutation = useAddTicketJiraLinkMutation();
@@ -196,6 +200,19 @@ export function JiraPage() {
   useEffect(() => {
     setIssueSearchInput((current) => (current === issueSearch ? current : issueSearch));
   }, [issueSearch]);
+
+  useEffect(() => {
+    setQuickCreateForm((current) => {
+      if (boardColumns.length === 0 || boardColumns.some((column) => column.status === current.status)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        status: defaultBoardStatus
+      };
+    });
+  }, [boardColumns, defaultBoardStatus]);
 
   const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
     if (event.defaultPrevented) {
@@ -532,6 +549,7 @@ export function JiraPage() {
         <QuickTicketForm
           form={quickCreateForm}
           projects={projects}
+          statuses={boardColumns}
           isSubmitting={createTicketMutation.isPending}
           submitLabel="Create new Boroda ticket"
           submittingLabel="Creating new Boroda ticket…"

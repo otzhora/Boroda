@@ -6,6 +6,7 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { MultipartFile } from "@fastify/multipart";
 import type { FastifyInstance } from "fastify";
 import { getConfig } from "../../config";
+import { ensureBoardStatusExists } from "../board/columns";
 import { getJiraIssuesByKeys } from "../integrations/jira/service";
 import { isWorkspaceDirty, removeWorkspaceWorktree } from "../integrations/open-in/git-workspaces";
 import {
@@ -834,6 +835,7 @@ export async function createTicket(
     async () => {
       const now = nowIso();
       const key = nextTicketKey(app);
+      await ensureBoardStatusExists(app, input.status);
       assertUniqueProjectLinks(input.projectLinks);
       assertUniqueJiraIssueLinks(input.jiraIssues);
       await ensureProjectsExist(
@@ -907,6 +909,9 @@ export async function updateTicket(
     },
     async () => {
       const existing = await getTicketOrThrow(app, id);
+      if (input.status !== undefined) {
+        await ensureBoardStatusExists(app, input.status);
+      }
       const nextUpdatedAt = nowIso();
       const nextLegacyBranch =
         input.workspaces === undefined
@@ -985,7 +990,9 @@ export async function updateTicket(
       }
 
       if (input.status && input.status !== existing.status) {
-        recordActivity(app, id, "ticket.status.changed", `Status changed to ${input.status}`);
+        recordActivity(app, id, "ticket.status.changed", `Status changed to ${input.status}`, {
+          status: input.status
+        });
       }
 
       if (input.priority && input.priority !== existing.priority) {

@@ -1,23 +1,3 @@
-export const BOARD_STATUS_ORDER = [
-  "INBOX",
-  "READY",
-  "IN_PROGRESS",
-  "BLOCKED",
-  "IN_REVIEW",
-  "MANUAL_UI",
-  "DONE"
-] as const;
-
-export const statusLabelMap: Record<(typeof BOARD_STATUS_ORDER)[number], string> = {
-  INBOX: "Inbox",
-  READY: "Ready",
-  IN_PROGRESS: "In Progress",
-  BLOCKED: "Blocked",
-  IN_REVIEW: "In Review",
-  MANUAL_UI: "Manual UI",
-  DONE: "Done"
-};
-
 export const TICKET_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
 
 export const TICKET_PROJECT_RELATIONSHIPS = ["PRIMARY", "RELATED", "DEPENDENCY"] as const;
@@ -56,3 +36,12 @@ export const workContextTypeLabelMap: Record<(typeof WORK_CONTEXT_TYPES)[number]
   LINK: "Link",
   NOTE: "Note"
 };
+
+export function formatStatusLabel(status: string) {
+  return status
+    .trim()
+    .split(/_+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+}

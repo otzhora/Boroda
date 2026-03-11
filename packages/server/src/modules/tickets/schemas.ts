@@ -1,14 +1,6 @@
 import { z } from "zod";
 
-const statusEnum = z.enum([
-  "INBOX",
-  "READY",
-  "IN_PROGRESS",
-  "BLOCKED",
-  "IN_REVIEW",
-  "MANUAL_UI",
-  "DONE"
-]);
+const statusField = z.string().trim().min(1).max(64);
 
 const priorityEnum = z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]);
 const relationshipEnum = z.enum(["PRIMARY", "RELATED", "DEPENDENCY"]);
@@ -55,7 +47,7 @@ export const ticketProjectLinkIdParamSchema = z.object({
 });
 
 export const ticketQuerySchema = z.object({
-  status: z.preprocess((value) => toArray(value), z.array(statusEnum).default([])),
+  status: z.preprocess((value) => toArray(value), z.array(statusField).default([])),
   priority: z.preprocess((value) => toArray(value), z.array(priorityEnum).default([])),
   projectId: z.preprocess(
     (value) => toArray(value),
@@ -79,7 +71,7 @@ export const createTicketSchema = z.object({
       })
     )
     .default([]),
-  status: statusEnum.default("INBOX"),
+  status: statusField.default("INBOX"),
   priority: priorityEnum.default("MEDIUM"),
   dueAt: z.string().datetime().optional().nullable(),
   projectLinks: z

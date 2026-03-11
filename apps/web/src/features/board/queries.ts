@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { BoardResponse } from "../../lib/types";
+import type { BoardColumnsResponse, BoardResponse } from "../../lib/types";
 
 export interface BoardFilters {
   projectId?: number;
@@ -10,6 +10,10 @@ export interface BoardFilters {
 
 export function boardQueryKey(filters: BoardFilters) {
   return ["board", filters] as const;
+}
+
+export function boardColumnsQueryKey() {
+  return ["board-columns"] as const;
 }
 
 function toBoardSearchParams(filters: BoardFilters) {
@@ -36,6 +40,15 @@ export function useBoardQuery(filters: BoardFilters) {
   return useQuery({
     queryKey: boardQueryKey(filters),
     queryFn: () => apiClient<BoardResponse>(`/api/board${toBoardSearchParams(filters)}`),
+    gcTime: 60 * 1000,
+    placeholderData: (previousData) => previousData
+  });
+}
+
+export function useBoardColumnsQuery() {
+  return useQuery({
+    queryKey: boardColumnsQueryKey(),
+    queryFn: () => apiClient<BoardColumnsResponse>("/api/board-columns"),
     gcTime: 60 * 1000,
     placeholderData: (previousData) => previousData
   });

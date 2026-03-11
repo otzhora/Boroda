@@ -1,31 +1,13 @@
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { projects, ticketJiraIssueLinks, ticketProjectLinks, tickets, workContexts } from "../../db/schema";
-
-const STATUS_ORDER = [
-  "INBOX",
-  "READY",
-  "IN_PROGRESS",
-  "BLOCKED",
-  "IN_REVIEW",
-  "MANUAL_UI",
-  "DONE"
-] as const;
-
-const STATUS_LABELS: Record<(typeof STATUS_ORDER)[number], string> = {
-  INBOX: "Inbox",
-  READY: "Ready",
-  IN_PROGRESS: "In Progress",
-  BLOCKED: "Blocked",
-  IN_REVIEW: "In Review",
-  MANUAL_UI: "Manual UI",
-  DONE: "Done"
-};
+import { ensureBoardColumnsPresent } from "./columns";
 
 export async function getBoard(
   app: FastifyInstance,
   filters: { projectId?: number; priority?: string; q?: string }
 ) {
+  const configuredColumns = await ensureBoardColumnsPresent(app);
   const allTickets = await app.db.query.tickets.findMany({
     where: (table, operators) => {
       const clauses = [sql`${table.archivedAt} is null`];
@@ -104,11 +86,11 @@ export async function getBoard(
     : [];
 
   return {
-    columns: STATUS_ORDER.map((status) => ({
-      status,
-      label: STATUS_LABELS[status],
+    columns: configuredColumns.map((column) => ({
+      status: column.status,
+      label: column.label,
       tickets: allTickets
-        .filter((ticket) => ticket.status === status)
+        .filter((ticket) => ticket.status === column.status)
         .map((ticket) => ({
           id: ticket.id,
           key: ticket.key,

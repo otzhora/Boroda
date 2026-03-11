@@ -27,14 +27,14 @@ export interface TicketFormState {
   projectLinks: TicketProjectLinkFormState[];
 }
 
-export function createEmptyTicketForm(): TicketFormState {
+export function createEmptyTicketForm(defaultStatus = "INBOX"): TicketFormState {
   return {
     title: "",
     description: "",
     branch: "",
     workspaces: [],
     jiraIssues: [],
-    status: "INBOX",
+    status: defaultStatus,
     priority: "MEDIUM",
     dueAt: "",
     projectLinks: []

@@ -12,7 +12,12 @@ import { TicketDrawer } from "../components/ticket/ticket-drawer";
 import { ModalDialog } from "../components/ui/modal-dialog";
 import { OverflowMenu } from "../components/ui/overflow-menu";
 import { useAppHeader } from "../app/router";
-import { useBoardQuery, type BoardFilters } from "../features/board/queries";
+import {
+  useCreateBoardColumnMutation,
+  useDeleteBoardColumnMutation,
+  useRenameBoardColumnMutation
+} from "../features/board/mutations";
+import { useBoardColumnsQuery, useBoardQuery, type BoardFilters } from "../features/board/queries";
 import { useProjectsQuery } from "../features/projects/queries";
 import {
   createEmptyTicketForm,
@@ -98,6 +103,12 @@ export function BoardPage() {
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(EMPTY_BOARD_FILTERS);
   const [quickCreateForm, setQuickCreateForm] = useState<QuickTicketFormState>(createEmptyQuickTicketForm());
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [columnDialogState, setColumnDialogState] = useState<
+    | { mode: "create"; relativeToStatus: string; placement: "before" | "after" }
+    | { mode: "rename"; status: string; label: string }
+    | null
+  >(null);
+  const [newColumnLabel, setNewColumnLabel] = useState("");
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => parseTicketId(searchParams.get("ticketId")));
   const [editForm, setEditForm] = useState<TicketFormState>(createEmptyTicketForm());
   const [ticketSaveSuccessCount, setTicketSaveSuccessCount] = useState(0);
@@ -107,14 +118,40 @@ export function BoardPage() {
   const deferredBoardFilters = useDeferredValue(boardFilters);
 
   const boardQuery = useBoardQuery(deferredBoardFilters);
+  const boardColumnsQuery = useBoardColumnsQuery();
   const projectsQuery = useProjectsQuery();
   const selectedTicketQuery = useTicketQuery(selectedTicketId);
+  const createBoardColumnMutation = useCreateBoardColumnMutation();
+  const deleteBoardColumnMutation = useDeleteBoardColumnMutation();
+  const renameBoardColumnMutation = useRenameBoardColumnMutation();
+  const boardColumns = boardColumnsQuery.data?.columns ?? boardQuery.data?.columns.map((column) => ({
+    id: 0,
+    status: column.status,
+    label: column.label,
+    position: 0,
+    createdAt: "",
+    updatedAt: ""
+  })) ?? [];
+  const defaultBoardStatus = boardColumns[0]?.status ?? "INBOX";
 
   useEffect(() => {
     if (selectedTicketQuery.data) {
       setEditForm(toTicketForm(selectedTicketQuery.data));
     }
   }, [selectedTicketQuery.data]);
+
+  useEffect(() => {
+    setQuickCreateForm((current) => {
+      if (boardColumns.length === 0 || boardColumns.some((column) => column.status === current.status)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        status: defaultBoardStatus
+      };
+    });
+  }, [boardColumns, defaultBoardStatus]);
 
   useEffect(() => {
     const nextSelectedTicketId = parseTicketId(searchParams.get("ticketId"));
@@ -153,7 +190,7 @@ export function BoardPage() {
       setSelectedTicketId(ticket.id);
     },
     onReset: () => {
-      setQuickCreateForm(createEmptyQuickTicketForm());
+      setQuickCreateForm(createEmptyQuickTicketForm(defaultBoardStatus));
     }
   });
 
@@ -192,6 +229,9 @@ export function BoardPage() {
   const refreshTicketJiraLinksMutation = useRefreshTicketJiraLinksMutation(selectedTicketId);
 
   const actionError =
+    createBoardColumnMutation.error?.message ??
+    renameBoardColumnMutation.error?.message ??
+    deleteBoardColumnMutation.error?.message ??
     createTicketMutation.error?.message ??
     updateTicketMutation.error?.message ??
     deleteTicketMutation.error?.message ??
@@ -486,7 +526,7 @@ export function BoardPage() {
             <p className="m-0 max-w-[44rem] text-sm text-ink-200">
               {boardHasFilters
                 ? "Clear the current filters or create a ticket that matches them."
-                : "Create a ticket from the dialog or load the sample seed data for local testing."}
+                : "Create a ticket from the dialog, add a board column, or load the sample seed data for local testing."}
             </p>
             <div className="flex flex-wrap gap-3">
               {boardHasFilters ? (
@@ -509,11 +549,26 @@ export function BoardPage() {
               >
                 Create ticket
               </button>
+              {columns[0] ? (
+                <button
+                  className={secondaryButtonClassName}
+                  type="button"
+                  onClick={() => {
+                    setColumnDialogState({
+                      mode: "create",
+                      relativeToStatus: columns[0].status,
+                      placement: "before"
+                    });
+                  }}
+                >
+                  Add column
+                </button>
+              ) : null}
             </div>
           </section>
         ) : null}
 
-        {!boardQuery.isLoading && !boardQuery.isError && totalTickets > 0 ? (
+        {!boardQuery.isLoading && !boardQuery.isError && columns.length > 0 ? (
           <BoardView
             columns={columns}
             selectedTicketId={selectedTicketId}
@@ -521,6 +576,20 @@ export function BoardPage() {
             onMoveTicket={(ticketId, status) => {
               moveTicketStatusMutation.mutate({ ticketId, status });
             }}
+            onAddColumn={(relativeToStatus, placement) => {
+              setColumnDialogState({ mode: "create", relativeToStatus, placement });
+              setNewColumnLabel("");
+            }}
+            onRenameColumn={(status, label) => {
+              setColumnDialogState({ mode: "rename", status, label });
+              setNewColumnLabel(label);
+            }}
+            onDeleteColumn={(status) => {
+              deleteBoardColumnMutation.mutate(status);
+            }}
+            isColumnMutationPending={
+              createBoardColumnMutation.isPending || renameBoardColumnMutation.isPending || deleteBoardColumnMutation.isPending
+            }
           />
         ) : null}
       </div>
@@ -539,6 +608,7 @@ export function BoardPage() {
         <QuickTicketForm
           form={quickCreateForm}
           projects={projects}
+          statuses={boardColumns}
           isSubmitting={createTicketMutation.isPending}
           titleInputRef={quickCreateTitleRef}
           onChange={(updater) => {
@@ -553,9 +623,111 @@ export function BoardPage() {
         />
       </ModalDialog>
 
+      <ModalDialog
+        open={columnDialogState !== null}
+        title={columnDialogState?.mode === "rename" ? "Rename board column" : "Add board column"}
+        onClose={() => {
+          if (createBoardColumnMutation.isPending || renameBoardColumnMutation.isPending) {
+            return;
+          }
+
+          setColumnDialogState(null);
+          setNewColumnLabel("");
+        }}
+        variant="flat"
+        showHeader={false}
+        showCloseButton={false}
+      >
+        <div className="grid gap-4 px-5 py-4 sm:px-6 sm:py-5">
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+
+              if (!columnDialogState) {
+                return;
+              }
+
+              if (columnDialogState.mode === "rename") {
+                renameBoardColumnMutation.mutate(
+                  {
+                    status: columnDialogState.status,
+                    label: newColumnLabel.trim()
+                  },
+                  {
+                    onSuccess: () => {
+                      setColumnDialogState(null);
+                      setNewColumnLabel("");
+                    }
+                  }
+                );
+                return;
+              }
+
+              createBoardColumnMutation.mutate(
+                {
+                  relativeToStatus: columnDialogState.relativeToStatus,
+                  placement: columnDialogState.placement,
+                  label: newColumnLabel.trim()
+                },
+                {
+                  onSuccess: () => {
+                    setColumnDialogState(null);
+                    setNewColumnLabel("");
+                  }
+                }
+              );
+            }}
+          >
+            <input
+              aria-label="Column name"
+              className={inputClassName}
+              value={newColumnLabel}
+              onChange={(event) => {
+                setNewColumnLabel(event.target.value);
+              }}
+              placeholder="Needs QA…"
+              autoFocus
+              required
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                className={secondaryButtonClassName}
+                onClick={() => {
+                  setColumnDialogState(null);
+                  setNewColumnLabel("");
+                }}
+                disabled={createBoardColumnMutation.isPending || renameBoardColumnMutation.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className={primaryButtonClassName}
+                disabled={
+                  createBoardColumnMutation.isPending ||
+                  renameBoardColumnMutation.isPending ||
+                  newColumnLabel.trim().length === 0
+                }
+              >
+                {createBoardColumnMutation.isPending
+                  ? "Adding…"
+                  : renameBoardColumnMutation.isPending
+                    ? "Saving…"
+                    : columnDialogState?.mode === "rename"
+                      ? "Save"
+                      : "Add column"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </ModalDialog>
+
       <TicketDrawer
         ticketId={selectedTicketId}
         ticket={selectedTicketQuery.data}
+        statuses={boardColumns}
         isLoading={selectedTicketQuery.isLoading}
         isError={selectedTicketQuery.isError}
         form={editForm}

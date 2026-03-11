@@ -8,10 +8,14 @@ import { ApiError } from "../lib/api-client";
 
 const mocks = vi.hoisted(() => ({
   useBoardQuery: vi.fn(),
+  useBoardColumnsQuery: vi.fn(),
   useProjectsQuery: vi.fn(),
   useTicketQuery: vi.fn(),
   refetchBoard: vi.fn(),
   createMutate: vi.fn(),
+  createBoardColumnMutate: vi.fn(),
+  renameBoardColumnMutate: vi.fn(),
+  deleteBoardColumnMutate: vi.fn(),
   updateMutate: vi.fn(),
   deleteMutate: vi.fn(),
   deleteMutateAsync: vi.fn(),
@@ -21,7 +25,26 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../features/board/queries", () => ({
-  useBoardQuery: mocks.useBoardQuery
+  useBoardQuery: mocks.useBoardQuery,
+  useBoardColumnsQuery: mocks.useBoardColumnsQuery
+}));
+
+vi.mock("../features/board/mutations", () => ({
+  useCreateBoardColumnMutation: vi.fn(() => ({
+    mutate: mocks.createBoardColumnMutate,
+    isPending: false,
+    error: null
+  })),
+  useRenameBoardColumnMutation: vi.fn(() => ({
+    mutate: mocks.renameBoardColumnMutate,
+    isPending: false,
+    error: null
+  })),
+  useDeleteBoardColumnMutation: vi.fn(() => ({
+    mutate: mocks.deleteBoardColumnMutate,
+    isPending: false,
+    error: null
+  }))
 }));
 
 vi.mock("../features/projects/queries", () => ({
@@ -114,10 +137,16 @@ vi.mock("../components/ticket/ticket-drawer", () => ({
 vi.mock("../components/board/board-view", () => ({
   BoardView: ({
     onMoveTicket,
-    onSelectTicket
+    onSelectTicket,
+    onAddColumn,
+    onRenameColumn,
+    onDeleteColumn
   }: {
     onMoveTicket: (ticketId: number, status: string) => void;
     onSelectTicket: (ticketId: number) => void;
+    onAddColumn: (relativeToStatus: string, placement: "before" | "after") => void;
+    onRenameColumn: (status: string, label: string) => void;
+    onDeleteColumn: (status: string) => void;
   }) => (
     <>
       <button type="button" onClick={() => onMoveTicket(12, "DONE")}>
@@ -125,6 +154,15 @@ vi.mock("../components/board/board-view", () => ({
       </button>
       <button type="button" onClick={() => onSelectTicket(12)}>
         Select ticket
+      </button>
+      <button type="button" onClick={() => onAddColumn("READY", "after")}>
+        Trigger add column
+      </button>
+      <button type="button" onClick={() => onRenameColumn("READY", "Ready")}>
+        Trigger rename column
+      </button>
+      <button type="button" onClick={() => onDeleteColumn("READY")}>
+        Trigger delete column
       </button>
     </>
   )
@@ -147,10 +185,14 @@ function renderBoardPage(options?: { initialEntries?: string[] }) {
 describe("BoardPage", () => {
   beforeEach(() => {
     mocks.useBoardQuery.mockReset();
+    mocks.useBoardColumnsQuery.mockReset();
     mocks.useProjectsQuery.mockReset();
     mocks.useTicketQuery.mockReset();
     mocks.refetchBoard.mockReset();
     mocks.createMutate.mockReset();
+    mocks.createBoardColumnMutate.mockReset();
+    mocks.renameBoardColumnMutate.mockReset();
+    mocks.deleteBoardColumnMutate.mockReset();
     mocks.updateMutate.mockReset();
     mocks.deleteMutate.mockReset();
     mocks.deleteMutateAsync.mockReset();
@@ -163,6 +205,36 @@ describe("BoardPage", () => {
       isLoading: false,
       isError: false,
       refetch: mocks.refetchBoard
+    });
+    mocks.useBoardColumnsQuery.mockReturnValue({
+      data: {
+        columns: [
+          {
+            id: 1,
+            status: "INBOX",
+            label: "Inbox",
+            position: 0,
+            createdAt: "",
+            updatedAt: ""
+          },
+          {
+            id: 2,
+            status: "READY",
+            label: "Ready",
+            position: 1,
+            createdAt: "",
+            updatedAt: ""
+          },
+          {
+            id: 3,
+            status: "DONE",
+            label: "Done",
+            position: 2,
+            createdAt: "",
+            updatedAt: ""
+          }
+        ]
+      }
     });
 
     mocks.useProjectsQuery.mockReturnValue({
@@ -302,6 +374,75 @@ describe("BoardPage", () => {
     screen.getByLabelText("Search").blur();
     await user.keyboard("c");
     expect((await screen.findByLabelText("Title")) as HTMLElement).toHaveFocus();
+  });
+
+  it("creates a board column relative to an existing column", async () => {
+    const user = userEvent.setup();
+    mocks.useBoardQuery.mockReturnValue({
+      data: {
+        columns: [
+          {
+            status: "READY",
+            label: "Ready",
+            tickets: []
+          }
+        ]
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetchBoard
+    });
+
+    renderBoardPage();
+
+    await user.click(screen.getByRole("button", { name: "Trigger add column" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add board column" });
+    await user.type(within(dialog).getByLabelText("Column name"), "Needs QA");
+    await user.click(within(dialog).getByRole("button", { name: "Add column" }));
+
+    expect(mocks.createBoardColumnMutate).toHaveBeenCalledWith(
+      {
+        relativeToStatus: "READY",
+        placement: "after",
+        label: "Needs QA"
+      },
+      expect.any(Object)
+    );
+  });
+
+  it("renames a board column", async () => {
+    const user = userEvent.setup();
+    mocks.useBoardQuery.mockReturnValue({
+      data: {
+        columns: [
+          {
+            status: "READY",
+            label: "Ready",
+            tickets: []
+          }
+        ]
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetchBoard
+    });
+
+    renderBoardPage();
+
+    await user.click(screen.getByRole("button", { name: "Trigger rename column" }));
+    const dialog = await screen.findByRole("dialog");
+    const input = within(dialog).getByLabelText("Column name");
+    await user.clear(input);
+    await user.type(input, "Needs QA");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(mocks.renameBoardColumnMutate).toHaveBeenCalledWith(
+      {
+        status: "READY",
+        label: "Needs QA"
+      },
+      expect.any(Object)
+    );
   });
 
   it("does not close the selected ticket when escape was already handled", async () => {

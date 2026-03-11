@@ -1461,6 +1461,58 @@ describe("TicketDrawer", () => {
     expect(screen.getByRole("tabpanel")).toHaveAttribute("tabindex", "0");
   });
 
+  it("renders renamed board column labels in status activity entries", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          activities: [
+            {
+              id: 1,
+              ticketId: ticket.id,
+              type: "ticket.status.changed",
+              message: "Status changed to MANUAL_UI",
+              metaJson: "{}",
+              createdAt: "2026-02-28T20:13:00.000Z"
+            }
+          ]
+        }}
+        statuses={[
+          {
+            id: 7,
+            status: "MANUAL_UI",
+            label: "Manual checks",
+            position: 6,
+            createdAt: "",
+            updatedAt: ""
+          }
+        ]}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isDeleting={false}
+        isOpeningInApp={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenInApp={vi.fn()}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Activity" }));
+
+    expect(screen.getByText("Status changed to Manual checks")).toBeInTheDocument();
+  });
+
   it("shows a Jira refresh icon button and calls refresh", async () => {
     const user = userEvent.setup();
     const handleRefreshJira = vi.fn();

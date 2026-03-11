@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { z } from "zod";
 import {
+  boardColumns,
   projectFolders,
   projects,
   sequences,
@@ -10,6 +11,7 @@ import {
   tickets,
   workContexts
 } from "../../db/schema";
+import { DEFAULT_BOARD_COLUMNS, ensureColumnsForStatuses } from "../board/columns";
 import { AppError } from "../../shared/errors";
 import { importWorkspaceSchema } from "./schemas";
 
@@ -22,6 +24,7 @@ export async function exportWorkspace(app: FastifyInstance) {
       sequences: app.db.select().from(sequences).all(),
       projects: app.db.select().from(projects).all(),
       projectFolders: app.db.select().from(projectFolders).all(),
+      boardColumns: app.db.select().from(boardColumns).all(),
       tickets: app.db.select().from(tickets).all(),
       ticketProjectLinks: app.db.select().from(ticketProjectLinks).all(),
       ticketJiraIssueLinks: app.db.select().from(ticketJiraIssueLinks).all(),
@@ -61,6 +64,7 @@ export async function importWorkspace(
     tx.delete(ticketJiraIssueLinks).run();
     tx.delete(ticketProjectLinks).run();
     tx.delete(tickets).run();
+    tx.delete(boardColumns).run();
     tx.delete(projectFolders).run();
     tx.delete(projects).run();
     tx.delete(sequences).run();
@@ -76,6 +80,22 @@ export async function importWorkspace(
     if (data.projectFolders.length) {
       tx.insert(projectFolders).values(data.projectFolders).run();
     }
+
+    const importedBoardColumns = data.boardColumns.length
+      ? data.boardColumns.map((column) => ({
+          status: column.status,
+          label: column.label,
+          position: column.position,
+          createdAt: column.createdAt ?? new Date().toISOString(),
+          updatedAt: column.updatedAt ?? new Date().toISOString()
+        }))
+      : DEFAULT_BOARD_COLUMNS.map((column) => ({
+          ...column,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }));
+
+    tx.insert(boardColumns).values(importedBoardColumns).run();
 
     if (data.tickets.length) {
       tx.insert(tickets)
@@ -95,6 +115,11 @@ export async function importWorkspace(
           }))
         )
         .run();
+
+      ensureColumnsForStatuses(
+        tx,
+        data.tickets.map((ticket) => ticket.status)
+      );
     }
 
     if (data.ticketProjectLinks.length) {

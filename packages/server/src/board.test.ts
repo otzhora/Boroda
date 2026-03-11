@@ -10,6 +10,11 @@ import type { FastifyInstance } from "fastify";
 let app: FastifyInstance;
 let sqlite: { close: () => void };
 let schema: typeof import("./db/schema");
+let boardColumnDefaults: ReadonlyArray<{
+  status: string;
+  label: string;
+  position: number;
+}>;
 let tempRoot = "";
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
@@ -25,6 +30,7 @@ before(async () => {
 
   sqlite = dbClient.sqlite;
   schema = importedSchema;
+  ({ DEFAULT_BOARD_COLUMNS: boardColumnDefaults } = await import("./modules/board/columns"));
 
   migrate(dbClient.db, {
     migrationsFolder: path.resolve(repoRoot, "drizzle/migrations")
@@ -40,9 +46,14 @@ beforeEach(() => {
   app.db.delete(schema.ticketJiraIssueLinks).run();
   app.db.delete(schema.ticketProjectLinks).run();
   app.db.delete(schema.tickets).run();
+  app.db.delete(schema.boardColumns).run();
   app.db.delete(schema.projectFolders).run();
   app.db.delete(schema.projects).run();
   app.db.delete(schema.sequences).run();
+  app.db
+    .insert(schema.boardColumns)
+    .values(boardColumnDefaults.map((column) => ({ ...column })))
+    .run();
 });
 
 after(async () => {
@@ -204,6 +215,74 @@ test("board endpoint applies project, priority, and text filters together", asyn
   assert.equal(filteredTickets.length, 1);
   assert.equal(filteredTickets[0].title, "Terraform drift fix");
   assert.equal(filteredTickets[0].priority, "HIGH");
+});
+
+test("board columns can be inserted and deleted when only archived tickets use the status", async () => {
+  const project = await createProject("Ops", "ops");
+  const addColumnResponse = await app.inject({
+    method: "POST",
+    url: "/api/board-columns",
+    payload: {
+      label: "Needs QA",
+      relativeToStatus: "READY",
+      placement: "after"
+    }
+  });
+
+  assert.equal(addColumnResponse.statusCode, 200);
+  const addedColumns = addColumnResponse.json().columns;
+  const qaColumn = addedColumns.find((column: { status: string; label: string }) => column.label === "Needs QA");
+  assert.ok(qaColumn);
+
+  const archivedTicket = await createTicket({
+    title: "Archived only",
+    description: "Should not block deletion",
+    status: qaColumn.status,
+    priority: "LOW",
+    projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }]
+  });
+
+  const archiveResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/tickets/${archivedTicket.id}`
+  });
+  assert.equal(archiveResponse.statusCode, 200);
+
+  const deleteColumnResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/board-columns/${qaColumn.status}`
+  });
+
+  assert.equal(deleteColumnResponse.statusCode, 200);
+  const remainingColumns = deleteColumnResponse.json().columns;
+  assert.equal(remainingColumns.some((column: { status: string }) => column.status === qaColumn.status), false);
+  assert.equal(remainingColumns.some((column: { status: string }) => column.status === "READY"), true);
+});
+
+test("board columns can be renamed without changing their status key", async () => {
+  const renameResponse = await app.inject({
+    method: "PATCH",
+    url: "/api/board-columns/READY",
+    payload: {
+      label: "Queued"
+    }
+  });
+
+  assert.equal(renameResponse.statusCode, 200);
+  const renamedColumns = renameResponse.json().columns;
+  const readyColumn = renamedColumns.find((column: { status: string }) => column.status === "READY");
+  assert.ok(readyColumn);
+  assert.equal(readyColumn.label, "Queued");
+
+  const ticket = await createTicket({
+    title: "Uses renamed column",
+    description: "Still stored with same status key",
+    status: "READY",
+    priority: "MEDIUM",
+    projectLinks: []
+  });
+
+  assert.equal(ticket.status, "READY");
 });
 
 test("export endpoint returns a workspace snapshot with current records", async () => {

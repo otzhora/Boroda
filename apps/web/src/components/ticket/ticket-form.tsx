@@ -8,12 +8,11 @@ import {
   type RefObject
 } from "react";
 import {
-  BOARD_STATUS_ORDER,
-  statusLabelMap,
-  TICKET_PRIORITIES
+  TICKET_PRIORITIES,
+  formatStatusLabel
 } from "../../lib/constants";
 import { useUploadTicketImageMutation } from "../../features/tickets/mutations";
-import type { Project, TicketPriority, TicketStatus } from "../../lib/types";
+import type { BoardColumnDefinition, Project, TicketPriority, TicketStatus } from "../../lib/types";
 import { ProjectLinkEditor } from "./project-link-editor";
 import { MarkdownDescription } from "./markdown-description";
 import type { TicketFormState, TicketWorkspaceFormState } from "../../features/tickets/form";
@@ -45,6 +44,7 @@ interface TicketDescriptionFieldProps {
 interface TicketMetaFieldsProps {
   form: TicketFormState;
   projects: Project[];
+  statuses?: BoardColumnDefinition[];
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
 }
 
@@ -487,7 +487,21 @@ export function TicketWorkspaceFields({ value, projects, projectLinks, onChange 
   );
 }
 
-export function TicketMetaFields({ form, projects, onChange }: TicketMetaFieldsProps) {
+export function TicketMetaFields({ form, projects, statuses = [], onChange }: TicketMetaFieldsProps) {
+  const availableStatuses =
+    statuses.length > 0
+      ? statuses
+      : [
+          {
+            id: 0,
+            status: form.status,
+            label: formatStatusLabel(form.status),
+            position: 0,
+            createdAt: "",
+            updatedAt: ""
+          }
+        ];
+
   return (
     <div className="grid gap-4">
       <div className="grid gap-2">
@@ -531,9 +545,9 @@ export function TicketMetaFields({ form, projects, onChange }: TicketMetaFieldsP
             }))
           }
         >
-          {BOARD_STATUS_ORDER.map((status) => (
-            <option key={status} value={status}>
-              {statusLabelMap[status]}
+          {availableStatuses.map((status) => (
+            <option key={status.status} value={status.status}>
+              {status.label || formatStatusLabel(status.status)}
             </option>
           ))}
         </select>

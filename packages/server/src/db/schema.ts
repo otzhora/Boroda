@@ -37,6 +37,21 @@ export const projectFolders = sqliteTable(
   })
 );
 
+export const boardColumns = sqliteTable(
+  "board_columns",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    status: text("status").notNull().unique(),
+    label: text("label").notNull(),
+    position: integer("position").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+  },
+  (table) => ({
+    positionUnique: uniqueIndex("board_columns_position_unique").on(table.position)
+  })
+);
+
 export const tickets = sqliteTable(
   "tickets",
   {

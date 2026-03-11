@@ -1,12 +1,6 @@
-import {
-  BOARD_STATUS_ORDER,
-  PROJECT_FOLDER_KINDS,
-  TICKET_PRIORITIES,
-  TICKET_PROJECT_RELATIONSHIPS,
-  WORK_CONTEXT_TYPES
-} from "./constants";
+import { PROJECT_FOLDER_KINDS, TICKET_PRIORITIES, TICKET_PROJECT_RELATIONSHIPS, WORK_CONTEXT_TYPES } from "./constants";
 
-export type TicketStatus = (typeof BOARD_STATUS_ORDER)[number];
+export type TicketStatus = string;
 export type TicketPriority = (typeof TICKET_PRIORITIES)[number];
 export type TicketProjectRelationship = (typeof TICKET_PROJECT_RELATIONSHIPS)[number];
 export type ProjectFolderKind = (typeof PROJECT_FOLDER_KINDS)[number];
@@ -76,8 +70,21 @@ export interface BoardColumn {
   tickets: BoardTicket[];
 }
 
+export interface BoardColumnDefinition {
+  id: number;
+  status: string;
+  label: string;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BoardResponse {
   columns: BoardColumn[];
+}
+
+export interface BoardColumnsResponse {
+  columns: BoardColumnDefinition[];
 }
 
 export interface TicketProjectLink {

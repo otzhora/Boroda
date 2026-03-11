@@ -3,8 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
 import { useAppHeader } from "../app/router";
-import { BOARD_STATUS_ORDER, statusLabelMap, TICKET_PRIORITIES } from "../lib/constants";
-import type { BoardFilters } from "../features/board/queries";
+import { TICKET_PRIORITIES, formatStatusLabel } from "../lib/constants";
+import { useBoardColumnsQuery, type BoardFilters } from "../features/board/queries";
 import { useProjectsQuery } from "../features/projects/queries";
 import {
   createEmptyTicketForm,
@@ -130,7 +130,8 @@ function parseTicketFilters(searchParams: URLSearchParams): TicketFilters {
     );
   const statuses = searchParams
     .getAll("status")
-    .filter((value): value is TicketStatus => BOARD_STATUS_ORDER.some((status) => status === value));
+    .map((value) => value.trim())
+    .filter((value): value is TicketStatus => value.length > 0);
   const jiraIssues = searchParams.getAll("jiraIssue").map((value) => value.trim()).filter(Boolean);
 
   return {
@@ -189,7 +190,8 @@ function scopeLabel(scope: TicketScope) {
 function compareTicketValues(
   left: TicketListItem,
   right: TicketListItem,
-  field: TicketSortField
+  field: TicketSortField,
+  statusOrder: Map<string, number>
 ) {
   switch (field) {
     case "ticket":
@@ -197,7 +199,7 @@ function compareTicketValues(
     case "jira":
       return left.jiraIssues.map((issue) => issue.key).join(", ").localeCompare(right.jiraIssues.map((issue) => issue.key).join(", "));
     case "status":
-      return BOARD_STATUS_ORDER.indexOf(left.status) - BOARD_STATUS_ORDER.indexOf(right.status);
+      return (statusOrder.get(left.status) ?? Number.MAX_SAFE_INTEGER) - (statusOrder.get(right.status) ?? Number.MAX_SAFE_INTEGER);
     case "priority":
       return priorityRank[left.priority] - priorityRank[right.priority];
     case "projects":
@@ -214,7 +216,8 @@ function compareTicketValues(
 function sortTickets(
   tickets: TicketListItem[],
   sortField: TicketSortField | null,
-  sortDirection: TicketSortDirection
+  sortDirection: TicketSortDirection,
+  statusOrder: Map<string, number>
 ) {
   if (!sortField) {
     return tickets;
@@ -223,7 +226,7 @@ function sortTickets(
   const directionMultiplier = sortDirection === "asc" ? 1 : -1;
 
   return [...tickets].sort((left, right) => {
-    const comparison = compareTicketValues(left, right, sortField);
+    const comparison = compareTicketValues(left, right, sortField, statusOrder);
 
     if (comparison !== 0) {
       return comparison * directionMultiplier;
@@ -298,6 +301,7 @@ function ColumnHeader(props: {
 function FilterDropdown(props: {
   filters: TicketFilters;
   projects: Project[];
+  statuses: Array<{ status: string; label: string }>;
   jiraIssues: string[];
   onUpdateFilters: (updater: (nextSearchParams: URLSearchParams) => void) => void;
   onClearFilters: () => void;
@@ -421,22 +425,22 @@ function FilterDropdown(props: {
                 <div className="grid gap-2">
                   <span className="text-sm font-medium text-ink-100">Status</span>
                   <div className="grid gap-1">
-                    {BOARD_STATUS_ORDER.map((status) => {
-                      const checked = props.filters.status?.includes(status) ?? false;
+                    {props.statuses.map((status) => {
+                      const checked = props.filters.status?.includes(status.status) ?? false;
 
                       return (
-                        <label key={status} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
+                        <label key={status.status} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
                           <input
                             type="checkbox"
                             className="h-4 w-4"
                             checked={checked}
                             onChange={() => {
                               props.onUpdateFilters((nextSearchParams) => {
-                                toggleStringFilter(nextSearchParams, "status", status);
+                                toggleStringFilter(nextSearchParams, "status", status.status);
                               });
                             }}
                           />
-                          <span>{statusLabelMap[status]}</span>
+                          <span>{status.label || formatStatusLabel(status.status)}</span>
                         </label>
                       );
                     })}
@@ -574,10 +578,16 @@ export function TicketsPage() {
     q: searchInputValue.trim() || undefined
   });
 
+  const boardColumnsQuery = useBoardColumnsQuery();
   const ticketsQuery = useTicketsQuery(deferredFilters);
   const activeBoardTicketsQuery = useTicketsQuery({ scope: "active" });
   const projectsQuery = useProjectsQuery();
   const selectedTicketQuery = useTicketQuery(selectedTicketId);
+  const boardColumns = boardColumnsQuery.data?.columns ?? [];
+  const statusOrder = useMemo(
+    () => new Map(boardColumns.map((column, index) => [column.status, index])),
+    [boardColumns]
+  );
 
   useEffect(() => {
     document.title = "Tickets · Boroda";
@@ -617,7 +627,7 @@ export function TicketsPage() {
   }, [searchParams, selectedTicketId, setSearchParams]);
 
   const projects = projectsQuery.data ?? [];
-  const tickets = sortTickets(ticketsQuery.data ?? [], sortField, sortDirection);
+  const tickets = sortTickets(ticketsQuery.data ?? [], sortField, sortDirection, statusOrder);
   const boardJiraIssues = useMemo(() => {
     const issueKeys = new Set<string>();
 
@@ -785,10 +795,11 @@ export function TicketsPage() {
       hasHost ? (
         <>
           {renderSearchControl()}
-          <FilterDropdown
-            filters={parsedFilters}
-            projects={projects}
-            jiraIssues={boardJiraIssues}
+        <FilterDropdown
+          filters={parsedFilters}
+          projects={projects}
+          statuses={boardColumns}
+          jiraIssues={boardJiraIssues}
             onUpdateFilters={updateFilters}
             onClearFilters={clearFilters}
             hotkeySignal={filterHotkeySignal}
@@ -868,6 +879,7 @@ export function TicketsPage() {
           <FilterDropdown
             filters={parsedFilters}
             projects={projects}
+            statuses={boardColumns}
             jiraIssues={boardJiraIssues}
             onUpdateFilters={updateFilters}
             onClearFilters={clearFilters}
@@ -990,7 +1002,7 @@ export function TicketsPage() {
                     </div>
                     <div className="flex items-center">
                       <span className={`${chipClassName} border-white/10 text-ink-200`}>
-                        {statusLabelMap[ticket.status]}
+                        {boardColumns.find((column) => column.status === ticket.status)?.label ?? formatStatusLabel(ticket.status)}
                       </span>
                     </div>
                     <div className="flex items-center">
@@ -1015,6 +1027,7 @@ export function TicketsPage() {
       <TicketDrawer
         ticketId={selectedTicketId}
         ticket={selectedTicketQuery.data}
+        statuses={boardColumns}
         isLoading={selectedTicketQuery.isLoading}
         isError={selectedTicketQuery.isError}
         form={editForm}

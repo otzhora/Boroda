@@ -10,8 +10,8 @@ import {
   type MouseEvent,
   type ReactNode
 } from "react";
-import { BOARD_STATUS_ORDER, statusLabelMap, TICKET_PRIORITIES } from "../../lib/constants";
-import type { OpenInMode, OpenInTarget, Project, Ticket } from "../../lib/types";
+import { TICKET_PRIORITIES, formatStatusLabel } from "../../lib/constants";
+import type { BoardColumnDefinition, OpenInMode, OpenInTarget, Project, Ticket } from "../../lib/types";
 import type { TicketFormState } from "../../features/tickets/form";
 import { useJiraSettingsQuery } from "../../features/jira/queries";
 import { getStoredDefaultOpenInMode } from "../../lib/user-preferences";
@@ -30,6 +30,7 @@ import { WorkContextEditor } from "./work-context-editor";
 interface TicketDrawerProps {
   ticketId: number | null;
   ticket: Ticket | undefined;
+  statuses?: BoardColumnDefinition[];
   isLoading: boolean;
   isError: boolean;
   form: TicketFormState;
@@ -570,6 +571,30 @@ function parseActivityMeta(metaJson: string) {
   }
 }
 
+function getStatusActivityKey(activity: Ticket["activities"][number], meta: Record<string, unknown> | null) {
+  if (typeof meta?.status === "string" && meta.status.trim()) {
+    return meta.status.trim();
+  }
+
+  const match = activity.message.match(/^Status changed to (.+)$/);
+  return match?.[1]?.trim() || null;
+}
+
+function getActivityMessage(activity: Ticket["activities"][number], statuses: BoardColumnDefinition[]) {
+  const meta = parseActivityMeta(activity.metaJson);
+
+  if (activity.type === "ticket.status.changed") {
+    const statusKey = getStatusActivityKey(activity, meta);
+
+    if (statusKey) {
+      const label = statuses.find((status) => status.status === statusKey)?.label ?? formatStatusLabel(statusKey);
+      return `Status changed to ${label}`;
+    }
+  }
+
+  return activity.message;
+}
+
 function TicketActivityDetails(props: { activity: Ticket["activities"][number] }) {
   const meta = parseActivityMeta(props.activity.metaJson);
 
@@ -624,6 +649,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const {
     ticketId,
     ticket,
+    statuses = [],
     isLoading,
     isError,
     form,
@@ -656,6 +682,13 @@ export function TicketDrawer(props: TicketDrawerProps) {
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
   const detailTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const editorRootRefs = useRef<Partial<Record<EditableSectionId, HTMLElement | null>>>({});
+  const activityMessages = useMemo(
+    () =>
+      new Map(
+        (ticket?.activities ?? []).map((activity) => [activity.id, getActivityMessage(activity, statuses)])
+      ),
+    [statuses, ticket?.activities]
+  );
   const openInMenuRef = useRef<HTMLDivElement>(null);
   const openInActionButtonRef = useRef<HTMLButtonElement>(null);
   const openInToggleButtonRef = useRef<HTMLButtonElement>(null);
@@ -973,12 +1006,25 @@ export function TicketDrawer(props: TicketDrawerProps) {
 
   const metadata = useMemo(
     () => ({
-      status: statusLabelMap[form.status],
+      status: statuses.find((column) => column.status === form.status)?.label ?? formatStatusLabel(form.status),
       priority: form.priority,
       dueAt: formatDateTime(ticket?.dueAt ?? null)
     }),
-    [form.priority, form.status, ticket?.dueAt]
+    [form.priority, form.status, statuses, ticket?.dueAt]
   );
+  const availableStatuses =
+    statuses.length > 0
+      ? statuses
+      : [
+          {
+            id: 0,
+            status: form.status,
+            label: formatStatusLabel(form.status),
+            position: 0,
+            createdAt: "",
+            updatedAt: ""
+          }
+        ];
 
   const openEditor = (section: EditableSectionId) => {
     if (isSaving) {
@@ -1258,7 +1304,7 @@ export function TicketDrawer(props: TicketDrawerProps) {
                   <div className="grid gap-3">
                     {ticket.activities.map((activity) => (
                       <div className="grid gap-1 border-b border-white/8 pb-3 last:border-b-0 last:pb-0" key={activity.id}>
-                        <p className="m-0 text-sm text-ink-50">{activity.message}</p>
+                        <p className="m-0 text-sm text-ink-50">{activityMessages.get(activity.id) ?? activity.message}</p>
                         <TicketActivityDetails activity={activity} />
                         <span className="text-[0.8rem] text-ink-300">{formatDateTime(activity.createdAt)}</span>
                       </div>
@@ -1476,9 +1522,9 @@ export function TicketDrawer(props: TicketDrawerProps) {
                           }))
                         }
                       >
-                        {BOARD_STATUS_ORDER.map((status) => (
-                          <option key={status} value={status}>
-                            {statusLabelMap[status]}
+                        {availableStatuses.map((status) => (
+                          <option key={status.status} value={status.status}>
+                            {status.label || formatStatusLabel(status.status)}
                           </option>
                         ))}
                       </select>

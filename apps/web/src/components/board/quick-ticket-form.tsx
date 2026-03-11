@@ -1,6 +1,6 @@
 import type { Ref } from "react";
-import { BOARD_STATUS_ORDER, TICKET_PRIORITIES, statusLabelMap } from "../../lib/constants";
-import type { Project, TicketPriority, TicketStatus } from "../../lib/types";
+import { TICKET_PRIORITIES, formatStatusLabel } from "../../lib/constants";
+import type { BoardColumnDefinition, Project, TicketPriority, TicketStatus } from "../../lib/types";
 
 export interface QuickTicketFormState {
   title: string;
@@ -12,6 +12,7 @@ export interface QuickTicketFormState {
 interface QuickTicketFormProps {
   form: QuickTicketFormState;
   projects: Project[];
+  statuses: BoardColumnDefinition[];
   isSubmitting: boolean;
   submitLabel?: string;
   submittingLabel?: string;
@@ -38,11 +39,11 @@ function LoadingSpinner() {
   );
 }
 
-export function createEmptyQuickTicketForm(): QuickTicketFormState {
+export function createEmptyQuickTicketForm(defaultStatus = "INBOX"): QuickTicketFormState {
   return {
     title: "",
     projectId: "",
-    status: "INBOX",
+    status: defaultStatus,
     priority: "MEDIUM"
   };
 }
@@ -50,6 +51,7 @@ export function createEmptyQuickTicketForm(): QuickTicketFormState {
 export function QuickTicketForm({
   form,
   projects,
+  statuses,
   isSubmitting,
   submitLabel = "Create ticket",
   submittingLabel = "Creating…",
@@ -58,6 +60,20 @@ export function QuickTicketForm({
   onSubmit,
   onCancel
 }: QuickTicketFormProps) {
+  const availableStatuses =
+    statuses.length > 0
+      ? statuses
+      : [
+          {
+            id: 0,
+            status: form.status,
+            label: formatStatusLabel(form.status),
+            position: 0,
+            createdAt: "",
+            updatedAt: ""
+          }
+        ];
+
   return (
     <form
       className="grid gap-0"
@@ -120,9 +136,9 @@ export function QuickTicketForm({
                 }))
               }
             >
-              {BOARD_STATUS_ORDER.map((status) => (
-                <option key={status} value={status}>
-                  {statusLabelMap[status]}
+              {availableStatuses.map((status) => (
+                <option key={status.status} value={status.status}>
+                  {status.label || formatStatusLabel(status.status)}
                 </option>
               ))}
             </select>
