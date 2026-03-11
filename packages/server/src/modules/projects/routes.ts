@@ -4,6 +4,7 @@ import {
   createProjectFolderSchema,
   projectFolderIdParamSchema,
   projectIdParamSchema,
+  projectQuerySchema,
   updateProjectFolderSchema,
   updateProjectSchema
 } from "./schemas";
@@ -20,7 +21,10 @@ import {
 } from "./service";
 
 export const projectRoutes: FastifyPluginAsync = async (app) => {
-  app.get("/projects", async () => listProjects(app));
+  app.get("/projects", async (request) => {
+    const query = projectQuerySchema.parse(request.query);
+    return listProjects(app, query);
+  });
 
   app.post("/projects", async (request) => {
     const payload = createProjectSchema.parse(request.body);

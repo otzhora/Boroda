@@ -1,9 +1,10 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { AppError } from "../../shared/errors";
 import { normalizeWslPath, resolvePathInfo } from "../../shared/path-utils";
 import { getProjectFolderSetupInfo, scaffoldProjectFolderWorktreeSetup } from "../../shared/worktree-setup";
-import { projectFolders, projects } from "../../db/schema";
+import { projectFolders, projects, ticketProjectLinks, tickets } from "../../db/schema";
+import { archivePreparedTicket, prepareTicketArchive } from "../tickets/service";
 
 function nowIso() {
   return new Date().toISOString();
@@ -51,8 +52,52 @@ function rethrowProjectConflict(error: unknown): never {
   throw error;
 }
 
-export async function listProjects(app: FastifyInstance) {
+async function listTicketsToArchiveAfterProjectArchive(app: FastifyInstance, projectId: number) {
+  const linkedTicketIds = app.db
+    .select({ ticketId: ticketProjectLinks.ticketId })
+    .from(ticketProjectLinks)
+    .innerJoin(tickets, eq(ticketProjectLinks.ticketId, tickets.id))
+    .where(and(eq(ticketProjectLinks.projectId, projectId), isNull(tickets.archivedAt)))
+    .all()
+    .map((row) => row.ticketId);
+
+  if (!linkedTicketIds.length) {
+    return [];
+  }
+
+  const activeSiblingLinks = app.db
+    .select({ ticketId: ticketProjectLinks.ticketId })
+    .from(ticketProjectLinks)
+    .innerJoin(projects, eq(ticketProjectLinks.projectId, projects.id))
+    .where(
+      and(
+        inArray(ticketProjectLinks.ticketId, linkedTicketIds),
+        sql`${ticketProjectLinks.projectId} <> ${projectId}`,
+        isNull(projects.archivedAt)
+      )
+    )
+    .all();
+
+  const ticketsWithOtherActiveProjects = new Set(
+    activeSiblingLinks
+      .filter((row) => row.ticketId !== undefined)
+      .map((row) => row.ticketId)
+  );
+
+  return linkedTicketIds.filter((ticketId) => !ticketsWithOtherActiveProjects.has(ticketId));
+}
+
+export async function listProjects(
+  app: FastifyInstance,
+  filters: { scope: "active" | "archived" | "all" }
+) {
   const items = await app.db.query.projects.findMany({
+    where:
+      filters.scope === "active"
+        ? isNull(projects.archivedAt)
+        : filters.scope === "archived"
+          ? isNotNull(projects.archivedAt)
+          : undefined,
     with: {
       folders: true
     },
@@ -85,7 +130,7 @@ export async function createProject(
   try {
     const result = app.db
       .insert(projects)
-      .values({ ...input, createdAt: now, updatedAt: now })
+      .values({ ...input, createdAt: now, updatedAt: now, archivedAt: null })
       .returning()
       .get();
 
@@ -120,8 +165,28 @@ export async function updateProject(
 }
 
 export async function deleteProject(app: FastifyInstance, id: number) {
-  await getProjectOrThrow(app, id);
-  app.db.delete(projects).where(eq(projects.id, id)).run();
+  const existing = await getProjectOrThrow(app, id);
+
+  if (existing.archivedAt) {
+    return { ok: true };
+  }
+
+  const ticketIdsToArchive = await listTicketsToArchiveAfterProjectArchive(app, id);
+  const preparedTickets = await Promise.all(ticketIdsToArchive.map((ticketId) => prepareTicketArchive(app, ticketId)));
+
+  for (const preparedTicket of preparedTickets) {
+    await archivePreparedTicket(app, preparedTicket);
+  }
+
+  const archivedAt = nowIso();
+  app.db
+    .update(projects)
+    .set({
+      archivedAt,
+      updatedAt: archivedAt
+    })
+    .where(eq(projects.id, id))
+    .run();
   return { ok: true };
 }
 

@@ -188,6 +188,20 @@ function listArchivableWorktrees(
     }));
 }
 
+type PreparedTicketArchive = {
+  existing: Awaited<ReturnType<typeof getTicketOrThrow>>;
+  archivableWorktrees: Array<{
+    id: number;
+    branchName: string;
+    worktreePath: string;
+  }>;
+  dirtyWorktrees: Array<{
+    workspaceId: number;
+    branchName: string;
+    worktreePath: string;
+  }>;
+};
+
 function isSqliteUniqueConstraintError(
   error: unknown,
   constraintTarget: string
@@ -1073,55 +1087,73 @@ export async function deleteTicket(app: FastifyInstance, id: number, options?: {
       ticketId: id
     },
     async () => {
-      const existing = await getTicketOrThrow(app, id);
-      const archivableWorktrees = listArchivableWorktrees(existing.workspaces);
-
-      if (existing.archivedAt) {
-        logServerEvent(app, "info", "ticket.archive.skipped", {
-          ticketId: id,
-          ticketKey: existing.key,
-          reason: "already_archived"
-        });
-        return { ok: true };
-      }
-
-      const dirtyWorktrees = archivableWorktrees
-        .filter((workspace) => existsSync(workspace.worktreePath))
-        .filter((workspace) => isWorkspaceDirty(workspace.worktreePath))
-        .map((workspace) => ({
-          workspaceId: workspace.id,
-          branchName: workspace.branchName,
-          worktreePath: workspace.worktreePath
-        }));
-
-      if (dirtyWorktrees.length && !options?.force) {
-        throw new AppError(
-          409,
-          "TICKET_ARCHIVE_DIRTY_WORKTREES",
-          "One or more ticket worktrees have uncommitted changes",
-          { dirtyWorktrees }
-        );
-      }
-
-      for (const workspace of archivableWorktrees) {
-        removeWorkspaceWorktree(workspace.worktreePath, {
-          force: options?.force
-        });
-      }
-
-      const archivedAt = nowIso();
-      app.db
-        .update(tickets)
-        .set({
-          archivedAt,
-          updatedAt: archivedAt
-        })
-        .where(eq(tickets.id, id))
-        .run();
-      recordActivity(app, id, "ticket.archived", `Ticket ${existing.key} moved to history`);
-      return { ok: true };
+      const prepared = await prepareTicketArchive(app, id);
+      return archivePreparedTicket(app, prepared, options);
     }
   );
+}
+
+export async function prepareTicketArchive(app: FastifyInstance, id: number): Promise<PreparedTicketArchive> {
+  const existing = await getTicketOrThrow(app, id);
+  const archivableWorktrees = listArchivableWorktrees(existing.workspaces);
+  const dirtyWorktrees = archivableWorktrees
+    .filter((workspace) => existsSync(workspace.worktreePath))
+    .filter((workspace) => isWorkspaceDirty(workspace.worktreePath))
+    .map((workspace) => ({
+      workspaceId: workspace.id,
+      branchName: workspace.branchName,
+      worktreePath: workspace.worktreePath
+    }));
+
+  return {
+    existing,
+    archivableWorktrees,
+    dirtyWorktrees
+  };
+}
+
+export async function archivePreparedTicket(
+  app: FastifyInstance,
+  prepared: PreparedTicketArchive,
+  options?: { force?: boolean }
+) {
+  const { existing, archivableWorktrees, dirtyWorktrees } = prepared;
+
+  if (existing.archivedAt) {
+    logServerEvent(app, "info", "ticket.archive.skipped", {
+      ticketId: existing.id,
+      ticketKey: existing.key,
+      reason: "already_archived"
+    });
+    return { ok: true };
+  }
+
+  if (dirtyWorktrees.length && !options?.force) {
+    throw new AppError(
+      409,
+      "TICKET_ARCHIVE_DIRTY_WORKTREES",
+      "One or more ticket worktrees have uncommitted changes",
+      { dirtyWorktrees }
+    );
+  }
+
+  for (const workspace of archivableWorktrees) {
+    removeWorkspaceWorktree(workspace.worktreePath, {
+      force: options?.force
+    });
+  }
+
+  const archivedAt = nowIso();
+  app.db
+    .update(tickets)
+    .set({
+      archivedAt,
+      updatedAt: archivedAt
+    })
+    .where(eq(tickets.id, existing.id))
+    .run();
+  recordActivity(app, existing.id, "ticket.archived", `Ticket ${existing.key} moved to history`);
+  return { ok: true };
 }
 
 export async function saveTicketImage(app: FastifyInstance, ticketId: number, file: MultipartFile) {

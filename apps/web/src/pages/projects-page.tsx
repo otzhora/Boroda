@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useAppHeader } from "../app/router";
 import { ModalDialog } from "../components/ui/modal-dialog";
 import { apiClient } from "../lib/api-client";
@@ -29,7 +29,7 @@ interface FolderFormState {
 }
 
 interface MutationContext {
-  previousProjects?: Project[];
+  previousProjects?: Array<[readonly unknown[], Project[] | undefined]>;
 }
 
 const PROJECTS_QUERY_KEY = ["projects"] as const;
@@ -154,6 +154,18 @@ function formatFolderCount(count: number) {
   return `${count} folder${count === 1 ? "" : "s"}`;
 }
 
+function scopeLabel(scope: "active" | "archived" | "all") {
+  if (scope === "archived") {
+    return "Archived";
+  }
+
+  if (scope === "all") {
+    return "All";
+  }
+
+  return "Active";
+}
+
 function createProjectFormState(project?: Project): ProjectFormState {
   if (!project) {
     return {
@@ -208,14 +220,17 @@ function sortFolders(items: ProjectFolder[]) {
 
 function updateProjectList(
   queryClient: QueryClient,
+  queryKey: readonly unknown[],
   updater: (projects: Project[]) => Project[]
 ) {
-  queryClient.setQueryData<Project[]>(PROJECTS_QUERY_KEY, (current) => updater(current ?? []));
+  queryClient.setQueryData<Project[]>(queryKey, (current) => updater(current ?? []));
 }
 
 function rollbackProjects(queryClient: QueryClient, context?: MutationContext) {
   if (context?.previousProjects) {
-    queryClient.setQueryData(PROJECTS_QUERY_KEY, context.previousProjects);
+    for (const [queryKey, projects] of context.previousProjects) {
+      queryClient.setQueryData(queryKey, projects);
+    }
   }
 }
 
@@ -250,6 +265,7 @@ function getProjectStatusClassName(folderCount: number) {
 export function ProjectsPage() {
   const { setActions, setRightActions } = useAppHeader();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projectForm, setProjectForm] = useState<ProjectFormState>(createProjectFormState());
   const [slugTouched, setSlugTouched] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
@@ -266,6 +282,11 @@ export function ProjectsPage() {
     document.title = "Projects · Boroda";
   }, []);
 
+  const scopeParam = searchParams.get("scope");
+  const projectScope =
+    scopeParam === "archived" || scopeParam === "all" ? scopeParam : "active";
+  const projectsQueryKey = [...PROJECTS_QUERY_KEY, { scope: projectScope }] as const;
+
   useEffect(() => {
     setActions(null);
     setRightActions(
@@ -281,8 +302,8 @@ export function ProjectsPage() {
   }, [setActions, setRightActions]);
 
   const projectsQuery = useQuery({
-    queryKey: PROJECTS_QUERY_KEY,
-    queryFn: () => apiClient<Project[]>("/api/projects")
+    queryKey: projectsQueryKey,
+    queryFn: () => apiClient<Project[]>(`/api/projects?scope=${projectScope}`)
   });
 
   const createProjectMutation = useMutation<Project, Error, ProjectFormState, MutationContext>({
@@ -292,8 +313,8 @@ export function ProjectsPage() {
         body: JSON.stringify(payload)
       }),
     onMutate: async (payload) => {
-      await queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY });
-      const previousProjects = queryClient.getQueryData<Project[]>(PROJECTS_QUERY_KEY);
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey });
+      const previousProjects = queryClient.getQueryData<Project[]>(projectsQueryKey);
       const timestamp = nowIso();
       const optimisticProject: Project = {
         id: -Date.now(),
@@ -303,18 +324,23 @@ export function ProjectsPage() {
         color: payload.color,
         createdAt: timestamp,
         updatedAt: timestamp,
+        archivedAt: null,
         folders: []
       };
 
-      updateProjectList(queryClient, (projects) => sortProjects([optimisticProject, ...projects]));
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
+        projectScope === "archived" ? projects : sortProjects([optimisticProject, ...projects])
+      );
 
-      return { previousProjects };
+      return {
+        previousProjects: [[projectsQueryKey, previousProjects]]
+      };
     },
     onError: (_error, _payload, context) => {
       rollbackProjects(queryClient, context);
     },
     onSuccess: (project, payload) => {
-      updateProjectList(queryClient, (projects) =>
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
         sortProjects(
           projects.map((item) =>
             item.id < 0 && item.slug === payload.slug
@@ -348,10 +374,10 @@ export function ProjectsPage() {
         body: JSON.stringify(payload)
       }),
     onMutate: async ({ projectId, payload }) => {
-      await queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY });
-      const previousProjects = queryClient.getQueryData<Project[]>(PROJECTS_QUERY_KEY);
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey });
+      const previousProjects = queryClient.getQueryData<Project[]>(projectsQueryKey);
 
-      updateProjectList(queryClient, (projects) =>
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
         sortProjects(
           projects.map((project) =>
             project.id === projectId
@@ -365,13 +391,15 @@ export function ProjectsPage() {
         )
       );
 
-      return { previousProjects };
+      return {
+        previousProjects: [[projectsQueryKey, previousProjects]]
+      };
     },
     onError: (_error, _variables, context) => {
       rollbackProjects(queryClient, context);
     },
     onSuccess: (project, variables) => {
-      updateProjectList(queryClient, (projects) =>
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
         sortProjects(
           projects.map((item) =>
             item.id === variables.projectId
@@ -390,20 +418,38 @@ export function ProjectsPage() {
     }
   });
 
-  const deleteProjectMutation = useMutation<{ ok: true }, Error, number, MutationContext>({
+  const archiveProjectMutation = useMutation<{ ok: true }, Error, number, MutationContext>({
     mutationFn: (projectId) =>
       apiClient<{ ok: true }>(`/api/projects/${projectId}`, {
         method: "DELETE"
       }),
     onMutate: async (projectId) => {
-      await queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY });
-      const previousProjects = queryClient.getQueryData<Project[]>(PROJECTS_QUERY_KEY);
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey });
+      const previousProjects = queryClient.getQueryData<Project[]>(projectsQueryKey);
+      const archivedAt = nowIso();
 
-      updateProjectList(queryClient, (projects) =>
-        projects.filter((project) => project.id !== projectId)
-      );
+      updateProjectList(queryClient, projectsQueryKey, (projects) => {
+        const target = projects.find((project) => project.id === projectId);
 
-      return { previousProjects };
+        if (!target) {
+          return projects;
+        }
+
+        const archivedProject = {
+          ...target,
+          archivedAt,
+          updatedAt: archivedAt
+        };
+        const remainingProjects = projects.filter((project) => project.id !== projectId);
+
+        if (projectScope === "all" || projectScope === "archived") {
+          return sortProjects([archivedProject, ...remainingProjects]);
+        }
+
+        return remainingProjects;
+      });
+
+      return { previousProjects: [[projectsQueryKey, previousProjects]] };
     },
     onError: (_error, _projectId, context) => {
       rollbackProjects(queryClient, context);
@@ -425,8 +471,8 @@ export function ProjectsPage() {
         body: JSON.stringify(payload)
       }),
     onMutate: async ({ projectId, payload }) => {
-      await queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY });
-      const previousProjects = queryClient.getQueryData<Project[]>(PROJECTS_QUERY_KEY);
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey });
+      const previousProjects = queryClient.getQueryData<Project[]>(projectsQueryKey);
       const timestamp = nowIso();
       const optimisticFolder: ProjectFolder = {
         id: -Date.now(),
@@ -445,7 +491,7 @@ export function ProjectsPage() {
         updatedAt: timestamp
       };
 
-      updateProjectList(queryClient, (projects) =>
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
         sortProjects(
           projects.map((project) => {
             if (project.id !== projectId) {
@@ -468,13 +514,15 @@ export function ProjectsPage() {
         )
       );
 
-      return { previousProjects };
+      return {
+        previousProjects: [[projectsQueryKey, previousProjects]]
+      };
     },
     onError: (_error, _variables, context) => {
       rollbackProjects(queryClient, context);
     },
     onSuccess: (folder, variables) => {
-      updateProjectList(queryClient, (projects) =>
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
         sortProjects(
           projects.map((project) => {
             if (project.id !== variables.projectId) {
@@ -525,11 +573,11 @@ export function ProjectsPage() {
         body: JSON.stringify(payload)
       }),
     onMutate: async ({ projectId, folderId, payload }) => {
-      await queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY });
-      const previousProjects = queryClient.getQueryData<Project[]>(PROJECTS_QUERY_KEY);
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey });
+      const previousProjects = queryClient.getQueryData<Project[]>(projectsQueryKey);
       const timestamp = nowIso();
 
-      updateProjectList(queryClient, (projects) =>
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
         sortProjects(
           projects.map((project) => {
             if (project.id !== projectId) {
@@ -560,13 +608,15 @@ export function ProjectsPage() {
         )
       );
 
-      return { previousProjects };
+      return {
+        previousProjects: [[projectsQueryKey, previousProjects]]
+      };
     },
     onError: (_error, _variables, context) => {
       rollbackProjects(queryClient, context);
     },
     onSuccess: (folder, variables) => {
-      updateProjectList(queryClient, (projects) =>
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
         sortProjects(
           projects.map((project) => {
             if (project.id !== variables.projectId) {
@@ -621,11 +671,11 @@ export function ProjectsPage() {
         method: "DELETE"
       }),
     onMutate: async ({ projectId, folderId }) => {
-      await queryClient.cancelQueries({ queryKey: PROJECTS_QUERY_KEY });
-      const previousProjects = queryClient.getQueryData<Project[]>(PROJECTS_QUERY_KEY);
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey });
+      const previousProjects = queryClient.getQueryData<Project[]>(projectsQueryKey);
       const timestamp = nowIso();
 
-      updateProjectList(queryClient, (projects) =>
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
         sortProjects(
           projects.map((project) =>
             project.id === projectId
@@ -639,7 +689,9 @@ export function ProjectsPage() {
         )
       );
 
-      return { previousProjects };
+      return {
+        previousProjects: [[projectsQueryKey, previousProjects]]
+      };
     },
     onError: (_error, _variables, context) => {
       rollbackProjects(queryClient, context);
@@ -666,7 +718,7 @@ export function ProjectsPage() {
       }));
 
       if (variables.existingFolderId && pathInfo.exists) {
-        updateProjectList(queryClient, (projects) =>
+        updateProjectList(queryClient, projectsQueryKey, (projects) =>
           projects.map((project) => ({
             ...project,
             folders: project.folders.map((folder) =>
@@ -693,7 +745,7 @@ export function ProjectsPage() {
         method: "POST"
       }),
     onSuccess: (folder, variables) => {
-      updateProjectList(queryClient, (projects) =>
+      updateProjectList(queryClient, projectsQueryKey, (projects) =>
         sortProjects(
           projects.map((project) =>
             project.id === variables.projectId
@@ -720,7 +772,7 @@ export function ProjectsPage() {
     deleteFolderMutation.error?.message ??
     scaffoldWorktreeSetupMutation.error?.message;
   const validateError = validatePathMutation.error?.message;
-  const deleteError = deleteProjectMutation.error?.message;
+  const deleteError = archiveProjectMutation.error?.message;
 
   const sortedProjects = useMemo(
     () => sortProjects(projectsQuery.data ?? []),
@@ -916,14 +968,15 @@ export function ProjectsPage() {
   function handleDeleteProject(project: Project) {
     const scope =
       project.folders.length > 0
-        ? `Delete ${project.name} and ${formatFolderCount(project.folders.length)}?`
-        : `Delete ${project.name}?`;
+        ? `Archive ${project.name} and keep ${formatFolderCount(project.folders.length)} in history?`
+        : `Archive ${project.name}?`;
 
     if (!window.confirm(scope)) {
       return;
     }
 
-    deleteProjectMutation.mutate(project.id);
+    archiveProjectMutation.mutate(project.id);
+    collapseProject(project.id);
   }
 
   function toggleProjectExpansion(projectId: number) {
@@ -1046,7 +1099,7 @@ export function ProjectsPage() {
           <h1 className="m-0 text-base font-semibold text-ink-50">Projects</h1>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap items-center gap-2 text-sm text-ink-300">
-              <span>{sortedProjects.length} projects</span>
+              <span>{sortedProjects.length} {scopeLabel(projectScope).toLowerCase()} projects</span>
               <span aria-hidden="true">/</span>
               <span>
                 {sortedProjects.reduce((count, project) => count + project.folders.length, 0)} folders
@@ -1063,6 +1116,30 @@ export function ProjectsPage() {
               {projectsQuery.isFetching ? <span className={spinnerClassName} aria-hidden="true" /> : null}
               <span>{projectsQuery.isFetching ? "Refreshing…" : "Refresh"}</span>
             </button>
+            <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Project scope">
+              {(["active", "archived", "all"] as const).map((scope) => (
+                <button
+                  key={scope}
+                  type="button"
+                  role="tab"
+                  aria-selected={projectScope === scope}
+                  className={projectScope === scope ? primaryButtonClassName : secondaryButtonClassName}
+                  onClick={() => {
+                    const nextSearchParams = new URLSearchParams(searchParams);
+
+                    if (scope === "active") {
+                      nextSearchParams.delete("scope");
+                    } else {
+                      nextSearchParams.set("scope", scope);
+                    }
+
+                    setSearchParams(nextSearchParams, { replace: true });
+                  }}
+                >
+                  {scopeLabel(scope)}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               className={secondaryButtonClassName}
@@ -1166,10 +1243,10 @@ export function ProjectsPage() {
                             <button
                               type="button"
                               className={dangerButtonClassName}
-                              disabled={deleteProjectMutation.isPending}
+                              disabled={archiveProjectMutation.isPending}
                               onClick={() => handleDeleteProject(project)}
                             >
-                              Delete
+                              Archive
                             </button>
                           </div>
                         ) : null}

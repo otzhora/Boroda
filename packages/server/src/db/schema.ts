@@ -13,7 +13,8 @@ export const projects = sqliteTable("projects", {
   description: text("description").notNull().default(""),
   color: text("color").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  archivedAt: text("archived_at")
 });
 
 export const projectFolders = sqliteTable(

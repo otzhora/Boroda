@@ -62,6 +62,7 @@ const project: Project = {
   color: "#355c7d",
   createdAt: "2026-02-28T12:00:00.000Z",
   updatedAt: "2026-02-28T12:00:00.000Z",
+  archivedAt: null,
   folders: []
 };
 

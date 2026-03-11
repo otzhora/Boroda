@@ -7,7 +7,8 @@ const projectSchema = z.object({
   description: z.string(),
   color: z.string(),
   createdAt: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
+  archivedAt: z.string().nullable().optional()
 });
 
 const projectFolderSchema = z.object({

@@ -8,6 +8,10 @@ export const projectFolderIdParamSchema = z.object({
   id: z.coerce.number().int().positive()
 });
 
+export const projectQuerySchema = z.object({
+  scope: z.enum(["active", "archived", "all"]).default("active")
+});
+
 export const createProjectSchema = z.object({
   name: z.string().min(1),
   slug: z.string().min(1),

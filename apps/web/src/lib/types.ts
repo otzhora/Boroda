@@ -40,6 +40,7 @@ export interface Project {
   color: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt: string | null;
   folders: ProjectFolder[];
 }
 

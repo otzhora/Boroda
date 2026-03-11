@@ -11,6 +11,9 @@ let app: FastifyInstance;
 let sqlite: { close: () => void };
 let projectsTable: (typeof import("./db/schema"))["projects"];
 let projectFoldersTable: (typeof import("./db/schema"))["projectFolders"];
+let ticketsTable: (typeof import("./db/schema"))["tickets"];
+let ticketProjectLinksTable: (typeof import("./db/schema"))["ticketProjectLinks"];
+let sequencesTable: (typeof import("./db/schema"))["sequences"];
 let tempRoot = "";
 let existingFolderPath = "";
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -31,6 +34,9 @@ before(async () => {
   sqlite = dbClient.sqlite;
   projectsTable = schema.projects;
   projectFoldersTable = schema.projectFolders;
+  ticketsTable = schema.tickets;
+  ticketProjectLinksTable = schema.ticketProjectLinks;
+  sequencesTable = schema.sequences;
 
   migrate(dbClient.db, {
     migrationsFolder: path.resolve(repoRoot, "drizzle/migrations")
@@ -41,8 +47,11 @@ before(async () => {
 });
 
 beforeEach(() => {
+  app.db.delete(ticketProjectLinksTable).run();
+  app.db.delete(ticketsTable).run();
   app.db.delete(projectFoldersTable).run();
   app.db.delete(projectsTable).run();
+  app.db.delete(sequencesTable).run();
 });
 
 after(async () => {
@@ -50,6 +59,23 @@ after(async () => {
   sqlite.close();
   await rm(tempRoot, { recursive: true, force: true });
 });
+
+async function createTicket(title: string, projectLinks: Array<{ projectId: number; relationship: string }>) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title,
+      description: "",
+      status: "INBOX",
+      priority: "MEDIUM",
+      projectLinks
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  return response.json();
+}
 
 test("project CRUD works through the API", async () => {
   const createResponse = await app.inject({
@@ -114,19 +140,40 @@ test("project CRUD works through the API", async () => {
   assert.equal(deleteResponse.statusCode, 200);
   assert.deepEqual(deleteResponse.json(), { ok: true });
 
-  const missingResponse = await app.inject({
+  const listAfterArchiveResponse = await app.inject({
+    method: "GET",
+    url: "/api/projects"
+  });
+
+  assert.equal(listAfterArchiveResponse.statusCode, 200);
+  assert.deepEqual(listAfterArchiveResponse.json(), []);
+
+  const archivedListResponse = await app.inject({
+    method: "GET",
+    url: "/api/projects?scope=archived"
+  });
+
+  assert.equal(archivedListResponse.statusCode, 200);
+  const archivedProjects = archivedListResponse.json();
+  assert.equal(archivedProjects.length, 1);
+  assert.equal(archivedProjects[0].id, createdProject.id);
+  assert.equal(typeof archivedProjects[0].archivedAt, "string");
+
+  const allListResponse = await app.inject({
+    method: "GET",
+    url: "/api/projects?scope=all"
+  });
+
+  assert.equal(allListResponse.statusCode, 200);
+  assert.equal(allListResponse.json().length, 1);
+
+  const getResponseAfterArchive = await app.inject({
     method: "GET",
     url: `/api/projects/${createdProject.id}`
   });
 
-  assert.equal(missingResponse.statusCode, 404);
-  assert.deepEqual(missingResponse.json(), {
-    error: {
-      code: "PROJECT_NOT_FOUND",
-      message: "Project not found",
-      details: {}
-    }
-  });
+  assert.equal(getResponseAfterArchive.statusCode, 200);
+  assert.equal(typeof getResponseAfterArchive.json().archivedAt, "string");
 });
 
 test("project folder CRUD validates paths and updates primary state", async () => {
@@ -222,6 +269,76 @@ test("project folder CRUD validates paths and updates primary state", async () =
 
   assert.equal(deleteFolderResponse.statusCode, 200);
   assert.deepEqual(deleteFolderResponse.json(), { ok: true });
+});
+
+test("archiving a project archives tickets that have no remaining active projects", async () => {
+  const primaryProject = (
+    await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Primary",
+        slug: "primary",
+        description: "",
+        color: "#111111"
+      }
+    })
+  ).json();
+  const secondaryProject = (
+    await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Secondary",
+        slug: "secondary",
+        description: "",
+        color: "#222222"
+      }
+    })
+  ).json();
+
+  const singleProjectTicket = await createTicket("Single project ticket", [
+    { projectId: primaryProject.id, relationship: "PRIMARY" }
+  ]);
+  const sharedTicket = await createTicket("Shared ticket", [
+    { projectId: primaryProject.id, relationship: "PRIMARY" },
+    { projectId: secondaryProject.id, relationship: "RELATED" }
+  ]);
+
+  const archivePrimaryResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/projects/${primaryProject.id}`
+  });
+
+  assert.equal(archivePrimaryResponse.statusCode, 200);
+
+  const singleProjectTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${singleProjectTicket.id}`
+  });
+  assert.equal(singleProjectTicketResponse.statusCode, 200);
+  assert.equal(typeof singleProjectTicketResponse.json().archivedAt, "string");
+
+  const sharedTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${sharedTicket.id}`
+  });
+  assert.equal(sharedTicketResponse.statusCode, 200);
+  assert.equal(sharedTicketResponse.json().archivedAt, null);
+
+  const archiveSecondaryResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/projects/${secondaryProject.id}`
+  });
+
+  assert.equal(archiveSecondaryResponse.statusCode, 200);
+
+  const sharedTicketAfterSecondArchiveResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${sharedTicket.id}`
+  });
+  assert.equal(sharedTicketAfterSecondArchiveResponse.statusCode, 200);
+  assert.equal(typeof sharedTicketAfterSecondArchiveResponse.json().archivedAt, "string");
 });
 
 test("duplicate project slugs and folder paths return 409 conflicts", async () => {
