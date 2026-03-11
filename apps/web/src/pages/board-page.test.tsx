@@ -186,6 +186,7 @@ function renderBoardPage(options?: { initialEntries?: string[] }) {
 
 describe("BoardPage", () => {
   beforeEach(() => {
+    document.title = "Tickets · Boroda";
     mocks.useBoardQuery.mockReset();
     mocks.useBoardColumnsQuery.mockReset();
     mocks.useProjectsQuery.mockReset();
@@ -497,6 +498,12 @@ describe("BoardPage", () => {
 
     expect(mocks.useTicketQuery).toHaveBeenLastCalledWith(12);
     expect(screen.getByTestId("ticket-drawer")).toBeInTheDocument();
+  });
+
+  it("resets the document title for the board route", () => {
+    renderBoardPage();
+
+    expect(document.title).toBe("Boroda");
   });
 
   it("shows an in-app confirmation before forcing archive of dirty worktrees", async () => {

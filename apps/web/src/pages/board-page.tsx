@@ -240,6 +240,10 @@ export function BoardPage() {
   const defaultBoardStatus = boardColumns[0]?.status ?? "INBOX";
 
   useEffect(() => {
+    document.title = "Boroda";
+  }, []);
+
+  useEffect(() => {
     if (selectedTicketQuery.data) {
       setEditForm(toTicketForm(selectedTicketQuery.data));
     }
