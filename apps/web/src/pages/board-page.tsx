@@ -734,7 +734,8 @@ export function BoardPage() {
         projects={projects}
         isSaving={updateTicketMutation.isPending}
         saveSuccessCount={ticketSaveSuccessCount}
-        isDeleting={deleteTicketMutation.isPending}
+        isArchiving={deleteTicketMutation.isPending}
+        isRestoring={false}
         isOpeningInApp={openTicketInAppMutation.isPending}
         isRefreshingJira={refreshTicketJiraLinksMutation.isPending}
         onChange={(updater) => {
@@ -743,7 +744,7 @@ export function BoardPage() {
         onSave={() => {
           updateTicketMutation.mutate(toTicketPayload(editForm));
         }}
-        onDelete={() => {
+        onArchive={() => {
           void (async () => {
             try {
               await deleteTicketMutation.mutateAsync(undefined);
@@ -771,6 +772,7 @@ export function BoardPage() {
                 : { target, mode, folderId, workspaceId, runSetup }
           );
         }}
+        onRestore={() => {}}
         onRefreshJira={() => {
           refreshTicketJiraLinksMutation.mutate();
         }}

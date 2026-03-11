@@ -1156,6 +1156,40 @@ export async function archivePreparedTicket(
   return { ok: true };
 }
 
+export async function unarchiveTicket(app: FastifyInstance, id: number) {
+  return withServerSpan(
+    app,
+    "ticket.unarchive",
+    {
+      ticketId: id
+    },
+    async () => {
+      const existing = await getTicketOrThrow(app, id);
+
+      if (!existing.archivedAt) {
+        logServerEvent(app, "info", "ticket.unarchive.skipped", {
+          ticketId: existing.id,
+          ticketKey: existing.key,
+          reason: "already_active"
+        });
+        return { ok: true };
+      }
+
+      const restoredAt = nowIso();
+      app.db
+        .update(tickets)
+        .set({
+          archivedAt: null,
+          updatedAt: restoredAt
+        })
+        .where(eq(tickets.id, existing.id))
+        .run();
+      recordActivity(app, existing.id, "ticket.unarchived", `Ticket ${existing.key} restored from history`);
+      return { ok: true };
+    }
+  );
+}
+
 export async function saveTicketImage(app: FastifyInstance, ticketId: number, file: MultipartFile) {
   return withServerSpan(
     app,

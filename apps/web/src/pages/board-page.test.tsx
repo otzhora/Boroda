@@ -92,11 +92,13 @@ vi.mock("../features/tickets/mutations", () => ({
 vi.mock("../components/ticket/ticket-drawer", () => ({
   TicketDrawer: ({
     ticketId,
-    onDelete,
+    onArchive,
+    onRestore,
     onClose
   }: {
     ticketId: number | null;
-    onDelete: () => void;
+    onArchive: () => void;
+    onRestore: () => void;
     onClose: () => void;
   }) => {
     useEffect(() => {
@@ -123,7 +125,7 @@ vi.mock("../components/ticket/ticket-drawer", () => ({
 
     return (
       <div data-testid="ticket-drawer">
-        <button type="button" onClick={onDelete}>
+        <button type="button" onClick={onArchive}>
           Archive ticket
         </button>
         <button type="button" onClick={onClose}>

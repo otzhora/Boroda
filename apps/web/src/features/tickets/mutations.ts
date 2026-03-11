@@ -136,6 +136,37 @@ export function useDeleteTicketMutation(options: {
   });
 }
 
+export function useUnarchiveTicketMutation(options: {
+  ticketId: number | null;
+  boardFilters: BoardFilters;
+  onRestored: () => void;
+}) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => {
+      if (options.ticketId === null) {
+        throw new Error("No ticket selected");
+      }
+
+      return apiClient<{ ok: true }>(`/api/tickets/${options.ticketId}/unarchive`, {
+        method: "POST"
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["board"] });
+      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
+
+      if (options.ticketId !== null) {
+        void queryClient.invalidateQueries({ queryKey: ticketQueryKey(options.ticketId) });
+      }
+
+      options.onRestored();
+    }
+  });
+}
+
 export function useMoveTicketStatusMutation(options: {
   boardFilters: BoardFilters;
   onMoved?: (ticketId: number, status: TicketStatus) => void;

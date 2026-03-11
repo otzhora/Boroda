@@ -37,12 +37,14 @@ interface TicketDrawerProps {
   projects: Project[];
   isSaving: boolean;
   saveSuccessCount: number;
-  isDeleting: boolean;
+  isArchiving: boolean;
+  isRestoring: boolean;
   isOpeningInApp: boolean;
   isRefreshingJira: boolean;
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
   onSave: () => void;
-  onDelete: () => void;
+  onArchive: () => void;
+  onRestore: () => void;
   onOpenInApp: (target: OpenInTarget, mode: OpenInMode, folderId?: number, workspaceId?: number) => void | Promise<void>;
   onRefreshJira: () => void;
   onClose: () => void;
@@ -656,12 +658,14 @@ export function TicketDrawer(props: TicketDrawerProps) {
     projects,
     isSaving,
     saveSuccessCount,
-    isDeleting,
+    isArchiving,
+    isRestoring,
     isOpeningInApp,
     isRefreshingJira,
     onChange,
     onSave,
-    onDelete,
+    onArchive,
+    onRestore,
     onOpenInApp,
     onRefreshJira,
     onClose
@@ -1685,21 +1689,39 @@ export function TicketDrawer(props: TicketDrawerProps) {
               </section>
 
               <section className={railSectionClassName}>
-                <button
-                  type="button"
-                  className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-red-400/20 bg-red-950/28 px-3 py-1.5 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/40 disabled:cursor-progress disabled:opacity-70"
-                  onClick={onDelete}
-                  disabled={isDeleting}
-                  aria-label={isDeleting ? "Moving ticket to history" : "Move ticket to history"}
-                >
-                  {isDeleting ? (
-                    <span
-                      className="mr-2 inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                  {isDeleting ? "Moving to history…" : "Move to history"}
-                </button>
+                {ticket?.archivedAt ? (
+                  <button
+                    type="button"
+                    className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-emerald-400/20 bg-emerald-950/28 px-3 py-1.5 text-sm font-medium text-emerald-100 transition-colors hover:border-emerald-300/30 hover:bg-emerald-950/40 disabled:cursor-progress disabled:opacity-70"
+                    onClick={onRestore}
+                    disabled={isRestoring}
+                    aria-label={isRestoring ? "Restoring ticket from history" : "Restore ticket from history"}
+                  >
+                    {isRestoring ? (
+                      <span
+                        className="mr-2 inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    {isRestoring ? "Restoring…" : "Restore from history"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="inline-flex min-h-9 w-full max-w-full items-center justify-center rounded-lg border border-red-400/20 bg-red-950/28 px-3 py-1.5 text-sm font-medium text-red-100 transition-colors hover:border-red-300/30 hover:bg-red-950/40 disabled:cursor-progress disabled:opacity-70"
+                    onClick={onArchive}
+                    disabled={isArchiving}
+                    aria-label={isArchiving ? "Moving ticket to history" : "Move ticket to history"}
+                  >
+                    {isArchiving ? (
+                      <span
+                        className="mr-2 inline-block h-[0.85rem] w-[0.85rem] animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    {isArchiving ? "Moving to history…" : "Move to history"}
+                  </button>
+                )}
               </section>
             </div>
           </aside>

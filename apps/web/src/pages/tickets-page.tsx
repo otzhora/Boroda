@@ -16,6 +16,7 @@ import {
   useDeleteTicketMutation,
   useOpenTicketInAppMutation,
   useRefreshTicketJiraLinksMutation,
+  useUnarchiveTicketMutation,
   useUpdateTicketMutation
 } from "../features/tickets/mutations";
 import {
@@ -705,6 +706,13 @@ export function TicketsPage() {
       setEditForm(form);
     }
   });
+  const unarchiveTicketMutation = useUnarchiveTicketMutation({
+    ticketId: selectedTicketId,
+    boardFilters: EMPTY_BOARD_FILTERS,
+    onRestored: () => {
+      setSelectedTicketId(null);
+    }
+  });
 
   const openTicketInAppMutation = useOpenTicketInAppMutation(selectedTicketId);
   const refreshTicketJiraLinksMutation = useRefreshTicketJiraLinksMutation(selectedTicketId);
@@ -712,6 +720,7 @@ export function TicketsPage() {
   const actionError =
     updateTicketMutation.error?.message ??
     deleteTicketMutation.error?.message ??
+    unarchiveTicketMutation.error?.message ??
     refreshTicketJiraLinksMutation.error?.message;
 
   const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
@@ -1099,7 +1108,8 @@ export function TicketsPage() {
         projects={projects}
         isSaving={updateTicketMutation.isPending}
         saveSuccessCount={ticketSaveSuccessCount}
-        isDeleting={deleteTicketMutation.isPending}
+        isArchiving={deleteTicketMutation.isPending}
+        isRestoring={unarchiveTicketMutation.isPending}
         isOpeningInApp={openTicketInAppMutation.isPending}
         isRefreshingJira={refreshTicketJiraLinksMutation.isPending}
         onChange={(updater) => {
@@ -1108,7 +1118,7 @@ export function TicketsPage() {
         onSave={() => {
           updateTicketMutation.mutate(toTicketPayload(editForm));
         }}
-        onDelete={() => {
+        onArchive={() => {
           void (async () => {
             try {
               await deleteTicketMutation.mutateAsync(undefined);
@@ -1125,6 +1135,9 @@ export function TicketsPage() {
               setDirtyWorktreesToConfirm(dirtyWorktrees);
             }
           })();
+        }}
+        onRestore={() => {
+          unarchiveTicketMutation.mutate();
         }}
         onOpenInApp={async (target, mode, folderId, workspaceId) => {
           const runSetup = getStoredAutoRunWorktreeSetup();

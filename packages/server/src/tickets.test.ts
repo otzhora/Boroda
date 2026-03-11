@@ -288,6 +288,23 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   assert.equal(typeof archivedTicket.archivedAt, "string");
   assert.ok(archivedTicket.activities.some((activity: { type: string }) => activity.type === "ticket.archived"));
 
+  const unarchiveResponse = await app.inject({
+    method: "POST",
+    url: `/api/tickets/${createdTicket.id}/unarchive`
+  });
+
+  assert.equal(unarchiveResponse.statusCode, 200);
+
+  const restoredTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${createdTicket.id}`
+  });
+
+  assert.equal(restoredTicketResponse.statusCode, 200);
+  const restoredTicket = restoredTicketResponse.json();
+  assert.equal(restoredTicket.archivedAt, null);
+  assert.ok(restoredTicket.activities.some((activity: { type: string }) => activity.type === "ticket.unarchived"));
+
   const boardResponse = await app.inject({
     method: "GET",
     url: "/api/board"
@@ -296,7 +313,8 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   assert.equal(boardResponse.statusCode, 200);
   const board = boardResponse.json();
   const visibleTickets = board.columns.flatMap((column: { tickets: Array<{ id: number }> }) => column.tickets);
-  assert.equal(visibleTickets.length, 0);
+  assert.equal(visibleTickets.length, 1);
+  assert.equal(visibleTickets[0].id, createdTicket.id);
 });
 
 test("ticket-project link endpoints enforce duplicate and primary constraints", async () => {

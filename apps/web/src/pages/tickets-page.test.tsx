@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "../lib/api-client";
 
 const mocks = vi.hoisted(() => ({
+  useBoardColumnsQuery: vi.fn(),
   useProjectsQuery: vi.fn(),
   useTicketsQuery: vi.fn(),
   useTicketQuery: vi.fn(),
@@ -14,8 +15,13 @@ const mocks = vi.hoisted(() => ({
   updateMutate: vi.fn(),
   deleteMutate: vi.fn(),
   deleteMutateAsync: vi.fn(),
+  unarchiveMutate: vi.fn(),
   openTerminalMutateAsync: vi.fn(),
   refreshJiraMutate: vi.fn()
+}));
+
+vi.mock("../features/board/queries", () => ({
+  useBoardColumnsQuery: mocks.useBoardColumnsQuery
 }));
 
 vi.mock("../features/projects/queries", () => ({
@@ -39,6 +45,11 @@ vi.mock("../features/tickets/mutations", () => ({
     isPending: false,
     error: null
   })),
+  useUnarchiveTicketMutation: vi.fn(() => ({
+    mutate: mocks.unarchiveMutate,
+    isPending: false,
+    error: null
+  })),
   useOpenTicketInAppMutation: vi.fn(() => ({
     mutateAsync: mocks.openTerminalMutateAsync,
     isPending: false,
@@ -54,11 +65,17 @@ vi.mock("../features/tickets/mutations", () => ({
 vi.mock("../components/ticket/ticket-drawer", () => ({
   TicketDrawer: ({
     ticketId,
+    ticket,
+    onArchive,
+    onRestore,
     onDelete,
     onClose
   }: {
     ticketId: number | null;
-    onDelete: () => void;
+    ticket?: { archivedAt: string | null };
+    onArchive?: () => void;
+    onRestore?: () => void;
+    onDelete?: () => void;
     onClose: () => void;
   }) => {
     useEffect(() => {
@@ -85,9 +102,15 @@ vi.mock("../components/ticket/ticket-drawer", () => ({
 
     return (
       <div data-testid="ticket-drawer">
-        <button type="button" onClick={onDelete}>
-          Archive ticket
-        </button>
+        {ticket?.archivedAt ? (
+          <button type="button" onClick={onRestore}>
+            Restore ticket
+          </button>
+        ) : (
+          <button type="button" onClick={onArchive ?? onDelete}>
+            Archive ticket
+          </button>
+        )}
         <button type="button" onClick={onClose}>
           Close drawer
         </button>
@@ -113,12 +136,14 @@ function renderTicketsPage(options?: { initialEntries?: string[] }) {
 describe("TicketsPage", () => {
   beforeEach(() => {
     mocks.useProjectsQuery.mockReset();
+    mocks.useBoardColumnsQuery.mockReset();
     mocks.useTicketsQuery.mockReset();
     mocks.useTicketQuery.mockReset();
     mocks.refetchTickets.mockReset();
     mocks.updateMutate.mockReset();
     mocks.deleteMutate.mockReset();
     mocks.deleteMutateAsync.mockReset();
+    mocks.unarchiveMutate.mockReset();
     mocks.openTerminalMutateAsync.mockReset();
     mocks.refreshJiraMutate.mockReset();
 
@@ -135,6 +160,16 @@ describe("TicketsPage", () => {
           folders: []
         }
       ]
+    });
+    mocks.useBoardColumnsQuery.mockReturnValue({
+      data: {
+        columns: [
+          { id: 1, status: "INBOX", label: "Inbox", position: 0, createdAt: "", updatedAt: "" },
+          { id: 2, status: "READY", label: "Ready", position: 1, createdAt: "", updatedAt: "" },
+          { id: 3, status: "IN_PROGRESS", label: "In progress", position: 2, createdAt: "", updatedAt: "" },
+          { id: 4, status: "DONE", label: "Done", position: 3, createdAt: "", updatedAt: "" }
+        ]
+      }
     });
 
     mocks.useTicketsQuery.mockReturnValue({
@@ -283,6 +318,62 @@ describe("TicketsPage", () => {
     await user.click(screen.getByRole("button", { name: "Delete and archive" }));
 
     expect(mocks.deleteMutateAsync).toHaveBeenNthCalledWith(2, { force: true });
+  });
+
+  it("restores archived tickets from the drawer", async () => {
+    const user = userEvent.setup();
+
+    mocks.useTicketsQuery.mockReturnValue({
+      data: [
+        {
+          id: 12,
+          key: "BRD-12",
+          title: "Fix drawer save state",
+          description: "",
+          branch: null,
+          status: "IN_PROGRESS",
+          priority: "HIGH",
+          dueAt: null,
+          createdAt: "",
+          updatedAt: "2026-03-06T10:00:00.000Z",
+          archivedAt: "2026-03-10T10:00:00.000Z",
+          contextsCount: 2,
+          projectBadges: [],
+          jiraIssues: []
+        }
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetchTickets
+    });
+    mocks.useTicketQuery.mockReturnValue({
+      data: {
+        id: 12,
+        key: "BRD-12",
+        title: "Fix drawer save state",
+        description: "",
+        branch: null,
+        workspaces: [],
+        status: "IN_PROGRESS",
+        priority: "HIGH",
+        dueAt: null,
+        createdAt: "",
+        updatedAt: "2026-03-06T10:00:00.000Z",
+        archivedAt: "2026-03-10T10:00:00.000Z",
+        projectLinks: [],
+        jiraIssues: [],
+        workContexts: [],
+        activities: []
+      },
+      isLoading: false,
+      isError: false
+    });
+
+    renderTicketsPage({ initialEntries: ["/tickets?scope=archived"] });
+    await user.click(screen.getByRole("button", { name: "Open ticket BRD-12 Fix drawer save state" }));
+    await user.click(screen.getByRole("button", { name: "Restore ticket" }));
+
+    expect(mocks.unarchiveMutate).toHaveBeenCalledTimes(1);
   });
 
   it("focuses the search field from the board-style hotkeys", async () => {

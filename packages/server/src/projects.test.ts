@@ -174,6 +174,22 @@ test("project CRUD works through the API", async () => {
 
   assert.equal(getResponseAfterArchive.statusCode, 200);
   assert.equal(typeof getResponseAfterArchive.json().archivedAt, "string");
+
+  const unarchiveResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${createdProject.id}/unarchive`
+  });
+
+  assert.equal(unarchiveResponse.statusCode, 200);
+
+  const activeListAfterRestoreResponse = await app.inject({
+    method: "GET",
+    url: "/api/projects"
+  });
+
+  assert.equal(activeListAfterRestoreResponse.statusCode, 200);
+  assert.equal(activeListAfterRestoreResponse.json().length, 1);
+  assert.equal(activeListAfterRestoreResponse.json()[0].archivedAt, null);
 });
 
 test("project folder CRUD validates paths and updates primary state", async () => {
@@ -339,6 +355,27 @@ test("archiving a project archives tickets that have no remaining active project
   });
   assert.equal(sharedTicketAfterSecondArchiveResponse.statusCode, 200);
   assert.equal(typeof sharedTicketAfterSecondArchiveResponse.json().archivedAt, "string");
+
+  const restoreSecondaryResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${secondaryProject.id}/unarchive`
+  });
+
+  assert.equal(restoreSecondaryResponse.statusCode, 200);
+
+  const restoredSharedTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${sharedTicket.id}`
+  });
+  assert.equal(restoredSharedTicketResponse.statusCode, 200);
+  assert.equal(restoredSharedTicketResponse.json().archivedAt, null);
+
+  const restoredSingleProjectTicketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${singleProjectTicket.id}`
+  });
+  assert.equal(restoredSingleProjectTicketResponse.statusCode, 200);
+  assert.equal(typeof restoredSingleProjectTicketResponse.json().archivedAt, "string");
 });
 
 test("duplicate project slugs and folder paths return 409 conflicts", async () => {

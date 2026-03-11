@@ -16,6 +16,7 @@ import {
   getProjectOrThrow,
   listProjects,
   scaffoldProjectFolderSetup,
+  unarchiveProject,
   updateProject,
   updateProjectFolder
 } from "./service";
@@ -45,6 +46,11 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
   app.delete("/projects/:id", async (request) => {
     const params = projectIdParamSchema.parse(request.params);
     return deleteProject(app, params.id);
+  });
+
+  app.post("/projects/:id/unarchive", async (request) => {
+    const params = projectIdParamSchema.parse(request.params);
+    return unarchiveProject(app, params.id);
   });
 
   app.post("/projects/:id/folders", async (request) => {

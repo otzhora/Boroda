@@ -21,6 +21,7 @@ import {
   refreshTicketJiraIssues,
   saveTicketImage,
   streamTicketImage,
+  unarchiveTicket,
   updateTicket
 } from "./service";
 
@@ -50,6 +51,11 @@ export const ticketRoutes: FastifyPluginAsync = async (app) => {
     const params = ticketIdParamSchema.parse(request.params);
     const query = archiveTicketQuerySchema.parse(request.query);
     return deleteTicket(app, params.id, query);
+  });
+
+  app.post("/tickets/:id/unarchive", async (request) => {
+    const params = ticketIdParamSchema.parse(request.params);
+    return unarchiveTicket(app, params.id);
   });
 
   app.post("/tickets/:id/images", async (request) => {

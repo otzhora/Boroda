@@ -459,6 +459,47 @@ export function ProjectsPage() {
     }
   });
 
+  const unarchiveProjectMutation = useMutation<{ ok: true }, Error, number, MutationContext>({
+    mutationFn: (projectId) =>
+      apiClient<{ ok: true }>(`/api/projects/${projectId}/unarchive`, {
+        method: "POST"
+      }),
+    onMutate: async (projectId) => {
+      await queryClient.cancelQueries({ queryKey: projectsQueryKey });
+      const previousProjects = queryClient.getQueryData<Project[]>(projectsQueryKey);
+      const restoredAt = nowIso();
+
+      updateProjectList(queryClient, projectsQueryKey, (projects) => {
+        const target = projects.find((project) => project.id === projectId);
+
+        if (!target) {
+          return projects;
+        }
+
+        const restoredProject = {
+          ...target,
+          archivedAt: null,
+          updatedAt: restoredAt
+        };
+        const remainingProjects = projects.filter((project) => project.id !== projectId);
+
+        if (projectScope === "active" || projectScope === "all") {
+          return sortProjects([restoredProject, ...remainingProjects]);
+        }
+
+        return remainingProjects;
+      });
+
+      return { previousProjects: [[projectsQueryKey, previousProjects]] };
+    },
+    onError: (_error, _projectId, context) => {
+      rollbackProjects(queryClient, context);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: PROJECTS_QUERY_KEY });
+    }
+  });
+
   const createFolderMutation = useMutation<
     ProjectFolderWithPathInfo,
     Error,
@@ -979,6 +1020,11 @@ export function ProjectsPage() {
     collapseProject(project.id);
   }
 
+  function handleRestoreProject(project: Project) {
+    unarchiveProjectMutation.mutate(project.id);
+    collapseProject(project.id);
+  }
+
   function toggleProjectExpansion(projectId: number) {
     if (expandedProjectId === projectId) {
       collapseProject(projectId);
@@ -1240,14 +1286,25 @@ export function ProjectsPage() {
                             >
                               Edit project
                             </button>
-                            <button
-                              type="button"
-                              className={dangerButtonClassName}
-                              disabled={archiveProjectMutation.isPending}
-                              onClick={() => handleDeleteProject(project)}
-                            >
-                              Archive
-                            </button>
+                            {project.archivedAt ? (
+                              <button
+                                type="button"
+                                className={secondaryButtonClassName}
+                                disabled={unarchiveProjectMutation.isPending}
+                                onClick={() => handleRestoreProject(project)}
+                              >
+                                Restore
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className={dangerButtonClassName}
+                                disabled={archiveProjectMutation.isPending}
+                                onClick={() => handleDeleteProject(project)}
+                              >
+                                Archive
+                              </button>
+                            )}
                           </div>
                         ) : null}
                       </div>
