@@ -24,7 +24,11 @@ import {
   type TicketFilters,
   type TicketScope
 } from "../features/tickets/queries";
-import { getStoredAutoRunWorktreeSetup } from "../lib/user-preferences";
+import {
+  getStoredAutoRunWorktreeSetup,
+  getStoredLastStandupCompletedAt,
+  setStoredLastStandupCompletedAt
+} from "../lib/user-preferences";
 import { ApiError } from "../lib/api-client";
 import type { Project, TicketListItem, TicketStatus } from "../lib/types";
 
@@ -63,6 +67,28 @@ function hasTicketFilters(filters: TicketFilters) {
       filters.q?.trim() ||
       filters.jiraIssue?.length
   );
+}
+
+function getDefaultStandupWindowStart() {
+  const date = new Date();
+  date.setHours(date.getHours() - 24);
+  return date.toISOString();
+}
+
+function wasUpdatedSinceStandup(ticket: TicketListItem, standupWindowStart: string) {
+  const updatedAt = new Date(ticket.updatedAt).getTime();
+  const standupStartedAt = new Date(standupWindowStart).getTime();
+
+  if (Number.isNaN(updatedAt) || Number.isNaN(standupStartedAt)) {
+    return false;
+  }
+
+  return updatedAt >= standupStartedAt;
+}
+
+function formatStandupWindowLabel(value: string, hasSavedStandup: boolean) {
+  const prefix = hasSavedStandup ? "Since last standup" : "Showing the last 24 hours";
+  return `${prefix}: ${formatTimestamp(value)}`;
 }
 
 function isTypingTarget(target: EventTarget | null) {
@@ -567,11 +593,21 @@ export function TicketsPage() {
   const [ticketSaveSuccessCount, setTicketSaveSuccessCount] = useState(0);
   const [filterHotkeySignal, setFilterHotkeySignal] = useState(0);
   const [dirtyWorktreesToConfirm, setDirtyWorktreesToConfirm] = useState<DirtyWorktreeDescriptor[]>([]);
+  const [standupOnly, setStandupOnly] = useState(false);
+  const [{ lastCompletedAt, standupWindowStart }, setStandupWindow] = useState(() => {
+    const storedStandup = getStoredLastStandupCompletedAt();
+
+    return {
+      lastCompletedAt: storedStandup,
+      standupWindowStart: storedStandup ?? getDefaultStandupWindowStart()
+    };
+  });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const parsedFilters = parseTicketFilters(searchParams);
   const sortField = parseSortField(searchParams.get("sort"));
   const sortDirection = parseSortDirection(searchParams.get("dir"));
+  const hasSavedStandup = lastCompletedAt !== null;
   const [searchInputValue, setSearchInputValue] = useState(parsedFilters.q ?? "");
   const deferredFilters = useDeferredValue({
     ...parsedFilters,
@@ -627,7 +663,10 @@ export function TicketsPage() {
   }, [searchParams, selectedTicketId, setSearchParams]);
 
   const projects = projectsQuery.data ?? [];
-  const tickets = sortTickets(ticketsQuery.data ?? [], sortField, sortDirection, statusOrder);
+  const sortedTickets = sortTickets(ticketsQuery.data ?? [], sortField, sortDirection, statusOrder);
+  const tickets = standupOnly
+    ? sortedTickets.filter((ticket) => wasUpdatedSinceStandup(ticket, standupWindowStart))
+    : sortedTickets;
   const boardJiraIssues = useMemo(() => {
     const issueKeys = new Set<string>();
 
@@ -639,7 +678,7 @@ export function TicketsPage() {
 
     return [...issueKeys].sort((left, right) => left.localeCompare(right));
   }, [activeBoardTicketsQuery.data]);
-  const filtersApplied = hasTicketFilters(parsedFilters);
+  const filtersApplied = hasTicketFilters(parsedFilters) || standupOnly;
   const statusFilterKey = parsedFilters.status?.join(",") ?? "";
   const priorityFilterKey = parsedFilters.priority?.join(",") ?? "";
   const projectFilterKey = parsedFilters.projectId?.join(",") ?? "";
@@ -744,6 +783,7 @@ export function TicketsPage() {
       nextSearchParams.delete("jiraIssue");
       nextSearchParams.delete("scope");
     });
+    setStandupOnly(false);
     setSearchInputValue("");
   };
 
@@ -765,6 +805,15 @@ export function TicketsPage() {
       nextSearchParams.delete("dir");
     });
   };
+
+  const handleMarkStandupDone = useEffectEvent(() => {
+    const completedAt = new Date().toISOString();
+    setStoredLastStandupCompletedAt(completedAt);
+    setStandupWindow({
+      lastCompletedAt: completedAt,
+      standupWindowStart: completedAt
+    });
+  });
 
   const renderSearchControl = () => (
     <label className="min-w-0 flex-1 basis-[18rem] max-w-[32rem]">
@@ -795,11 +844,11 @@ export function TicketsPage() {
       hasHost ? (
         <>
           {renderSearchControl()}
-        <FilterDropdown
-          filters={parsedFilters}
-          projects={projects}
-          statuses={boardColumns}
-          jiraIssues={boardJiraIssues}
+          <FilterDropdown
+            filters={parsedFilters}
+            projects={projects}
+            statuses={boardColumns}
+            jiraIssues={boardJiraIssues}
             onUpdateFilters={updateFilters}
             onClearFilters={clearFilters}
             hotkeySignal={filterHotkeySignal}
@@ -808,9 +857,14 @@ export function TicketsPage() {
       ) : null
     );
     setRightActions(
-      <Link to="/settings" className={secondaryButtonClassName}>
-        Settings
-      </Link>
+      <>
+        <button type="button" className={primaryButtonClassName} onClick={handleMarkStandupDone}>
+          Standup done
+        </button>
+        <Link to="/settings" className={secondaryButtonClassName}>
+          Settings
+        </Link>
+      </>
     );
 
     return () => {
@@ -841,6 +895,7 @@ export function TicketsPage() {
           <p className="m-0 text-sm text-ink-300">
             {tickets.length} {tickets.length === 1 ? "ticket" : "tickets"} in {scopeLabel(parsedFilters.scope ?? "active").toLowerCase()}
           </p>
+          {standupOnly ? <p className="m-0 text-sm text-ink-200">{formatStandupWindowLabel(standupWindowStart, hasSavedStandup)}</p> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Ticket scope">
           {(["active", "archived", "all"] as const).map((scope) => (
@@ -864,6 +919,16 @@ export function TicketsPage() {
               Clear filters
             </button>
           ) : null}
+          <button
+            type="button"
+            className={standupOnly ? primaryButtonClassName : secondaryButtonClassName}
+            aria-pressed={standupOnly}
+            onClick={() => {
+              setStandupOnly((current) => !current);
+            }}
+          >
+            For standup
+          </button>
         </div>
       </div>
 
