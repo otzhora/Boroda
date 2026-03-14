@@ -5,5 +5,8 @@ dist
 *.log
 data/*.sqlite
 data/*.sqlite-*
+packages/server/data/
 data/uploads/*
 data/worktrees/*
+data/mock-repos/**/bin/
+data/mock-repos/**/obj/
