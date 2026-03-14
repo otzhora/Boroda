@@ -1,9 +1,11 @@
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
+import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import type { FastifyInstance } from "fastify";
 
@@ -13,6 +15,8 @@ let projectsTable: (typeof import("./db/schema"))["projects"];
 let projectFoldersTable: (typeof import("./db/schema"))["projectFolders"];
 let ticketsTable: (typeof import("./db/schema"))["tickets"];
 let ticketProjectLinksTable: (typeof import("./db/schema"))["ticketProjectLinks"];
+let ticketWorkspacesTable: (typeof import("./db/schema"))["ticketWorkspaces"];
+let ticketActivitiesTable: (typeof import("./db/schema"))["ticketActivities"];
 let sequencesTable: (typeof import("./db/schema"))["sequences"];
 let tempRoot = "";
 let existingFolderPath = "";
@@ -36,6 +40,8 @@ before(async () => {
   projectFoldersTable = schema.projectFolders;
   ticketsTable = schema.tickets;
   ticketProjectLinksTable = schema.ticketProjectLinks;
+  ticketWorkspacesTable = schema.ticketWorkspaces;
+  ticketActivitiesTable = schema.ticketActivities;
   sequencesTable = schema.sequences;
 
   migrate(dbClient.db, {
@@ -47,6 +53,8 @@ before(async () => {
 });
 
 beforeEach(() => {
+  app.db.delete(ticketActivitiesTable).run();
+  app.db.delete(ticketWorkspacesTable).run();
   app.db.delete(ticketProjectLinksTable).run();
   app.db.delete(ticketsTable).run();
   app.db.delete(projectFoldersTable).run();
@@ -75,6 +83,27 @@ async function createTicket(title: string, projectLinks: Array<{ projectId: numb
 
   assert.equal(response.statusCode, 200);
   return response.json();
+}
+
+function git(cwd: string, ...args: string[]) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8"
+  });
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr || `git ${args.join(" ")} failed`);
+  }
+}
+
+async function createGitRepo(rootPath: string) {
+  await mkdir(rootPath, { recursive: true });
+  git(rootPath, "init", "--initial-branch=main");
+  git(rootPath, "config", "user.email", "boroda@example.test");
+  git(rootPath, "config", "user.name", "Boroda Tests");
+  await writeFile(path.join(rootPath, "README.md"), "main\n");
+  git(rootPath, "add", "README.md");
+  git(rootPath, "commit", "-m", "init");
 }
 
 test("project CRUD works through the API", async () => {
@@ -376,6 +405,96 @@ test("archiving a project archives tickets that have no remaining active project
   });
   assert.equal(restoredSingleProjectTicketResponse.statusCode, 200);
   assert.equal(typeof restoredSingleProjectTicketResponse.json().archivedAt, "string");
+
+  const stillArchivedPrimaryProjectResponse = await app.inject({
+    method: "GET",
+    url: `/api/projects/${primaryProject.id}`
+  });
+  assert.equal(stillArchivedPrimaryProjectResponse.statusCode, 200);
+  assert.equal(typeof stillArchivedPrimaryProjectResponse.json().archivedAt, "string");
+});
+
+test("project archive does not partially persist when a linked ticket archive is blocked", async () => {
+  const project = (
+    await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Dirty Workspace Project",
+        slug: "dirty-workspace-project",
+        description: "",
+        color: "#123456"
+      }
+    })
+  ).json();
+
+  const repoPath = path.join(tempRoot, `project-archive-repo-${Date.now()}`);
+  await createGitRepo(repoPath);
+
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "repo",
+      path: repoPath,
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+  assert.equal(folderResponse.statusCode, 200);
+  const folder = folderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Blocked archive ticket",
+      description: "",
+      status: "READY",
+      priority: "MEDIUM",
+      projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }],
+      workspaces: [
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/blocked-archive",
+          baseBranch: "main",
+          role: "primary"
+        }
+      ]
+    }
+  });
+  assert.equal(ticketResponse.statusCode, 200);
+  const ticket = ticketResponse.json();
+  const workspace = ticket.workspaces[0];
+
+  app.db
+    .update(ticketWorkspacesTable)
+    .set({ worktreePath: repoPath })
+    .where(eq(ticketWorkspacesTable.id, workspace.id))
+    .run();
+  await writeFile(path.join(repoPath, "dirty.txt"), "uncommitted\n");
+
+  const archiveProjectResponse = await app.inject({
+    method: "DELETE",
+    url: `/api/projects/${project.id}`
+  });
+
+  assert.equal(archiveProjectResponse.statusCode, 409);
+  assert.equal(archiveProjectResponse.json().error.code, "TICKET_ARCHIVE_DIRTY_WORKTREES");
+
+  const projectAfterFailure = await app.inject({
+    method: "GET",
+    url: `/api/projects/${project.id}`
+  });
+  assert.equal(projectAfterFailure.statusCode, 200);
+  assert.equal(projectAfterFailure.json().archivedAt, null);
+
+  const ticketAfterFailure = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${ticket.id}`
+  });
+  assert.equal(ticketAfterFailure.statusCode, 200);
+  assert.equal(ticketAfterFailure.json().archivedAt, null);
 });
 
 test("duplicate project slugs and folder paths return 409 conflicts", async () => {

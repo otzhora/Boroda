@@ -7,8 +7,13 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function logActivity(app: FastifyInstance, ticketId: number, type: string, message: string) {
-  app.db.insert(ticketActivities).values({
+type AppDb = FastifyInstance["db"];
+type TransactionCallback = Parameters<AppDb["transaction"]>[0];
+type DbTransaction = TransactionCallback extends (tx: infer Tx, ...args: never[]) => unknown ? Tx : never;
+type DbExecutor = AppDb | DbTransaction;
+
+function logActivity(db: DbExecutor, ticketId: number, type: string, message: string) {
+  db.insert(ticketActivities).values({
     ticketId,
     type,
     message,
@@ -36,22 +41,24 @@ export async function createWorkContext(
 ) {
   getTicketOrThrow(app, ticketId);
   const timestamp = nowIso();
-  const created = app.db
-    .insert(workContexts)
-    .values({
-      ticketId,
-      type: input.type,
-      label: input.label,
-      value: input.value,
-      metaJson: JSON.stringify(input.meta),
-      createdAt: timestamp,
-      updatedAt: timestamp
-    })
-    .returning()
-    .get();
+  return app.db.transaction((tx) => {
+    const created = tx
+      .insert(workContexts)
+      .values({
+        ticketId,
+        type: input.type,
+        label: input.label,
+        value: input.value,
+        metaJson: JSON.stringify(input.meta),
+        createdAt: timestamp,
+        updatedAt: timestamp
+      })
+      .returning()
+      .get();
 
-  logActivity(app, ticketId, "work-context.created", `Work context added: ${input.label}`);
-  return created;
+    logActivity(tx, ticketId, "work-context.created", `Work context added: ${input.label}`);
+    return created;
+  });
 }
 
 export async function updateWorkContext(
@@ -69,21 +76,23 @@ export async function updateWorkContext(
     throw new AppError(404, "WORK_CONTEXT_NOT_FOUND", "Work context not found");
   }
 
-  const updated = app.db
-    .update(workContexts)
-    .set({
-      type: input.type ?? existing.type,
-      label: input.label ?? existing.label,
-      value: input.value ?? existing.value,
-      metaJson: JSON.stringify(input.meta ?? JSON.parse(existing.metaJson)),
-      updatedAt: nowIso()
-    })
-    .where(eq(workContexts.id, id))
-    .returning()
-    .get();
+  return app.db.transaction((tx) => {
+    const updated = tx
+      .update(workContexts)
+      .set({
+        type: input.type ?? existing.type,
+        label: input.label ?? existing.label,
+        value: input.value ?? existing.value,
+        metaJson: JSON.stringify(input.meta ?? JSON.parse(existing.metaJson)),
+        updatedAt: nowIso()
+      })
+      .where(eq(workContexts.id, id))
+      .returning()
+      .get();
 
-  logActivity(app, existing.ticketId, "work-context.updated", `Work context updated: ${updated.label}`);
-  return updated;
+    logActivity(tx, existing.ticketId, "work-context.updated", `Work context updated: ${updated.label}`);
+    return updated;
+  });
 }
 
 export async function deleteWorkContext(app: FastifyInstance, id: number) {
@@ -97,7 +106,9 @@ export async function deleteWorkContext(app: FastifyInstance, id: number) {
     throw new AppError(404, "WORK_CONTEXT_NOT_FOUND", "Work context not found");
   }
 
-  app.db.delete(workContexts).where(eq(workContexts.id, id)).run();
-  logActivity(app, existing.ticketId, "work-context.deleted", `Work context removed: ${existing.label}`);
+  app.db.transaction((tx) => {
+    tx.delete(workContexts).where(eq(workContexts.id, id)).run();
+    logActivity(tx, existing.ticketId, "work-context.deleted", `Work context removed: ${existing.label}`);
+  });
   return { ok: true };
 }

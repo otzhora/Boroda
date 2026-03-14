@@ -317,6 +317,49 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   assert.equal(visibleTickets[0].id, createdTicket.id);
 });
 
+test("ticket creation rolls back sequence and rows when related writes fail", async () => {
+  const project = await createProject("Atomicity Project", "atomicity-project");
+
+  const failedCreateResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Will fail",
+      description: "",
+      status: "READY",
+      priority: "MEDIUM",
+      projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }],
+      workspaces: [
+        {
+          projectFolderId: 999999,
+          branchName: "feature/missing-folder",
+          role: "primary"
+        }
+      ]
+    }
+  });
+
+  assert.equal(failedCreateResponse.statusCode, 404);
+  assert.equal(app.db.select().from(schema.tickets).all().length, 0);
+  assert.equal(app.db.select().from(schema.ticketProjectLinks).all().length, 0);
+  assert.equal(app.db.select().from(schema.sequences).all().length, 0);
+
+  const successfulCreateResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "After rollback",
+      description: "",
+      status: "READY",
+      priority: "MEDIUM",
+      projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }]
+    }
+  });
+
+  assert.equal(successfulCreateResponse.statusCode, 200);
+  assert.equal(successfulCreateResponse.json().key, "BRD-1");
+});
+
 test("unarchiving a ticket also restores linked archived projects", async () => {
   const linkedProject = await createProject("Restore Parent Project", "restore-parent-project");
 
@@ -829,6 +872,10 @@ test("ticket image cleanup removes orphaned files on description update and keep
 
   assert.equal(secondUploadResponse.statusCode, 200);
   const secondImage = secondUploadResponse.json();
+
+  await mkdir(path.join(process.env.BORODA_UPLOADS_PATH as string, "tickets", String(ticket.id), "stale-dir"), {
+    recursive: true
+  });
 
   const keepOnlySecondResponse = await app.inject({
     method: "PATCH",

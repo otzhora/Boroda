@@ -4,7 +4,12 @@ import { AppError } from "../../shared/errors";
 import { normalizeWslPath, resolvePathInfo } from "../../shared/path-utils";
 import { getProjectFolderSetupInfo, scaffoldProjectFolderWorktreeSetup } from "../../shared/worktree-setup";
 import { projectFolders, projects, ticketProjectLinks, tickets } from "../../db/schema";
-import { archivePreparedTicket, prepareTicketArchive, unarchiveTicket } from "../tickets/service";
+import {
+  archivePreparedTicketsForCommit,
+  archivePreparedTicketsInTransaction,
+  prepareTicketArchive,
+  unarchiveTicketsInTransaction
+} from "../tickets/service";
 
 function nowIso() {
   return new Date().toISOString();
@@ -52,7 +57,7 @@ function rethrowProjectConflict(error: unknown): never {
   throw error;
 }
 
-async function listTicketsToArchiveAfterProjectArchive(app: FastifyInstance, projectId: number) {
+function listTicketsToArchiveAfterProjectArchive(app: FastifyInstance, projectId: number) {
   const linkedTicketIds = app.db
     .select({ ticketId: ticketProjectLinks.ticketId })
     .from(ticketProjectLinks)
@@ -87,7 +92,7 @@ async function listTicketsToArchiveAfterProjectArchive(app: FastifyInstance, pro
   return linkedTicketIds.filter((ticketId) => !ticketsWithOtherActiveProjects.has(ticketId));
 }
 
-async function listTicketsToUnarchiveAfterProjectRestore(app: FastifyInstance, projectId: number) {
+function listTicketsToUnarchiveAfterProjectRestore(app: FastifyInstance, projectId: number) {
   const linkedTicketIds = app.db
     .select({ ticketId: ticketProjectLinks.ticketId })
     .from(ticketProjectLinks)
@@ -208,20 +213,19 @@ export async function deleteProject(app: FastifyInstance, id: number) {
 
   const ticketIdsToArchive = await listTicketsToArchiveAfterProjectArchive(app, id);
   const preparedTickets = await Promise.all(ticketIdsToArchive.map((ticketId) => prepareTicketArchive(app, ticketId)));
-
-  for (const preparedTicket of preparedTickets) {
-    await archivePreparedTicket(app, preparedTicket);
-  }
-
+  archivePreparedTicketsForCommit(preparedTickets);
   const archivedAt = nowIso();
-  app.db
-    .update(projects)
-    .set({
-      archivedAt,
-      updatedAt: archivedAt
-    })
-    .where(eq(projects.id, id))
-    .run();
+
+  app.db.transaction((tx) => {
+    tx.update(projects)
+      .set({
+        archivedAt,
+        updatedAt: archivedAt
+      })
+      .where(eq(projects.id, id))
+      .run();
+    archivePreparedTicketsInTransaction(tx, preparedTickets, archivedAt);
+  });
   return { ok: true };
 }
 
@@ -234,19 +238,24 @@ export async function unarchiveProject(app: FastifyInstance, id: number) {
 
   const ticketIdsToRestore = await listTicketsToUnarchiveAfterProjectRestore(app, id);
   const restoredAt = nowIso();
+  const restoredTickets = ticketIdsToRestore.length
+    ? app.db
+        .select({ id: tickets.id, key: tickets.key })
+        .from(tickets)
+        .where(inArray(tickets.id, ticketIdsToRestore))
+        .all()
+    : [];
 
-  app.db
-    .update(projects)
-    .set({
-      archivedAt: null,
-      updatedAt: restoredAt
-    })
-    .where(eq(projects.id, id))
-    .run();
-
-  for (const ticketId of ticketIdsToRestore) {
-    await unarchiveTicket(app, ticketId);
-  }
+  app.db.transaction((tx) => {
+    tx.update(projects)
+      .set({
+        archivedAt: null,
+        updatedAt: restoredAt
+      })
+      .where(eq(projects.id, id))
+      .run();
+    unarchiveTicketsInTransaction(tx, restoredTickets, restoredAt);
+  });
 
   return { ok: true };
 }
@@ -260,30 +269,31 @@ export async function createProjectFolder(
   const pathInfo = await resolvePathInfo(input.path);
   const now = nowIso();
 
-  if (input.isPrimary) {
-    app.db
-      .update(projectFolders)
-      .set({ isPrimary: false, updatedAt: now })
-      .where(eq(projectFolders.projectId, projectId))
-      .run();
-  }
-
   try {
-    const folder = app.db
-      .insert(projectFolders)
-      .values({
-        projectId,
-        label: input.label,
-        path: normalizeWslPath(input.path),
-        defaultBranch: input.defaultBranch?.trim() || null,
-        kind: input.kind,
-        isPrimary: input.isPrimary,
-        existsOnDisk: pathInfo.exists,
-        createdAt: now,
-        updatedAt: now
-      })
-      .returning()
-      .get();
+    const folder = app.db.transaction((tx) => {
+      if (input.isPrimary) {
+        tx.update(projectFolders)
+          .set({ isPrimary: false, updatedAt: now })
+          .where(eq(projectFolders.projectId, projectId))
+          .run();
+      }
+
+      return tx
+        .insert(projectFolders)
+        .values({
+          projectId,
+          label: input.label,
+          path: normalizeWslPath(input.path),
+          defaultBranch: input.defaultBranch?.trim() || null,
+          kind: input.kind,
+          isPrimary: input.isPrimary,
+          existsOnDisk: pathInfo.exists,
+          createdAt: now,
+          updatedAt: now
+        })
+        .returning()
+        .get();
+    });
 
     return {
       ...enrichProjectFolder(folder),
@@ -319,29 +329,30 @@ export async function updateProjectFolder(
 
   const now = nowIso();
 
-  if (input.isPrimary) {
-    app.db
-      .update(projectFolders)
-      .set({ isPrimary: false, updatedAt: now })
-      .where(
-        and(eq(projectFolders.projectId, existing.projectId), eq(projectFolders.isPrimary, true))
-      )
-      .run();
-  }
-
   try {
-    const folder = app.db
-      .update(projectFolders)
-      .set({
-        ...input,
-        path: normalizedPath,
-        defaultBranch: input.defaultBranch === undefined ? existing.defaultBranch : input.defaultBranch?.trim() || null,
-        existsOnDisk: pathInfo?.exists ?? existing.existsOnDisk,
-        updatedAt: now
-      })
-      .where(eq(projectFolders.id, id))
-      .returning()
-      .get();
+    const folder = app.db.transaction((tx) => {
+      if (input.isPrimary) {
+        tx.update(projectFolders)
+          .set({ isPrimary: false, updatedAt: now })
+          .where(
+            and(eq(projectFolders.projectId, existing.projectId), eq(projectFolders.isPrimary, true))
+          )
+          .run();
+      }
+
+      return tx
+        .update(projectFolders)
+        .set({
+          ...input,
+          path: normalizedPath,
+          defaultBranch: input.defaultBranch === undefined ? existing.defaultBranch : input.defaultBranch?.trim() || null,
+          existsOnDisk: pathInfo?.exists ?? existing.existsOnDisk,
+          updatedAt: now
+        })
+        .where(eq(projectFolders.id, id))
+        .returning()
+        .get();
+    });
 
     return {
       ...enrichProjectFolder(folder),

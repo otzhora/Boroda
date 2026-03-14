@@ -35,6 +35,11 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+type AppDb = FastifyInstance["db"];
+type TransactionCallback = Parameters<AppDb["transaction"]>[0];
+type DbTransaction = TransactionCallback extends (tx: infer Tx, ...args: never[]) => unknown ? Tx : never;
+type DbExecutor = AppDb | DbTransaction;
+
 function getTicketUploadsRoot() {
   return path.resolve(getConfig().uploadsPath, "tickets");
 }
@@ -131,9 +136,11 @@ async function cleanupTicketImages(
       try {
         await rm(assertTicketImagePath(app, ticketId, filename), { force: true });
       } catch (error) {
-        if (error instanceof AppError) {
-          throw error;
-        }
+        logServerEvent(app, "warn", "ticket.image.cleanup.remove_failed", {
+          ticketId,
+          filename,
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     })
   );
@@ -144,19 +151,24 @@ async function cleanupTicketImages(
     if (!remainingEntries.length) {
       await rm(ticketDirectory, { recursive: true, force: true });
     }
-  } catch {
+  } catch (error) {
+    logServerEvent(app, "warn", "ticket.image.cleanup.directory_cleanup_failed", {
+      ticketId,
+      directory: ticketDirectory,
+      error: error instanceof Error ? error.message : String(error)
+    });
     return;
   }
 }
 
 function recordActivity(
-  app: FastifyInstance,
+  db: DbExecutor,
   ticketId: number,
   type: string,
   message: string,
   meta: Record<string, unknown> = {}
 ) {
-  app.db.insert(ticketActivities).values({
+  db.insert(ticketActivities).values({
     ticketId,
     type,
     message,
@@ -188,7 +200,7 @@ function listArchivableWorktrees(
     }));
 }
 
-type PreparedTicketArchive = {
+export type PreparedTicketArchive = {
   existing: Awaited<ReturnType<typeof getTicketOrThrow>>;
   archivableWorktrees: Array<{
     id: number;
@@ -201,6 +213,87 @@ type PreparedTicketArchive = {
     worktreePath: string;
   }>;
 };
+
+function assertPreparedTicketArchiveCanProceed(
+  prepared: PreparedTicketArchive,
+  options?: { force?: boolean }
+) {
+  if (prepared.existing.archivedAt) {
+    return;
+  }
+
+  if (prepared.dirtyWorktrees.length && !options?.force) {
+    throw new AppError(
+      409,
+      "TICKET_ARCHIVE_DIRTY_WORKTREES",
+      "One or more ticket worktrees have uncommitted changes",
+      { dirtyWorktrees: prepared.dirtyWorktrees }
+    );
+  }
+}
+
+function applyTicketArchivedState(
+  db: DbExecutor,
+  ticket: { id: number; key: string },
+  archivedAt: string
+) {
+  db.update(tickets)
+    .set({
+      archivedAt,
+      updatedAt: archivedAt
+    })
+    .where(eq(tickets.id, ticket.id))
+    .run();
+  recordActivity(db, ticket.id, "ticket.archived", `Ticket ${ticket.key} moved to history`);
+}
+
+export function archivePreparedTicketsForCommit(
+  preparedTickets: PreparedTicketArchive[],
+  options?: { force?: boolean }
+) {
+  for (const prepared of preparedTickets) {
+    assertPreparedTicketArchiveCanProceed(prepared, options);
+  }
+
+  for (const prepared of preparedTickets) {
+    for (const workspace of prepared.archivableWorktrees) {
+      removeWorkspaceWorktree(workspace.worktreePath, {
+        force: options?.force
+      });
+    }
+  }
+}
+
+export function archivePreparedTicketsInTransaction(
+  db: DbExecutor,
+  preparedTickets: PreparedTicketArchive[],
+  archivedAt: string
+) {
+  for (const prepared of preparedTickets) {
+    if (prepared.existing.archivedAt) {
+      continue;
+    }
+
+    applyTicketArchivedState(db, prepared.existing, archivedAt);
+  }
+}
+
+export function unarchiveTicketsInTransaction(
+  db: DbExecutor,
+  restoredTickets: Array<{ id: number; key: string }>,
+  restoredAt: string
+) {
+  for (const ticket of restoredTickets) {
+    db.update(tickets)
+      .set({
+        archivedAt: null,
+        updatedAt: restoredAt
+      })
+      .where(eq(tickets.id, ticket.id))
+      .run();
+    recordActivity(db, ticket.id, "ticket.unarchived", `Ticket ${ticket.key} restored from history`);
+  }
+}
 
 function isSqliteUniqueConstraintError(
   error: unknown,
@@ -231,20 +324,20 @@ function rethrowTicketConflict(error: unknown): never {
   throw error;
 }
 
-function nextTicketKey(app: FastifyInstance) {
-  const existing = app.db
+function nextTicketKey(db: DbExecutor) {
+  const existing = db
     .select()
     .from(sequences)
     .where(eq(sequences.name, "ticket"))
     .get();
 
   if (!existing) {
-    app.db.insert(sequences).values({ name: "ticket", value: 1 }).run();
+    db.insert(sequences).values({ name: "ticket", value: 1 }).run();
     return "BRD-1";
   }
 
   const nextValue = existing.value + 1;
-  app.db
+  db
     .update(sequences)
     .set({ value: nextValue })
     .where(eq(sequences.name, "ticket"))
@@ -315,21 +408,21 @@ function serializeJiraIssueLink(link: { key: string }) {
   return normalizeJiraIssueKey(link.key);
 }
 
-async function ensureProjectsExist(app: FastifyInstance, projectIds: number[]) {
+function ensureProjectsExist(db: DbExecutor, projectIds: number[]) {
   const uniqueProjectIds = [...new Set(projectIds)];
 
   if (!uniqueProjectIds.length) {
     return;
   }
 
-  const existingProjects = app.db
+  const existingProjects = db
     .select({ id: projects.id })
     .from(projects)
     .where(inArray(projects.id, uniqueProjectIds))
     .all();
 
   if (existingProjects.length !== uniqueProjectIds.length) {
-    const existingProjectIds = new Set(existingProjects.map((project) => project.id));
+    const existingProjectIds = new Set(existingProjects.map((project: { id: number }) => project.id));
     const missingProjectId = uniqueProjectIds.find((projectId) => !existingProjectIds.has(projectId));
     throw new AppError(404, "PROJECT_NOT_FOUND", "Project not found", {
       projectId: missingProjectId
@@ -409,8 +502,24 @@ function deriveLegacyBranch(
   return preferredWorkspace?.branchName ?? fallbackBranch ?? null;
 }
 
-async function ensureWorkspaceFoldersExist(
-  app: FastifyInstance,
+function listProjectNamesById(db: DbExecutor, projectIds: number[]): Map<number, string> {
+  const uniqueProjectIds = [...new Set(projectIds)];
+
+  if (!uniqueProjectIds.length) {
+    return new Map<number, string>();
+  }
+
+  const rows = db
+    .select({ id: projects.id, name: projects.name })
+    .from(projects)
+    .where(inArray(projects.id, uniqueProjectIds))
+    .all();
+
+  return new Map(rows.map((project: { id: number; name: string }) => [project.id, project.name]));
+}
+
+function ensureWorkspaceFoldersExist(
+  db: DbExecutor,
   projectLinks: Array<{ projectId: number }>,
   workspaces: Array<{ projectFolderId: number }>
 ) {
@@ -419,16 +528,17 @@ async function ensureWorkspaceFoldersExist(
   }
 
   const folderIds = [...new Set(workspaces.map((workspace) => workspace.projectFolderId))];
-  const existingFolders = app.db.query.projectFolders.findMany({
-    where: inArray(projectFolders.id, folderIds),
-    with: {
-      project: true
-    }
-  });
+  const folders = db
+    .select({
+      id: projectFolders.id,
+      projectId: projectFolders.projectId
+    })
+    .from(projectFolders)
+    .where(inArray(projectFolders.id, folderIds))
+    .all();
 
-  const folders = await existingFolders;
   if (folders.length !== folderIds.length) {
-    const existingFolderIds = new Set(folders.map((folder) => folder.id));
+    const existingFolderIds = new Set(folders.map((folder: { id: number }) => folder.id));
     const missingFolderId = folderIds.find((folderId) => !existingFolderIds.has(folderId));
     throw new AppError(404, "PROJECT_FOLDER_NOT_FOUND", "Project folder not found", {
       projectFolderId: missingFolderId
@@ -436,7 +546,7 @@ async function ensureWorkspaceFoldersExist(
   }
 
   const linkedProjectIds = new Set(projectLinks.map((link) => link.projectId));
-  const unlinkedFolder = folders.find((folder) => !linkedProjectIds.has(folder.projectId));
+  const unlinkedFolder = folders.find((folder: { projectId: number }) => !linkedProjectIds.has(folder.projectId));
   if (unlinkedFolder) {
     throw new AppError(400, "WORKSPACE_PROJECT_FOLDER_NOT_LINKED", "Workspace folder must belong to a project linked to the ticket", {
       projectFolderId: unlinkedFolder.id,
@@ -447,8 +557,8 @@ async function ensureWorkspaceFoldersExist(
   return folders;
 }
 
-async function replaceWorkspaces(
-  app: FastifyInstance,
+function replaceWorkspaces(
+  db: DbExecutor,
   ticketId: number,
   projectLinks: Array<{ projectId: number }>,
   workspaces: Array<{ projectFolderId: number; branchName: string; baseBranch?: string | null; role?: string }>
@@ -474,15 +584,15 @@ async function replaceWorkspaces(
     uniqueKeys.add(key);
   }
 
-  await ensureWorkspaceFoldersExist(app, projectLinks, normalizedWorkspaces);
-  app.db.delete(ticketWorkspaces).where(eq(ticketWorkspaces.ticketId, ticketId)).run();
+  ensureWorkspaceFoldersExist(db, projectLinks, normalizedWorkspaces);
+  db.delete(ticketWorkspaces).where(eq(ticketWorkspaces.ticketId, ticketId)).run();
 
   if (!normalizedWorkspaces.length) {
     return;
   }
 
   const now = nowIso();
-  app.db
+  db
     .insert(ticketWorkspaces)
     .values(
       normalizedWorkspaces.map((workspace) => ({
@@ -500,7 +610,7 @@ async function replaceWorkspaces(
 }
 
 function recordProjectLinkChanges(
-  app: FastifyInstance,
+  db: DbExecutor,
   ticketId: number,
   previousLinks: Array<{ projectId: number; relationship: string; project?: { name: string } | null }>,
   nextLinks: Array<{ projectId: number; relationship: string; project?: { name: string } | null }>
@@ -512,7 +622,7 @@ function recordProjectLinkChanges(
     if (!previousByKey.has(key)) {
       const projectName = link.project?.name ?? `Project ${link.projectId}`;
       recordActivity(
-        app,
+        db,
         ticketId,
         "ticket.project_linked",
         `${projectName} linked as ${link.relationship.toLowerCase()}`
@@ -524,7 +634,7 @@ function recordProjectLinkChanges(
     if (!nextByKey.has(key)) {
       const projectName = link.project?.name ?? `Project ${link.projectId}`;
       recordActivity(
-        app,
+        db,
         ticketId,
         "ticket.project_unlinked",
         `${projectName} removed from ticket`
@@ -539,7 +649,7 @@ function formatJiraIssueLabel(issue: { key: string; summary?: string | null }) {
 }
 
 function recordJiraIssueLinkChanges(
-  app: FastifyInstance,
+  db: DbExecutor,
   ticketId: number,
   previousIssues: Array<{ key: string; summary: string }>,
   nextIssues: Array<{ key: string; summary: string }>
@@ -550,7 +660,7 @@ function recordJiraIssueLinkChanges(
   for (const [key, issue] of nextByKey) {
     if (!previousByKey.has(key)) {
       recordActivity(
-        app,
+        db,
         ticketId,
         "ticket.jira_issue_linked",
         `${formatJiraIssueLabel(issue)} linked from Jira`
@@ -561,7 +671,7 @@ function recordJiraIssueLinkChanges(
   for (const [key, issue] of previousByKey) {
     if (!nextByKey.has(key)) {
       recordActivity(
-        app,
+        db,
         ticketId,
         "ticket.jira_issue_unlinked",
         `${formatJiraIssueLabel(issue)} removed from Jira links`
@@ -570,24 +680,24 @@ function recordJiraIssueLinkChanges(
   }
 }
 
-async function replaceProjectLinks(
-  app: FastifyInstance,
+function replaceProjectLinks(
+  db: DbExecutor,
   ticketId: number,
   projectLinks: Array<{ projectId: number; relationship: string }>
 ) {
   assertUniqueProjectLinks(projectLinks);
-  await ensureProjectsExist(
-    app,
+  ensureProjectsExist(
+    db,
     projectLinks.map((link) => link.projectId)
   );
-  app.db.delete(ticketProjectLinks).where(eq(ticketProjectLinks.ticketId, ticketId)).run();
+  db.delete(ticketProjectLinks).where(eq(ticketProjectLinks.ticketId, ticketId)).run();
 
   if (!projectLinks.length) {
     return;
   }
 
   const now = nowIso();
-  app.db
+  db
     .insert(ticketProjectLinks)
     .values(
       projectLinks.map((link) => ({
@@ -600,20 +710,20 @@ async function replaceProjectLinks(
     .run();
 }
 
-async function replaceJiraIssueLinks(
-  app: FastifyInstance,
+function replaceJiraIssueLinks(
+  db: DbExecutor,
   ticketId: number,
   jiraIssues: Array<{ key: string; summary: string }>
 ) {
   assertUniqueJiraIssueLinks(jiraIssues);
-  app.db.delete(ticketJiraIssueLinks).where(eq(ticketJiraIssueLinks.ticketId, ticketId)).run();
+  db.delete(ticketJiraIssueLinks).where(eq(ticketJiraIssueLinks.ticketId, ticketId)).run();
 
   if (!jiraIssues.length) {
     return;
   }
 
   const now = nowIso();
-  app.db
+  db
     .insert(ticketJiraIssueLinks)
     .values(
       jiraIssues.map((issue) => ({
@@ -848,42 +958,63 @@ export async function createTicket(
     },
     async () => {
       const now = nowIso();
-      const key = nextTicketKey(app);
       await ensureBoardStatusExists(app, input.status);
       assertUniqueProjectLinks(input.projectLinks);
       assertUniqueJiraIssueLinks(input.jiraIssues);
-      await ensureProjectsExist(
-        app,
+      ensureProjectsExist(
+        app.db,
         input.projectLinks.map((link) => link.projectId)
       );
-      const ticket = app.db
-        .insert(tickets)
-        .values({
-          key,
-          title: input.title,
-          description: input.description,
-          branch: deriveLegacyBranch(input.workspaces ?? [], input.branch ?? null),
-          status: input.status,
-          priority: input.priority,
-          dueAt: input.dueAt ?? null,
-          createdAt: now,
-          updatedAt: now
-        })
-        .returning()
-        .get();
+      ensureWorkspaceFoldersExist(app.db, input.projectLinks, input.workspaces ?? []);
+      const projectNamesById = listProjectNamesById(
+        app.db,
+        input.projectLinks.map((link) => link.projectId)
+      );
 
+      let ticket: typeof tickets.$inferSelect;
       try {
-        await replaceProjectLinks(app, ticket.id, input.projectLinks);
-        await replaceWorkspaces(app, ticket.id, input.projectLinks, input.workspaces ?? []);
-        await replaceJiraIssueLinks(app, ticket.id, input.jiraIssues);
+        ticket = app.db.transaction((tx) => {
+          const key = nextTicketKey(tx);
+          const createdTicket = tx
+            .insert(tickets)
+            .values({
+              key,
+              title: input.title,
+              description: input.description,
+              branch: deriveLegacyBranch(input.workspaces ?? [], input.branch ?? null),
+              status: input.status,
+              priority: input.priority,
+              dueAt: input.dueAt ?? null,
+              createdAt: now,
+              updatedAt: now
+            })
+            .returning()
+            .get();
+
+          replaceProjectLinks(tx, createdTicket.id, input.projectLinks);
+          replaceWorkspaces(tx, createdTicket.id, input.projectLinks, input.workspaces ?? []);
+          replaceJiraIssueLinks(tx, createdTicket.id, input.jiraIssues);
+
+          recordActivity(tx, createdTicket.id, "ticket.created", `Ticket ${createdTicket.key} created`);
+          recordProjectLinkChanges(
+            tx,
+            createdTicket.id,
+            [],
+            input.projectLinks.map((link) => ({
+              ...link,
+              project: {
+                name: projectNamesById.get(link.projectId) ?? `Project ${link.projectId}`
+              }
+            }))
+          );
+          recordJiraIssueLinkChanges(tx, createdTicket.id, [], input.jiraIssues);
+
+          return createdTicket;
+        });
       } catch (error) {
-        app.db.delete(tickets).where(eq(tickets.id, ticket.id)).run();
         rethrowTicketConflict(error);
       }
 
-      recordActivity(app, ticket.id, "ticket.created", `Ticket ${ticket.key} created`);
-      recordProjectLinkChanges(app, ticket.id, [], await loadTicketProjectLinks(app, ticket.id));
-      recordJiraIssueLinkChanges(app, ticket.id, [], input.jiraIssues);
       logServerEvent(app, "info", "ticket.create.persisted", {
         ticketId: ticket.id,
         ticketKey: ticket.key
@@ -934,25 +1065,10 @@ export async function updateTicket(
             : input.branch
           : deriveLegacyBranch(input.workspaces, input.branch === undefined ? existing.branch : input.branch);
 
-      const updated = app.db
-        .update(tickets)
-        .set({
-          title: input.title ?? existing.title,
-          description: input.description ?? existing.description,
-          branch: nextLegacyBranch,
-          status: input.status ?? existing.status,
-          priority: input.priority ?? existing.priority,
-          dueAt: input.dueAt === undefined ? existing.dueAt : input.dueAt,
-          updatedAt: nextUpdatedAt
-        })
-        .where(eq(tickets.id, id))
-        .returning()
-        .get();
-
       if (input.projectLinks) {
         assertUniqueProjectLinks(input.projectLinks);
-        await ensureProjectsExist(
-          app,
+        ensureProjectsExist(
+          app.db,
           input.projectLinks.map((link) => link.projectId)
         );
       }
@@ -962,55 +1078,84 @@ export async function updateTicket(
       }
 
       if (input.workspaces) {
-        await ensureWorkspaceFoldersExist(app, input.projectLinks ?? existing.projectLinks, input.workspaces);
+        ensureWorkspaceFoldersExist(app.db, input.projectLinks ?? existing.projectLinks, input.workspaces);
       }
 
-      if (input.projectLinks) {
-        try {
-          await replaceProjectLinks(app, id, input.projectLinks);
-        } catch (error) {
-          rethrowTicketConflict(error);
-        }
+      const nextProjectNamesById = input.projectLinks
+        ? listProjectNamesById(
+            app.db,
+            input.projectLinks.map((link) => link.projectId)
+          )
+        : null;
 
-        const previousLinks = existing.projectLinks.map((link) => ({
-          projectId: link.projectId,
-          relationship: link.relationship,
-          project: link.project
-        }));
-        const nextLinks = await loadTicketProjectLinks(app, id);
-        recordProjectLinkChanges(app, id, previousLinks, nextLinks);
-      }
+      let updated: typeof tickets.$inferSelect;
+      try {
+        updated = app.db.transaction((tx) => {
+          const nextTicket = tx
+            .update(tickets)
+            .set({
+              title: input.title ?? existing.title,
+              description: input.description ?? existing.description,
+              branch: nextLegacyBranch,
+              status: input.status ?? existing.status,
+              priority: input.priority ?? existing.priority,
+              dueAt: input.dueAt === undefined ? existing.dueAt : input.dueAt,
+              updatedAt: nextUpdatedAt
+            })
+            .where(eq(tickets.id, id))
+            .returning()
+            .get();
 
-      if (input.workspaces) {
-        await replaceWorkspaces(app, id, input.projectLinks ?? existing.projectLinks, input.workspaces);
-      }
+          if (input.projectLinks) {
+            replaceProjectLinks(tx, id, input.projectLinks);
+            recordProjectLinkChanges(
+              tx,
+              id,
+              existing.projectLinks.map((link) => ({
+                projectId: link.projectId,
+                relationship: link.relationship,
+                project: link.project
+              })),
+              input.projectLinks.map((link) => ({
+                ...link,
+                project: {
+                  name: nextProjectNamesById?.get(link.projectId) ?? `Project ${link.projectId}`
+                }
+              }))
+            );
+          }
 
-      if (input.jiraIssues) {
-        try {
-          await replaceJiraIssueLinks(app, id, input.jiraIssues);
-        } catch (error) {
-          rethrowTicketConflict(error);
-        }
+          if (input.workspaces) {
+            replaceWorkspaces(tx, id, input.projectLinks ?? existing.projectLinks, input.workspaces);
+          }
 
-        const previousIssues = existing.jiraIssues.map((issue) => ({
-          key: issue.key,
-          summary: issue.summary
-        }));
-        const nextIssues = (await loadTicketJiraIssueLinks(app, id)).map((issue) => ({
-          key: issue.issueKey,
-          summary: issue.issueSummary
-        }));
-        recordJiraIssueLinkChanges(app, id, previousIssues, nextIssues);
-      }
+          if (input.jiraIssues) {
+            replaceJiraIssueLinks(tx, id, input.jiraIssues);
+            recordJiraIssueLinkChanges(
+              tx,
+              id,
+              existing.jiraIssues.map((issue) => ({
+                key: issue.key,
+                summary: issue.summary
+              })),
+              input.jiraIssues
+            );
+          }
 
-      if (input.status && input.status !== existing.status) {
-        recordActivity(app, id, "ticket.status.changed", `Status changed to ${input.status}`, {
-          status: input.status
+          if (input.status && input.status !== existing.status) {
+            recordActivity(tx, id, "ticket.status.changed", `Status changed to ${input.status}`, {
+              status: input.status
+            });
+          }
+
+          if (input.priority && input.priority !== existing.priority) {
+            recordActivity(tx, id, "ticket.priority.changed", `Priority changed to ${input.priority}`);
+          }
+
+          return nextTicket;
         });
-      }
-
-      if (input.priority && input.priority !== existing.priority) {
-        recordActivity(app, id, "ticket.priority.changed", `Priority changed to ${input.priority}`);
+      } catch (error) {
+        rethrowTicketConflict(error);
       }
 
       if (input.description !== undefined && input.description !== existing.description) {
@@ -1052,27 +1197,33 @@ export async function refreshTicketJiraIssues(app: FastifyInstance, id: number) 
         summary: refreshedByKey.get(normalizeJiraIssueKey(issue.key)) ?? issue.summary
       }));
 
-      await replaceJiraIssueLinks(app, id, nextIssues);
+      try {
+        app.db.transaction((tx) => {
+          replaceJiraIssueLinks(tx, id, nextIssues);
 
-      const changedCount = existing.jiraIssues.filter((issue) => {
-        const nextSummary = refreshedByKey.get(normalizeJiraIssueKey(issue.key));
-        return nextSummary !== undefined && nextSummary !== issue.summary;
-      }).length;
+          const changedCount = existing.jiraIssues.filter((issue) => {
+            const nextSummary = refreshedByKey.get(normalizeJiraIssueKey(issue.key));
+            return nextSummary !== undefined && nextSummary !== issue.summary;
+          }).length;
 
-      if (changedCount > 0) {
-        recordActivity(
-          app,
-          id,
-          "ticket.jira_issue_refreshed",
-          changedCount === 1 ? "Refreshed 1 Jira issue summary" : `Refreshed ${changedCount} Jira issue summaries`
-        );
+          if (changedCount > 0) {
+            recordActivity(
+              tx,
+              id,
+              "ticket.jira_issue_refreshed",
+              changedCount === 1 ? "Refreshed 1 Jira issue summary" : `Refreshed ${changedCount} Jira issue summaries`
+            );
+          }
+
+          logServerEvent(app, "info", "ticket.jira.refresh.result", {
+            ticketId: id,
+            linkedIssueCount: existing.jiraIssues.length,
+            changedCount
+          });
+        });
+      } catch (error) {
+        rethrowTicketConflict(error);
       }
-
-      logServerEvent(app, "info", "ticket.jira.refresh.result", {
-        ticketId: id,
-        linkedIssueCount: existing.jiraIssues.length,
-        changedCount
-      });
 
       return getTicketOrThrow(app, id);
     }
@@ -1128,31 +1279,13 @@ export async function archivePreparedTicket(
     return { ok: true };
   }
 
-  if (dirtyWorktrees.length && !options?.force) {
-    throw new AppError(
-      409,
-      "TICKET_ARCHIVE_DIRTY_WORKTREES",
-      "One or more ticket worktrees have uncommitted changes",
-      { dirtyWorktrees }
-    );
-  }
-
-  for (const workspace of archivableWorktrees) {
-    removeWorkspaceWorktree(workspace.worktreePath, {
-      force: options?.force
-    });
-  }
+  assertPreparedTicketArchiveCanProceed(prepared, options);
+  archivePreparedTicketsForCommit([prepared], options);
 
   const archivedAt = nowIso();
-  app.db
-    .update(tickets)
-    .set({
-      archivedAt,
-      updatedAt: archivedAt
-    })
-    .where(eq(tickets.id, existing.id))
-    .run();
-  recordActivity(app, existing.id, "ticket.archived", `Ticket ${existing.key} moved to history`);
+  app.db.transaction((tx) => {
+    applyTicketArchivedState(tx, existing, archivedAt);
+  });
   return { ok: true };
 }
 
@@ -1179,27 +1312,21 @@ export async function unarchiveTicket(app: FastifyInstance, id: number) {
       const archivedLinkedProjectIds = existing.projectLinks
         .filter((link) => link.project.archivedAt)
         .map((link) => link.projectId);
+      const restoredTickets = [{ id: existing.id, key: existing.key }];
 
-      if (archivedLinkedProjectIds.length) {
-        app.db
-          .update(projects)
-          .set({
-            archivedAt: null,
-            updatedAt: restoredAt
-          })
-          .where(inArray(projects.id, archivedLinkedProjectIds))
-          .run();
-      }
+      app.db.transaction((tx) => {
+        if (archivedLinkedProjectIds.length) {
+          tx.update(projects)
+            .set({
+              archivedAt: null,
+              updatedAt: restoredAt
+            })
+            .where(inArray(projects.id, archivedLinkedProjectIds))
+            .run();
+        }
 
-      app.db
-        .update(tickets)
-        .set({
-          archivedAt: null,
-          updatedAt: restoredAt
-        })
-        .where(eq(tickets.id, existing.id))
-        .run();
-      recordActivity(app, existing.id, "ticket.unarchived", `Ticket ${existing.key} restored from history`);
+        unarchiveTicketsInTransaction(tx, restoredTickets, restoredAt);
+      });
       return { ok: true };
     }
   );
@@ -1295,40 +1422,40 @@ export async function addTicketProjectLink(
   ];
 
   assertUniqueProjectLinks(nextLinks);
-  await ensureProjectsExist(app, [input.projectId]);
+  ensureProjectsExist(app.db, [input.projectId]);
+  const linkedProject = app.db
+    .select({ name: projects.name })
+    .from(projects)
+    .where(eq(projects.id, input.projectId))
+    .get();
 
   try {
-    const created = app.db
-      .insert(ticketProjectLinks)
-      .values({
+    return app.db.transaction((tx) => {
+      const created = tx
+        .insert(ticketProjectLinks)
+        .values({
+          ticketId,
+          projectId: input.projectId,
+          relationship: input.relationship,
+          createdAt: nowIso()
+        })
+        .returning()
+        .get();
+
+      tx.update(tickets)
+        .set({ updatedAt: nowIso() })
+        .where(eq(tickets.id, ticketId))
+        .run();
+
+      recordActivity(
+        tx,
         ticketId,
-        projectId: input.projectId,
-        relationship: input.relationship,
-        createdAt: nowIso()
-      })
-      .returning()
-      .get();
+        "ticket.project_linked",
+        `${linkedProject?.name ?? `Project ${input.projectId}`} linked as ${input.relationship.toLowerCase()}`
+      );
 
-    const linkedProject = app.db
-      .select({ name: projects.name })
-      .from(projects)
-      .where(eq(projects.id, input.projectId))
-      .get();
-
-    app.db
-      .update(tickets)
-      .set({ updatedAt: nowIso() })
-      .where(eq(tickets.id, ticketId))
-      .run();
-
-    recordActivity(
-      app,
-      ticketId,
-      "ticket.project_linked",
-      `${linkedProject?.name ?? `Project ${input.projectId}`} linked as ${input.relationship.toLowerCase()}`
-    );
-
-    return created;
+      return created;
+    });
   } catch (error) {
     rethrowTicketConflict(error);
   }
@@ -1351,40 +1478,41 @@ export async function addTicketJiraIssueLink(
   assertUniqueJiraIssueLinks(nextIssues);
 
   try {
-    const created = app.db
-      .insert(ticketJiraIssueLinks)
-      .values({
+    return app.db.transaction((tx) => {
+      const created = tx
+        .insert(ticketJiraIssueLinks)
+        .values({
+          ticketId,
+          issueKey: normalizeJiraIssueKey(input.key),
+          issueSummary: normalizeJiraIssueSummary(input.summary),
+          createdAt: nowIso()
+        })
+        .returning()
+        .get();
+
+      tx.update(tickets)
+        .set({ updatedAt: nowIso() })
+        .where(eq(tickets.id, ticketId))
+        .run();
+
+      recordActivity(
+        tx,
         ticketId,
-        issueKey: normalizeJiraIssueKey(input.key),
-        issueSummary: normalizeJiraIssueSummary(input.summary),
-        createdAt: nowIso()
-      })
-      .returning()
-      .get();
+        "ticket.jira_issue_linked",
+        `${formatJiraIssueLabel({
+          key: normalizeJiraIssueKey(input.key),
+          summary: normalizeJiraIssueSummary(input.summary)
+        })} linked from Jira`
+      );
 
-    app.db
-      .update(tickets)
-      .set({ updatedAt: nowIso() })
-      .where(eq(tickets.id, ticketId))
-      .run();
-
-    recordActivity(
-      app,
-      ticketId,
-      "ticket.jira_issue_linked",
-      `${formatJiraIssueLabel({
-        key: normalizeJiraIssueKey(input.key),
-        summary: normalizeJiraIssueSummary(input.summary)
-      })} linked from Jira`
-    );
-
-    return {
-      id: created.id,
-      ticketId: created.ticketId,
-      key: created.issueKey,
-      summary: created.issueSummary,
-      createdAt: created.createdAt
-    };
+      return {
+        id: created.id,
+        ticketId: created.ticketId,
+        key: created.issueKey,
+        summary: created.issueSummary,
+        createdAt: created.createdAt
+      };
+    });
   } catch (error) {
     rethrowTicketConflict(error);
   }
@@ -1402,17 +1530,18 @@ export async function deleteTicketProjectLink(app: FastifyInstance, id: number) 
     throw new AppError(404, "TICKET_PROJECT_LINK_NOT_FOUND", "Ticket project link not found");
   }
 
-  app.db.delete(ticketProjectLinks).where(eq(ticketProjectLinks.id, id)).run();
-  app.db
-    .update(tickets)
-    .set({ updatedAt: nowIso() })
-    .where(eq(tickets.id, existing.ticketId))
-    .run();
-  recordActivity(
-    app,
-    existing.ticketId,
-    "ticket.project_unlinked",
-    `${existing.project.name} removed from ticket`
-  );
+  app.db.transaction((tx) => {
+    tx.delete(ticketProjectLinks).where(eq(ticketProjectLinks.id, id)).run();
+    tx.update(tickets)
+      .set({ updatedAt: nowIso() })
+      .where(eq(tickets.id, existing.ticketId))
+      .run();
+    recordActivity(
+      tx,
+      existing.ticketId,
+      "ticket.project_unlinked",
+      `${existing.project.name} removed from ticket`
+    );
+  });
   return { ok: true };
 }
