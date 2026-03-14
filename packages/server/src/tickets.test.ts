@@ -200,8 +200,9 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
 
   assert.equal(filteredListResponse.statusCode, 200);
   const filteredTickets = filteredListResponse.json();
-  assert.equal(filteredTickets.length, 1);
-  assert.equal(filteredTickets[0].id, createdTicket.id);
+  assert.equal(filteredTickets.items.length, 1);
+  assert.equal(filteredTickets.items[0].id, createdTicket.id);
+  assert.deepEqual(filteredTickets.meta.jiraIssues, ["PAY-128"]);
 
   const jiraFilteredListResponse = await app.inject({
     method: "GET",
@@ -209,7 +210,9 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   });
 
   assert.equal(jiraFilteredListResponse.statusCode, 200);
-  assert.equal(jiraFilteredListResponse.json().length, 1);
+  const jiraFilteredTickets = jiraFilteredListResponse.json();
+  assert.equal(jiraFilteredTickets.items.length, 1);
+  assert.deepEqual(jiraFilteredTickets.meta.jiraIssues, ["PAY-128"]);
 
   const updateResponse = await app.inject({
     method: "PATCH",
@@ -258,7 +261,7 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   });
 
   assert.equal(activeListResponse.statusCode, 200);
-  assert.equal(activeListResponse.json().length, 0);
+  assert.equal(activeListResponse.json().items.length, 0);
 
   const archivedListResponse = await app.inject({
     method: "GET",
@@ -267,8 +270,8 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
 
   assert.equal(archivedListResponse.statusCode, 200);
   const archivedTickets = archivedListResponse.json();
-  assert.equal(archivedTickets.length, 1);
-  assert.equal(archivedTickets[0].id, createdTicket.id);
+  assert.equal(archivedTickets.items.length, 1);
+  assert.equal(archivedTickets.items[0].id, createdTicket.id);
 
   const allListResponse = await app.inject({
     method: "GET",
@@ -276,7 +279,7 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   });
 
   assert.equal(allListResponse.statusCode, 200);
-  assert.equal(allListResponse.json().length, 1);
+  assert.equal(allListResponse.json().items.length, 1);
 
   const archivedTicketResponse = await app.inject({
     method: "GET",
@@ -315,6 +318,60 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   const visibleTickets = board.columns.flatMap((column: { tickets: Array<{ id: number }> }) => column.tickets);
   assert.equal(visibleTickets.length, 1);
   assert.equal(visibleTickets[0].id, createdTicket.id);
+});
+
+test("ticket list returns Jira facets for the current slice and sorts on the server", async () => {
+  const project = await createProject("Payments Backend", "payments-backend");
+
+  await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Low priority cleanup",
+      description: "",
+      jiraIssues: [{ key: "OPS-42", summary: "Cleanup" }],
+      status: "READY",
+      priority: "LOW",
+      projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }]
+    }
+  });
+
+  await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Critical incident",
+      description: "",
+      jiraIssues: [{ key: "PAY-128", summary: "Incident" }],
+      status: "READY",
+      priority: "CRITICAL",
+      projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }]
+    }
+  });
+
+  const sortedResponse = await app.inject({
+    method: "GET",
+    url: "/api/tickets?sort=priority&dir=asc"
+  });
+
+  assert.equal(sortedResponse.statusCode, 200);
+  const sortedPayload = sortedResponse.json();
+  assert.deepEqual(
+    sortedPayload.items.map((ticket: { priority: string }) => ticket.priority),
+    ["LOW", "CRITICAL"]
+  );
+  assert.deepEqual(sortedPayload.meta.jiraIssues, ["OPS-42", "PAY-128"]);
+
+  const jiraFilteredResponse = await app.inject({
+    method: "GET",
+    url: "/api/tickets?jiraIssue=PAY-128"
+  });
+
+  assert.equal(jiraFilteredResponse.statusCode, 200);
+  const jiraFilteredPayload = jiraFilteredResponse.json();
+  assert.equal(jiraFilteredPayload.items.length, 1);
+  assert.equal(jiraFilteredPayload.items[0].jiraIssues[0].key, "PAY-128");
+  assert.deepEqual(jiraFilteredPayload.meta.jiraIssues, ["OPS-42", "PAY-128"]);
 });
 
 test("ticket creation rolls back sequence and rows when related writes fail", async () => {

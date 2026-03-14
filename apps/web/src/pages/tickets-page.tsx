@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
@@ -21,8 +21,8 @@ import {
 } from "../features/tickets/mutations";
 import {
   useTicketQuery,
-  useTicketsQuery,
-  type TicketFilters
+  useTicketListQuery,
+  type TicketSortField
 } from "../features/tickets/queries";
 import {
   ColumnHeader,
@@ -32,14 +32,12 @@ import {
   formatStandupWindowLabel,
   getDefaultStandupWindowStart,
   hasTicketFilters,
-  parseScope,
   parseSortDirection,
   parseSortField,
   parseTicketFilters,
   scopeLabel,
-  sortTickets,
   updateSearchParam,
-  type TicketSortField
+  wasUpdatedSinceStandup
 } from "../features/tickets/tickets-page-helpers";
 import {
   getStoredAutoRunWorktreeSetup,
@@ -47,7 +45,6 @@ import {
   setStoredLastStandupCompletedAt
 } from "../lib/user-preferences";
 import { ApiError } from "../lib/api-client";
-import type { TicketListItem } from "../lib/types";
 import { isSearchFocused, isTypingTarget, parseTicketId } from "../features/tickets/url-state";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
@@ -63,18 +60,6 @@ const primaryButtonClassName =
 const chipClassName = "inline-flex min-h-6 items-center rounded-[8px] border px-2 py-0.5 text-xs";
 const filterButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900";
-
-function wasUpdatedSinceStandup(ticket: TicketListItem, standupWindowStart: string) {
-  const updatedAt = new Date(ticket.updatedAt).getTime();
-  const standupStartedAt = new Date(standupWindowStart).getTime();
-
-  if (Number.isNaN(updatedAt) || Number.isNaN(standupStartedAt)) {
-    return false;
-  }
-
-  return updatedAt >= standupStartedAt;
-}
-
 
 export function TicketsPage() {
   const { setActions, setRightActions, hasHost } = useAppHeader();
@@ -106,15 +91,14 @@ export function TicketsPage() {
   });
 
   const boardColumnsQuery = useBoardColumnsQuery();
-  const ticketsQuery = useTicketsQuery(deferredFilters);
-  const activeBoardTicketsQuery = useTicketsQuery({ scope: "active" });
+  const ticketsQuery = useTicketListQuery({
+    ...deferredFilters,
+    sort: sortField ?? undefined,
+    dir: sortField ? sortDirection : undefined
+  });
   const projectsQuery = useProjectsQuery();
   const selectedTicketQuery = useTicketQuery(selectedTicketId);
   const boardColumns = boardColumnsQuery.data?.columns ?? [];
-  const statusOrder = useMemo(
-    () => new Map(boardColumns.map((column, index) => [column.status, index])),
-    [boardColumns]
-  );
 
   useEffect(() => {
     document.title = "Tickets · Boroda";
@@ -154,21 +138,10 @@ export function TicketsPage() {
   }, [searchParams, selectedTicketId, setSearchParams]);
 
   const projects = projectsQuery.data ?? [];
-  const sortedTickets = sortTickets(ticketsQuery.data ?? [], sortField, sortDirection, statusOrder);
   const tickets = standupOnly
-    ? sortedTickets.filter((ticket) => wasUpdatedSinceStandup(ticket, standupWindowStart))
-    : sortedTickets;
-  const boardJiraIssues = useMemo(() => {
-    const issueKeys = new Set<string>();
-
-    for (const ticket of activeBoardTicketsQuery.data ?? []) {
-      for (const jiraIssue of ticket.jiraIssues) {
-        issueKeys.add(jiraIssue.key);
-      }
-    }
-
-    return [...issueKeys].sort((left, right) => left.localeCompare(right));
-  }, [activeBoardTicketsQuery.data]);
+    ? (ticketsQuery.data?.items ?? []).filter((ticket) => wasUpdatedSinceStandup(ticket, standupWindowStart))
+    : (ticketsQuery.data?.items ?? []);
+  const boardJiraIssues = ticketsQuery.data?.meta.jiraIssues ?? [];
   const ticketFiltersApplied = hasTicketFilters(parsedFilters);
   const statusFilterKey = parsedFilters.status?.join(",") ?? "";
   const priorityFilterKey = parsedFilters.priority?.join(",") ?? "";

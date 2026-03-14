@@ -2,16 +2,13 @@ import { useMemo, useState } from "react";
 import { SectionedFilterDropdown } from "../../components/ui/sectioned-filter-dropdown";
 import { TICKET_PRIORITIES, formatStatusLabel } from "../../lib/constants";
 import type { Project, TicketListItem, TicketStatus } from "../../lib/types";
-import type { TicketFilters, TicketScope } from "./queries";
+import type { TicketFilters, TicketScope, TicketSortDirection, TicketSortField } from "./queries";
 import { formatTicketTimestamp } from "./date-time";
 import { getProjectBadgeStyle } from "../../lib/project-colors";
 
 const chipClassName = "inline-flex min-h-6 items-center rounded-[8px] border px-2 py-0.5 text-xs";
 const headerButtonClassName =
   "inline-flex items-center gap-1 rounded-[8px] px-1.5 py-1 text-xs font-medium text-ink-200 transition-colors hover:bg-white/[0.04] hover:text-ink-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
-
-export type TicketSortField = "ticket" | "jira" | "status" | "priority" | "projects" | "updated";
-export type TicketSortDirection = "asc" | "desc";
 
 const priorityRank: Record<(typeof TICKET_PRIORITIES)[number], number> = {
   LOW: 0,
@@ -137,55 +134,6 @@ export function scopeLabel(scope: TicketScope) {
   }
 
   return "Current";
-}
-
-function compareTicketValues(
-  left: TicketListItem,
-  right: TicketListItem,
-  field: TicketSortField,
-  statusOrder: Map<string, number>
-) {
-  switch (field) {
-    case "ticket":
-      return `${left.key} ${left.title}`.localeCompare(`${right.key} ${right.title}`);
-    case "jira":
-      return left.jiraIssues.map((issue) => issue.key).join(", ").localeCompare(right.jiraIssues.map((issue) => issue.key).join(", "));
-    case "status":
-      return (statusOrder.get(left.status) ?? Number.MAX_SAFE_INTEGER) - (statusOrder.get(right.status) ?? Number.MAX_SAFE_INTEGER);
-    case "priority":
-      return priorityRank[left.priority] - priorityRank[right.priority];
-    case "projects":
-      return left.projectBadges.map((project) => project.name).join(", ").localeCompare(right.projectBadges.map((project) => project.name).join(", "));
-    case "updated":
-    default: {
-      const leftTimestamp = left.archivedAt ?? left.updatedAt;
-      const rightTimestamp = right.archivedAt ?? right.updatedAt;
-      return new Date(leftTimestamp).getTime() - new Date(rightTimestamp).getTime();
-    }
-  }
-}
-
-export function sortTickets(
-  tickets: TicketListItem[],
-  sortField: TicketSortField | null,
-  sortDirection: TicketSortDirection,
-  statusOrder: Map<string, number>
-) {
-  if (!sortField) {
-    return tickets;
-  }
-
-  const directionMultiplier = sortDirection === "asc" ? 1 : -1;
-
-  return [...tickets].sort((left, right) => {
-    const comparison = compareTicketValues(left, right, sortField, statusOrder);
-
-    if (comparison !== 0) {
-      return comparison * directionMultiplier;
-    }
-
-    return right.id - left.id;
-  });
 }
 
 function toggleStringFilter(searchParams: URLSearchParams, key: string, value: string) {

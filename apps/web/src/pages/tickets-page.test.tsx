@@ -10,7 +10,7 @@ import { renderWithProviders } from "../test/render-with-providers";
 const mocks = vi.hoisted(() => ({
   useBoardColumnsQuery: vi.fn(),
   useProjectsQuery: vi.fn(),
-  useTicketsQuery: vi.fn(),
+  useTicketListQuery: vi.fn(),
   useTicketQuery: vi.fn(),
   refetchTickets: vi.fn(),
   updateMutate: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock("../features/projects/queries", () => ({
 }));
 
 vi.mock("../features/tickets/queries", () => ({
-  useTicketsQuery: mocks.useTicketsQuery,
+  useTicketListQuery: mocks.useTicketListQuery,
   useTicketQuery: mocks.useTicketQuery
 }));
 
@@ -130,7 +130,7 @@ describe("TicketsPage", () => {
     window.localStorage.clear();
     mocks.useProjectsQuery.mockReset();
     mocks.useBoardColumnsQuery.mockReset();
-    mocks.useTicketsQuery.mockReset();
+    mocks.useTicketListQuery.mockReset();
     mocks.useTicketQuery.mockReset();
     mocks.refetchTickets.mockReset();
     mocks.updateMutate.mockReset();
@@ -149,39 +149,44 @@ describe("TicketsPage", () => {
       }
     });
 
-    mocks.useTicketsQuery.mockReturnValue({
-      data: [
-        createTicketListItem({
-          id: 12,
-          title: "Fix drawer save state",
-          status: "IN_PROGRESS",
-          priority: "HIGH",
-          createdAt: "",
-          updatedAt: "2026-03-06T10:00:00.000Z",
-          contextsCount: 2,
-          projectBadges: [
-            {
-              id: 1,
-              name: "Payments Backend",
-              color: "#355c7d",
-              relationship: "PRIMARY"
-            }
-          ],
-          jiraIssues: [{ key: "PAY-128", summary: "Fix drawer save state" }]
-        }),
-        createTicketListItem({
-          id: 21,
-          key: "BRD-21",
-          title: "Archive export mismatch",
-          status: secondaryTicketStatus,
-          priority: "LOW",
-          createdAt: "",
-          updatedAt: "2026-03-07T10:00:00.000Z",
-          contextsCount: 0,
-          projectBadges: [],
-          jiraIssues: [{ key: "OPS-42", summary: "Archive export mismatch" }]
-        })
-      ],
+    mocks.useTicketListQuery.mockReturnValue({
+      data: {
+        items: [
+          createTicketListItem({
+            id: 12,
+            title: "Fix drawer save state",
+            status: "IN_PROGRESS",
+            priority: "HIGH",
+            createdAt: "",
+            updatedAt: "2026-03-06T10:00:00.000Z",
+            contextsCount: 2,
+            projectBadges: [
+              {
+                id: 1,
+                name: "Payments Backend",
+                color: "#355c7d",
+                relationship: "PRIMARY"
+              }
+            ],
+            jiraIssues: [{ key: "PAY-128", summary: "Fix drawer save state" }]
+          }),
+          createTicketListItem({
+            id: 21,
+            key: "BRD-21",
+            title: "Archive export mismatch",
+            status: secondaryTicketStatus,
+            priority: "LOW",
+            createdAt: "",
+            updatedAt: "2026-03-07T10:00:00.000Z",
+            contextsCount: 0,
+            projectBadges: [],
+            jiraIssues: [{ key: "OPS-42", summary: "Archive export mismatch" }]
+          })
+        ],
+        meta: {
+          jiraIssues: ["OPS-42", "PAY-128"]
+        }
+      },
       isLoading: false,
       isError: false,
       refetch: mocks.refetchTickets
@@ -199,29 +204,33 @@ describe("TicketsPage", () => {
 
     renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets"] });
 
-    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({ q: undefined, scope: "active" });
+    expect(mocks.useTicketListQuery).toHaveBeenCalledWith({ dir: undefined, q: undefined, scope: "active", sort: undefined });
 
     await user.type(screen.getByLabelText("Search"), "drawer");
-    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({ q: "drawer", scope: "active" });
+    expect(mocks.useTicketListQuery).toHaveBeenCalledWith({ dir: undefined, q: "drawer", scope: "active", sort: undefined });
 
     await user.click(screen.getByRole("tab", { name: "Archived" }));
-    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({ q: "drawer", scope: "archived" });
+    expect(mocks.useTicketListQuery).toHaveBeenCalledWith({ dir: undefined, q: "drawer", scope: "archived", sort: undefined });
 
     await user.click(screen.getByRole("button", { name: "Filter" }));
     await user.click(screen.getByLabelText(doneColumn.label));
-    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({
+    expect(mocks.useTicketListQuery).toHaveBeenCalledWith({
+      dir: undefined,
       q: "drawer",
       scope: "archived",
+      sort: undefined,
       status: [doneColumn.status]
     });
 
     await user.click(screen.getByRole("button", { name: "Jira issue" }));
     await user.type(screen.getByLabelText("Jira issue filter"), "PAY");
     await user.click(screen.getByLabelText("PAY-128"));
-    expect(mocks.useTicketsQuery).toHaveBeenCalledWith({
+    expect(mocks.useTicketListQuery).toHaveBeenCalledWith({
+      dir: undefined,
       q: "drawer",
       jiraIssue: ["PAY-128"],
       scope: "archived",
+      sort: undefined,
       status: [doneColumn.status]
     });
   });
@@ -231,23 +240,32 @@ describe("TicketsPage", () => {
 
     renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets"] });
 
-    const rowsBefore = screen.getAllByRole("button", { name: /Open ticket /i });
-    expect(rowsBefore[0]).toHaveAccessibleName("Open ticket BRD-12 Fix drawer save state");
-
     await user.click(screen.getByRole("button", { name: "Priority, not sorted" }));
     expect(screen.getByRole("button", { name: "Priority, ascending" })).toBeInTheDocument();
-    let rows = screen.getAllByRole("button", { name: /Open ticket /i });
-    expect(rows[0]).toHaveAccessibleName("Open ticket BRD-21 Archive export mismatch");
+    expect(mocks.useTicketListQuery).toHaveBeenCalledWith({
+      dir: "asc",
+      q: undefined,
+      scope: "active",
+      sort: "priority"
+    });
 
     await user.click(screen.getByRole("button", { name: "Priority, ascending" }));
     expect(screen.getByRole("button", { name: "Priority, descending" })).toBeInTheDocument();
-    rows = screen.getAllByRole("button", { name: /Open ticket /i });
-    expect(rows[0]).toHaveAccessibleName("Open ticket BRD-12 Fix drawer save state");
+    expect(mocks.useTicketListQuery).toHaveBeenCalledWith({
+      dir: "desc",
+      q: undefined,
+      scope: "active",
+      sort: "priority"
+    });
 
     await user.click(screen.getByRole("button", { name: "Priority, descending" }));
     expect(screen.getByRole("button", { name: "Priority, not sorted" })).toBeInTheDocument();
-    rows = screen.getAllByRole("button", { name: /Open ticket /i });
-    expect(rows[0]).toHaveAccessibleName("Open ticket BRD-12 Fix drawer save state");
+    expect(mocks.useTicketListQuery).toHaveBeenCalledWith({
+      dir: undefined,
+      q: undefined,
+      scope: "active",
+      sort: undefined
+    });
   });
 
   it("shows standup state in the subtitle and keeps clear all scoped to ticket filters", async () => {
@@ -318,21 +336,26 @@ describe("TicketsPage", () => {
   it("restores archived tickets from the drawer", async () => {
     const user = userEvent.setup();
 
-    mocks.useTicketsQuery.mockReturnValue({
-      data: [
-        createTicketListItem({
-          id: 12,
-          title: "Fix drawer save state",
-          status: "IN_PROGRESS",
-          priority: "HIGH",
-          createdAt: "",
-          updatedAt: "2026-03-06T10:00:00.000Z",
-          archivedAt: "2026-03-10T10:00:00.000Z",
-          contextsCount: 2,
-          projectBadges: [],
+    mocks.useTicketListQuery.mockReturnValue({
+      data: {
+        items: [
+          createTicketListItem({
+            id: 12,
+            title: "Fix drawer save state",
+            status: "IN_PROGRESS",
+            priority: "HIGH",
+            createdAt: "",
+            updatedAt: "2026-03-06T10:00:00.000Z",
+            archivedAt: "2026-03-10T10:00:00.000Z",
+            contextsCount: 2,
+            projectBadges: [],
+            jiraIssues: []
+          })
+        ],
+        meta: {
           jiraIssues: []
-        })
-      ],
+        }
+      },
       isLoading: false,
       isError: false,
       refetch: mocks.refetchTickets

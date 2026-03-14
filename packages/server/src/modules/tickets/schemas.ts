@@ -55,7 +55,9 @@ export const ticketQuerySchema = z.object({
   ),
   q: z.string().optional(),
   jiraIssue: z.preprocess((value) => toArray(value), z.array(z.string().trim().min(1)).default([])),
-  scope: z.enum(["active", "archived", "all"]).default("active")
+  scope: z.enum(["active", "archived", "all"]).default("active"),
+  sort: z.enum(["ticket", "jira", "status", "priority", "projects", "updated"]).default("updated"),
+  dir: z.enum(["asc", "desc"]).default("desc")
 });
 
 export const createTicketSchema = z.object({

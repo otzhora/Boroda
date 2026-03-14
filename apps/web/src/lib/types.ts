@@ -169,6 +169,13 @@ export interface TicketListItem {
   jiraIssues: JiraIssueLinkSummary[];
 }
 
+export interface TicketListResponse {
+  items: TicketListItem[];
+  meta: {
+    jiraIssues: string[];
+  };
+}
+
 export interface TicketWorkspace {
   id: number;
   ticketId: number;

@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { Ticket, TicketListItem, TicketStatus } from "../../lib/types";
+import type { Ticket, TicketListItem, TicketListResponse, TicketStatus } from "../../lib/types";
 import { TICKET_PRIORITIES } from "../../lib/constants";
 
 export type TicketScope = "active" | "archived" | "all";
+export type TicketSortField = "ticket" | "jira" | "status" | "priority" | "projects" | "updated";
+export type TicketSortDirection = "asc" | "desc";
 
 export interface TicketFilters {
   status?: TicketStatus[];
@@ -12,6 +14,8 @@ export interface TicketFilters {
   q?: string;
   jiraIssue?: string[];
   scope?: TicketScope;
+  sort?: TicketSortField;
+  dir?: TicketSortDirection;
 }
 
 export function ticketQueryKey(ticketId: number | null) {
@@ -54,6 +58,11 @@ function toTicketSearchParams(filters: TicketFilters) {
     searchParams.set("scope", filters.scope);
   }
 
+  if (filters.sort) {
+    searchParams.set("sort", filters.sort);
+    searchParams.set("dir", filters.dir ?? "asc");
+  }
+
   const queryString = searchParams.toString();
   return queryString ? `?${queryString}` : "";
 }
@@ -70,7 +79,19 @@ export function useTicketQuery(ticketId: number | null) {
 export function useTicketsQuery(filters: TicketFilters = {}) {
   return useQuery({
     queryKey: ticketsQueryKey(filters),
-    queryFn: () => apiClient<TicketListItem[]>(`/api/tickets${toTicketSearchParams(filters)}`),
+    queryFn: async () => {
+      const response = await apiClient<TicketListResponse>(`/api/tickets${toTicketSearchParams(filters)}`);
+      return response.items;
+    },
+    gcTime: 30 * 1000,
+    placeholderData: (previousData) => previousData
+  });
+}
+
+export function useTicketListQuery(filters: TicketFilters = {}) {
+  return useQuery({
+    queryKey: ticketsQueryKey(filters),
+    queryFn: () => apiClient<TicketListResponse>(`/api/tickets${toTicketSearchParams(filters)}`),
     gcTime: 30 * 1000,
     placeholderData: (previousData) => previousData
   });

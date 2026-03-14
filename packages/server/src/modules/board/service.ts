@@ -1,7 +1,7 @@
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { projects, ticketJiraIssueLinks, ticketProjectLinks, tickets, workContexts } from "../../db/schema";
 import { ensureBoardColumnsPresent } from "./columns";
+import { buildTicketListItems, loadTicketListDecorations } from "../tickets/service/shared";
 
 export async function getBoard(
   app: FastifyInstance,
@@ -48,48 +48,13 @@ export async function getBoard(
   });
 
   const ids = allTickets.map((ticket) => ticket.id);
-  const links = ids.length
-    ? app.db
-        .select({
-          ticketId: ticketProjectLinks.ticketId,
-          projectId: projects.id,
-          projectName: projects.name,
-          projectColor: projects.color,
-          relationship: ticketProjectLinks.relationship
-        })
-        .from(ticketProjectLinks)
-        .innerJoin(projects, eq(ticketProjectLinks.projectId, projects.id))
-        .where(inArray(ticketProjectLinks.ticketId, ids))
-        .all()
-    : [];
-  const contextCounts = ids.length
-    ? app.db
-        .select({
-          ticketId: workContexts.ticketId,
-          count: sql<number>`count(*)`
-        })
-        .from(workContexts)
-        .where(inArray(workContexts.ticketId, ids))
-        .groupBy(workContexts.ticketId)
-        .all()
-    : [];
-  const jiraIssueLinks = ids.length
-    ? app.db
-        .select({
-          ticketId: ticketJiraIssueLinks.ticketId,
-          key: ticketJiraIssueLinks.issueKey,
-          summary: ticketJiraIssueLinks.issueSummary
-        })
-        .from(ticketJiraIssueLinks)
-        .where(inArray(ticketJiraIssueLinks.ticketId, ids))
-        .all()
-    : [];
+  const decoratedTickets = buildTicketListItems(allTickets, await loadTicketListDecorations(app.db, ids));
 
   return {
     columns: configuredColumns.map((column) => ({
       status: column.status,
       label: column.label,
-      tickets: allTickets
+      tickets: decoratedTickets
         .filter((ticket) => ticket.status === column.status)
         .map((ticket) => ({
           id: ticket.id,
@@ -98,21 +63,9 @@ export async function getBoard(
           status: ticket.status,
           priority: ticket.priority,
           updatedAt: ticket.updatedAt,
-          contextsCount: contextCounts.find((item) => item.ticketId === ticket.id)?.count ?? 0,
-          projectBadges: links
-            .filter((link) => link.ticketId === ticket.id)
-            .map((link) => ({
-              id: link.projectId,
-              name: link.projectName,
-              color: link.projectColor,
-              relationship: link.relationship
-            })),
-          jiraIssues: jiraIssueLinks
-            .filter((issue) => issue.ticketId === ticket.id)
-            .map((issue) => ({
-              key: issue.key,
-              summary: issue.summary
-            }))
+          contextsCount: ticket.contextsCount,
+          projectBadges: ticket.projectBadges,
+          jiraIssues: ticket.jiraIssues
         }))
     }))
   };
