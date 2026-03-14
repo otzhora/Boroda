@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { createBrowserRouter, NavLink, Outlet, RouterProvider } from "react-router-dom";
 import { BoardPage } from "../pages/board-page";
 import { JiraPage } from "../pages/jira-page";
@@ -7,18 +8,14 @@ import { SettingsPage } from "../pages/settings-page";
 import { TicketsPage } from "../pages/tickets-page";
 
 interface AppHeaderContextValue {
-  actions: ReactNode;
-  setActions: (actions: ReactNode) => void;
-  rightActions: ReactNode;
-  setRightActions: (actions: ReactNode) => void;
+  actionsHost: HTMLDivElement | null;
+  rightActionsHost: HTMLDivElement | null;
   hasHost: boolean;
 }
 
 const AppHeaderContext = createContext<AppHeaderContextValue>({
-  actions: null,
-  setActions: () => {},
-  rightActions: null,
-  setRightActions: () => {},
+  actionsHost: null,
+  rightActionsHost: null,
   hasHost: false
 });
 
@@ -26,9 +23,19 @@ export function useAppHeader() {
   return useContext(AppHeaderContext);
 }
 
+export function AppHeaderActions({ children }: { children: ReactNode }) {
+  const { actionsHost } = useAppHeader();
+  return actionsHost ? createPortal(children, actionsHost) : null;
+}
+
+export function AppHeaderRightActions({ children }: { children: ReactNode }) {
+  const { rightActionsHost } = useAppHeader();
+  return rightActionsHost ? createPortal(children, rightActionsHost) : null;
+}
+
 function AppShell() {
-  const [actions, setActions] = useState<ReactNode>(null);
-  const [rightActions, setRightActions] = useState<ReactNode>(null);
+  const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null);
+  const [rightActionsHost, setRightActionsHost] = useState<HTMLDivElement | null>(null);
   const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
     `inline-flex min-h-10 items-center border-b-2 px-1 py-2 text-sm font-medium transition-colors ${
       isActive
@@ -37,7 +44,7 @@ function AppShell() {
     }`;
 
   return (
-    <AppHeaderContext.Provider value={{ actions, setActions, rightActions, setRightActions, hasHost: true }}>
+    <AppHeaderContext.Provider value={{ actionsHost, rightActionsHost, hasHost: true }}>
       <div className="flex min-h-screen w-full flex-col">
         <a
           href="#content"
@@ -65,13 +72,9 @@ function AppShell() {
               </nav>
             </div>
             <div className="pointer-events-none absolute inset-y-0 left-1/2 flex w-full max-w-[44rem] -translate-x-1/2 items-center justify-center px-4">
-              <div className="pointer-events-auto flex min-w-0 items-center justify-center gap-2">
-                {actions}
-              </div>
+              <div ref={setActionsHost} className="pointer-events-auto flex min-w-0 items-center justify-center gap-2" />
             </div>
-            <div className="flex min-w-0 items-center justify-end gap-2">
-              {rightActions}
-            </div>
+            <div ref={setRightActionsHost} className="flex min-w-0 items-center justify-end gap-2" />
           </div>
         </header>
         <main

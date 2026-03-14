@@ -11,7 +11,7 @@ import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescrip
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
 import { SectionedFilterDropdown } from "../components/ui/sectioned-filter-dropdown";
 import { ModalDialog } from "../components/ui/modal-dialog";
-import { useAppHeader } from "../app/router";
+import { AppHeaderActions, AppHeaderRightActions, useAppHeader } from "../app/router";
 import { BoardFilterDropdown, hasBoardFilters, toQuickCreatePayload } from "../features/board/board-page-helpers";
 import {
   useCreateBoardColumnMutation,
@@ -53,7 +53,7 @@ const primaryButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-accent-500/40 bg-accent-500 px-3.5 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-accent-300 disabled:cursor-progress disabled:opacity-70";
 
 export function BoardPage() {
-  const { setActions, setRightActions, hasHost } = useAppHeader();
+  const { hasHost } = useAppHeader();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(EMPTY_BOARD_FILTERS);
@@ -264,79 +264,61 @@ export function BoardPage() {
     };
   }, []);
 
-  useEffect(() => {
-    const renderSearchControl = () => (
-      <label className="shrink-0">
-        <span className="sr-only">Search</span>
-        <input
-          ref={searchInputRef}
-          className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
-          placeholder="Search…"
-          value={boardFilters.q ?? ""}
-          onChange={(event) => {
-            const value = event.target.value;
-            setBoardFilters((current) => ({
-              ...current,
-              q: value || undefined
-            }));
-          }}
-        />
-      </label>
-    );
+  const renderSearchControl = () => (
+    <label className="shrink-0">
+      <span className="sr-only">Search</span>
+      <input
+        ref={searchInputRef}
+        className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
+        placeholder="Search…"
+        value={boardFilters.q ?? ""}
+        onChange={(event) => {
+          const value = event.target.value;
+          setBoardFilters((current) => ({
+            ...current,
+            q: value || undefined
+          }));
+        }}
+      />
+    </label>
+  );
 
-    const renderHeaderActions = () => (
-      <div className="flex min-w-0 items-center justify-center gap-2">
-        {renderSearchControl()}
-        <BoardFilterDropdown
-          filters={boardFilters}
-          projects={projects}
-          inputClassName={inputClassName}
-          primaryButtonClassName={primaryButtonClassName}
-          secondaryButtonClassName={secondaryButtonClassName}
-          onUpdateFilters={setBoardFilters}
-          onClearFilters={() => {
-            setBoardFilters(EMPTY_BOARD_FILTERS);
-          }}
-          hotkeySignal={filterHotkeySignal}
-        />
-        <button
-          type="button"
-          className={primaryButtonClassName}
-          onClick={() => {
-            setIsQuickCreateOpen(true);
-          }}
-        >
-          Create
-        </button>
-      </div>
-    );
-
-    setActions(
-      renderHeaderActions()
-    );
-    setRightActions(
-      <Link to="/settings" className={secondaryButtonClassName}>
-        Settings
-      </Link>
-    );
-
-    return () => {
-      setActions(null);
-      setRightActions(null);
-    };
-  }, [
-    boardFilters.priority,
-    boardFilters.projectId,
-    boardFilters.q,
-    boardHasFilters,
-    filterHotkeySignal,
-    projects,
-    setActions,
-    setRightActions
-  ]);
+  const renderHeaderActions = () => (
+    <div className="flex min-w-0 items-center justify-center gap-2">
+      {renderSearchControl()}
+      <BoardFilterDropdown
+        filters={boardFilters}
+        projects={projects}
+        inputClassName={inputClassName}
+        primaryButtonClassName={primaryButtonClassName}
+        secondaryButtonClassName={secondaryButtonClassName}
+        onUpdateFilters={setBoardFilters}
+        onClearFilters={() => {
+          setBoardFilters(EMPTY_BOARD_FILTERS);
+        }}
+        hotkeySignal={filterHotkeySignal}
+      />
+      <button
+        type="button"
+        className={primaryButtonClassName}
+        onClick={() => {
+          setIsQuickCreateOpen(true);
+        }}
+      >
+        Create
+      </button>
+    </div>
+  );
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col gap-4">
+      <AppHeaderActions>{renderHeaderActions()}</AppHeaderActions>
+      <AppHeaderRightActions>
+        <Link to="/settings" className={secondaryButtonClassName}>
+          Settings
+        </Link>
+      </AppHeaderRightActions>
+
       {actionError ? (
         <p className={`${softPanelClassName} m-0 text-sm text-danger-400`} role="alert">
           {actionError}

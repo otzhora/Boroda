@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useAppHeader } from "../app/router";
+import { AppHeaderRightActions } from "../app/router";
 import { ModalDialog } from "../components/ui/modal-dialog";
 import { apiClient } from "../lib/api-client";
 import { getProjectBadgeStyle } from "../lib/project-colors";
@@ -214,7 +214,6 @@ function getProjectStatusClassName(folderCount: number) {
 }
 
 export function ProjectsPage() {
-  const { setActions, setRightActions } = useAppHeader();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projectForm, setProjectForm] = useState<ProjectFormState>(createProjectFormState());
@@ -237,20 +236,6 @@ export function ProjectsPage() {
   const projectScope =
     scopeParam === "archived" || scopeParam === "all" ? scopeParam : "active";
   const projectsQueryKey = [...PROJECTS_QUERY_KEY, { scope: projectScope }] as const;
-
-  useEffect(() => {
-    setActions(null);
-    setRightActions(
-      <Link to="/settings" className={headerActionButtonClassName}>
-        Settings
-      </Link>
-    );
-
-    return () => {
-      setActions(null);
-      setRightActions(null);
-    };
-  }, [setActions, setRightActions]);
 
   const projectsQuery = useQuery({
     queryKey: projectsQueryKey,
@@ -998,6 +983,12 @@ export function ProjectsPage() {
 
   return (
     <>
+      <AppHeaderRightActions>
+        <Link to="/settings" className={headerActionButtonClassName}>
+          Settings
+        </Link>
+      </AppHeaderRightActions>
+
       <ModalDialog
         open={isCreateProjectOpen}
         title="New project"

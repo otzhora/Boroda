@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useAppHeader } from "../app/router";
+import { AppHeaderActions, AppHeaderRightActions, useAppHeader } from "../app/router";
 import { useBoardColumnsQuery } from "../features/board/queries";
 import { useAssignedJiraIssueLinksQuery, useJiraSettingsQuery } from "../features/jira/queries";
 import { useProjectsQuery } from "../features/projects/queries";
@@ -145,7 +145,7 @@ function sortIssues<
 }
 
 export function JiraPage() {
-  const { setActions, setRightActions, hasHost } = useAppHeader();
+  const { hasHost } = useAppHeader();
   const [searchParams, setSearchParams] = useSearchParams();
   const settingsQuery = useJiraSettingsQuery();
   const issuesQuery = useAssignedJiraIssueLinksQuery();
@@ -288,20 +288,6 @@ export function JiraPage() {
     </label>
   );
 
-  useEffect(() => {
-    setActions(hasHost ? renderSearchControl() : null);
-    setRightActions(
-      <Link to="/settings" className={headerActionButtonClassName}>
-        Settings
-      </Link>
-    );
-
-    return () => {
-      setActions(null);
-      setRightActions(null);
-    };
-  }, [hasHost, issueSearchInput, searchParams, setActions, setRightActions]);
-
   const openQuickCreate = (issue: { key: string; summary: string }) => {
     setIssueToCreateFrom(issue);
     setQuickCreateForm(createLinkedQuickTicketForm(issue));
@@ -334,6 +320,13 @@ export function JiraPage() {
 
   return (
     <section className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-3">
+      <AppHeaderActions>{renderSearchControl()}</AppHeaderActions>
+      <AppHeaderRightActions>
+        <Link to="/settings" className={headerActionButtonClassName}>
+          Settings
+        </Link>
+      </AppHeaderRightActions>
+
       <div className="flex min-h-12 flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-3">
         <h1 className="m-0 text-base font-semibold text-ink-50">Assigned Jira issues</h1>
         <div className="flex flex-wrap items-center gap-2">

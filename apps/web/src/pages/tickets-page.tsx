@@ -2,7 +2,7 @@ import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "r
 import { Link, useSearchParams } from "react-router-dom";
 import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
-import { useAppHeader } from "../app/router";
+import { AppHeaderActions, AppHeaderRightActions, useAppHeader } from "../app/router";
 import { TICKET_PRIORITIES, formatStatusLabel } from "../lib/constants";
 import { useBoardColumnsQuery, type BoardFilters } from "../features/board/queries";
 import { useProjectsQuery } from "../features/projects/queries";
@@ -62,7 +62,7 @@ const filterButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900";
 
 export function TicketsPage() {
-  const { setActions, setRightActions, hasHost } = useAppHeader();
+  const { hasHost } = useAppHeader();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => parseTicketId(searchParams.get("ticketId")));
   const [editForm, setEditForm] = useState<TicketFormState>(createEmptyTicketForm());
@@ -339,48 +339,22 @@ export function TicketsPage() {
     </div>
   );
 
-  useEffect(() => {
-    setActions(
-      hasHost ? (
-        renderHeaderActions()
-      ) : null
-    );
-    setRightActions(
-      <>
-        {standupOnly ? (
-          <button type="button" className={primaryButtonClassName} onClick={handleMarkStandupDone}>
-            Standup done
-          </button>
-        ) : null}
-        <Link to="/settings" className={secondaryButtonClassName}>
-          Settings
-        </Link>
-      </>
-    );
-
-    return () => {
-      setActions(null);
-      setRightActions(null);
-    };
-  }, [
-    boardJiraIssuesKey,
-    filterHotkeySignal,
-    hasHost,
-    jiraFilterKey,
-    parsedFilters.q,
-    parsedFilters.scope,
-    priorityFilterKey,
-    projectFilterKey,
-    projectOptionsKey,
-    searchInputValue,
-    setActions,
-    setRightActions,
-    standupOnly,
-    statusFilterKey
-  ]);
-
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col gap-4">
+      <AppHeaderActions>{renderHeaderActions()}</AppHeaderActions>
+      <AppHeaderRightActions>
+        <>
+          {standupOnly ? (
+            <button type="button" className={primaryButtonClassName} onClick={handleMarkStandupDone}>
+              Standup done
+            </button>
+          ) : null}
+          <Link to="/settings" className={secondaryButtonClassName}>
+            Settings
+          </Link>
+        </>
+      </AppHeaderRightActions>
+
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-3">
         <div className="grid gap-1">
           <h1 className="m-0 text-base font-semibold text-ink-50">Tickets</h1>
