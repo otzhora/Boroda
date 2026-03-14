@@ -1,5 +1,6 @@
 import { DEFAULT_BOARD_STATUS } from "../../lib/constants";
 import type { JiraIssueLinkSummary, Ticket, TicketPriority, TicketProjectRelationship, TicketStatus } from "../../lib/types";
+import { getPreferredTicketProjectFolderId } from "./project-links";
 
 export interface TicketProjectLinkFormState {
   projectId: string;
@@ -78,37 +79,6 @@ function toOptionalApiText(value: string) {
   return trimmedValue.length ? trimmedValue : null;
 }
 
-function getPreferredProjectFolderId(ticket: Ticket) {
-  const sortedLinks = [...ticket.projectLinks].sort((left, right) => {
-    if (left.relationship === right.relationship) {
-      return left.projectId - right.projectId;
-    }
-
-    if (left.relationship === "PRIMARY") {
-      return -1;
-    }
-
-    if (right.relationship === "PRIMARY") {
-      return 1;
-    }
-
-    return left.projectId - right.projectId;
-  });
-
-  for (const link of sortedLinks) {
-    const primaryFolder = link.project.folders.find((folder) => folder.isPrimary);
-    if (primaryFolder) {
-      return String(primaryFolder.id);
-    }
-
-    if (link.project.folders[0]) {
-      return String(link.project.folders[0].id);
-    }
-  }
-
-  return "";
-}
-
 function dedupeJiraIssues(jiraIssues: TicketJiraIssueFormState[]) {
   const seenKeys = new Set<string>();
 
@@ -137,7 +107,7 @@ export function toTicketForm(ticket: Ticket): TicketFormState {
       : ticket.branch
         ? [
             {
-              projectFolderId: getPreferredProjectFolderId(ticket),
+              projectFolderId: getPreferredTicketProjectFolderId(ticket),
               branchName: ticket.branch,
               baseBranch: "",
               role: "primary"

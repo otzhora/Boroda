@@ -12,6 +12,7 @@ import { TicketDrawer } from "../components/ticket/ticket-drawer";
 import { SectionedFilterDropdown } from "../components/ui/sectioned-filter-dropdown";
 import { ModalDialog } from "../components/ui/modal-dialog";
 import { useAppHeader } from "../app/router";
+import { BoardFilterDropdown, hasBoardFilters, toQuickCreatePayload } from "../features/board/board-page-helpers";
 import {
   useCreateBoardColumnMutation,
   useDeleteBoardColumnMutation,
@@ -37,6 +38,7 @@ import { useTicketQuery } from "../features/tickets/queries";
 import { DEFAULT_BOARD_STATUS, TICKET_PRIORITIES } from "../lib/constants";
 import { ApiError } from "../lib/api-client";
 import { getStoredAutoRunWorktreeSetup } from "../lib/user-preferences";
+import { isSearchFocused, isTypingTarget, parseTicketId } from "../features/tickets/url-state";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
 const panelClassName =
@@ -49,156 +51,6 @@ const secondaryButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900 disabled:cursor-progress disabled:opacity-70";
 const primaryButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-accent-500/40 bg-accent-500 px-3.5 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-accent-300 disabled:cursor-progress disabled:opacity-70";
-
-function hasBoardFilters(filters: BoardFilters) {
-  return Boolean(filters.projectId || filters.priority || filters.q?.trim());
-}
-
-function isTypingTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  return (
-    target.isContentEditable ||
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement
-  );
-}
-
-function isSearchFocused(searchInputRef: React.RefObject<HTMLInputElement | null>) {
-  return document.activeElement === searchInputRef.current;
-}
-
-function toQuickCreatePayload(form: QuickTicketFormState) {
-  return {
-    title: form.title.trim(),
-    description: "",
-    branch: null,
-    workspaces: [],
-    jiraIssues: [],
-    status: form.status,
-    priority: form.priority,
-    dueAt: null,
-    projectLinks: form.projectId
-      ? [{ projectId: Number(form.projectId), relationship: "PRIMARY" as const }]
-      : []
-  };
-}
-
-function parseTicketId(value: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function BoardFilterDropdown(props: {
-  filters: BoardFilters;
-  projects: Array<{ id: number; name: string }>;
-  onUpdateFilters: (updater: (current: BoardFilters) => BoardFilters) => void;
-  onClearFilters: () => void;
-  hotkeySignal: number;
-}) {
-  const [projectSearch, setProjectSearch] = useState("");
-  const hasFilters = hasBoardFilters(props.filters);
-
-  const filteredProjects = props.projects.filter((project) =>
-    project.name.toLowerCase().includes(projectSearch.trim().toLowerCase())
-  );
-
-  return (
-    <SectionedFilterDropdown
-      title="Board filters"
-      hotkeySignal={props.hotkeySignal}
-      hasFilters={hasFilters}
-      sections={[
-        { id: "project", label: "Project" },
-        { id: "priority", label: "Priority" }
-      ]}
-      initialSection="project"
-      activeButtonClassName={primaryButtonClassName}
-      inactiveButtonClassName={secondaryButtonClassName}
-      onClear={props.onClearFilters}
-      renderSection={(section) => {
-        if (section === "project") {
-          return (
-                <div className="grid gap-2">
-                  <span className="text-sm font-medium text-ink-100">Project</span>
-                  <input
-                    className={inputClassName}
-                    aria-label="Project filter"
-                    placeholder="Search projects…"
-                    value={projectSearch}
-                    onChange={(event) => {
-                      setProjectSearch(event.target.value);
-                    }}
-                  />
-                  <div className="grid max-h-[16rem] gap-1 overflow-auto pr-1">
-                    {filteredProjects.map((project) => {
-                      const checked = props.filters.projectId === project.id;
-
-                      return (
-                        <label key={project.id} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={checked}
-                            onChange={() => {
-                              props.onUpdateFilters((current) => ({
-                                ...current,
-                                projectId: checked ? undefined : project.id
-                              }));
-                            }}
-                          />
-                          <span className="min-w-0 truncate">{project.name}</span>
-                        </label>
-                      );
-                    })}
-                    {filteredProjects.length === 0 ? <p className="m-0 px-2 py-1 text-sm text-ink-300">No projects match</p> : null}
-                  </div>
-                </div>
-          );
-        }
-
-        if (section === "priority") {
-          return (
-                <div className="grid gap-2">
-                  <span className="text-sm font-medium text-ink-100">Priority</span>
-                  <div className="grid gap-1">
-                    {TICKET_PRIORITIES.map((priority) => {
-                      const checked = props.filters.priority === priority;
-
-                      return (
-                        <label key={priority} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={checked}
-                            onChange={() => {
-                              props.onUpdateFilters((current) => ({
-                                ...current,
-                                priority: checked ? undefined : priority
-                              }));
-                            }}
-                          />
-                          <span>{priority}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-          );
-        }
-
-        return null;
-      }}
-    />
-  );
-}
 
 export function BoardPage() {
   const { setActions, setRightActions, hasHost } = useAppHeader();
@@ -438,6 +290,9 @@ export function BoardPage() {
         <BoardFilterDropdown
           filters={boardFilters}
           projects={projects}
+          inputClassName={inputClassName}
+          primaryButtonClassName={primaryButtonClassName}
+          secondaryButtonClassName={secondaryButtonClassName}
           onUpdateFilters={setBoardFilters}
           onClearFilters={() => {
             setBoardFilters(EMPTY_BOARD_FILTERS);
@@ -510,6 +365,9 @@ export function BoardPage() {
             <BoardFilterDropdown
               filters={boardFilters}
               projects={projects}
+              inputClassName={inputClassName}
+              primaryButtonClassName={primaryButtonClassName}
+              secondaryButtonClassName={secondaryButtonClassName}
               onUpdateFilters={setBoardFilters}
               onClearFilters={() => {
                 setBoardFilters(EMPTY_BOARD_FILTERS);

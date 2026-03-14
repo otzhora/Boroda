@@ -2,7 +2,6 @@ import { useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState 
 import { Link, useSearchParams } from "react-router-dom";
 import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
-import { SectionedFilterDropdown } from "../components/ui/sectioned-filter-dropdown";
 import { useAppHeader } from "../app/router";
 import { TICKET_PRIORITIES, formatStatusLabel } from "../lib/constants";
 import { useBoardColumnsQuery, type BoardFilters } from "../features/board/queries";
@@ -23,16 +22,33 @@ import {
 import {
   useTicketQuery,
   useTicketsQuery,
-  type TicketFilters,
-  type TicketScope
+  type TicketFilters
 } from "../features/tickets/queries";
+import {
+  ColumnHeader,
+  ProjectChip,
+  TicketFilterDropdown,
+  formatLastChange,
+  formatStandupWindowLabel,
+  getDefaultStandupWindowStart,
+  hasTicketFilters,
+  parseScope,
+  parseSortDirection,
+  parseSortField,
+  parseTicketFilters,
+  scopeLabel,
+  sortTickets,
+  updateSearchParam,
+  type TicketSortField
+} from "../features/tickets/tickets-page-helpers";
 import {
   getStoredAutoRunWorktreeSetup,
   getStoredLastStandupCompletedAt,
   setStoredLastStandupCompletedAt
 } from "../lib/user-preferences";
 import { ApiError } from "../lib/api-client";
-import type { Project, TicketListItem, TicketStatus } from "../lib/types";
+import type { TicketListItem } from "../lib/types";
+import { isSearchFocused, isTypingTarget, parseTicketId } from "../features/tickets/url-state";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
 const panelClassName = "grid gap-4 rounded-[10px] border border-white/8 bg-canvas-925 px-5 py-5";
@@ -45,37 +61,8 @@ const secondaryButtonClassName =
 const primaryButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-accent-500/40 bg-accent-500 px-3.5 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-accent-300 disabled:cursor-progress disabled:opacity-70";
 const chipClassName = "inline-flex min-h-6 items-center rounded-[8px] border px-2 py-0.5 text-xs";
-const headerButtonClassName =
-  "inline-flex items-center gap-1 rounded-[8px] px-1.5 py-1 text-xs font-medium text-ink-200 transition-colors hover:bg-white/[0.04] hover:text-ink-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
 const filterButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900";
-
-type TicketSortField = "ticket" | "jira" | "status" | "priority" | "projects" | "updated";
-type TicketSortDirection = "asc" | "desc";
-type FilterSection = "status" | "priority" | "project" | "jira";
-
-const priorityRank: Record<(typeof TICKET_PRIORITIES)[number], number> = {
-  LOW: 0,
-  MEDIUM: 1,
-  HIGH: 2,
-  CRITICAL: 3
-};
-
-function hasTicketFilters(filters: TicketFilters) {
-  return Boolean(
-    filters.projectId?.length ||
-      filters.priority?.length ||
-      filters.status?.length ||
-      filters.q?.trim() ||
-      filters.jiraIssue?.length
-  );
-}
-
-function getDefaultStandupWindowStart() {
-  const date = new Date();
-  date.setHours(date.getHours() - 24);
-  return date.toISOString();
-}
 
 function wasUpdatedSinceStandup(ticket: TicketListItem, standupWindowStart: string) {
   const updatedAt = new Date(ticket.updatedAt).getTime();
@@ -88,434 +75,6 @@ function wasUpdatedSinceStandup(ticket: TicketListItem, standupWindowStart: stri
   return updatedAt >= standupStartedAt;
 }
 
-function formatStandupWindowLabel(value: string, hasSavedStandup: boolean) {
-  const prefix = hasSavedStandup ? "Since last standup" : "Showing the last 24 hours";
-  return `${prefix}: ${formatTimestamp(value)}`;
-}
-
-function isTypingTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  return (
-    target.isContentEditable ||
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement
-  );
-}
-
-function isSearchFocused(searchInputRef: React.RefObject<HTMLInputElement | null>) {
-  return document.activeElement === searchInputRef.current;
-}
-
-function parseTicketId(value: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseScope(value: string | null): TicketScope {
-  if (value === "archived" || value === "all") {
-    return value;
-  }
-
-  return "active";
-}
-
-function parseSortField(value: string | null): TicketSortField | null {
-  if (
-    value === "ticket" ||
-    value === "jira" ||
-    value === "status" ||
-    value === "priority" ||
-    value === "projects" ||
-    value === "updated"
-  ) {
-    return value;
-  }
-
-  return null;
-}
-
-function parseSortDirection(value: string | null): TicketSortDirection {
-  return value === "desc" ? "desc" : "asc";
-}
-
-function parseTicketFilters(searchParams: URLSearchParams): TicketFilters {
-  const projectIds = searchParams
-    .getAll("projectId")
-    .map((value) => Number(value))
-    .filter((value) => Number.isInteger(value) && value > 0);
-  const priorities = searchParams
-    .getAll("priority")
-    .filter((value): value is (typeof TICKET_PRIORITIES)[number] =>
-      TICKET_PRIORITIES.some((priority) => priority === value)
-    );
-  const statuses = searchParams
-    .getAll("status")
-    .map((value) => value.trim())
-    .filter((value): value is TicketStatus => value.length > 0);
-  const jiraIssues = searchParams.getAll("jiraIssue").map((value) => value.trim()).filter(Boolean);
-
-  return {
-    q: searchParams.get("q")?.trim() || undefined,
-    jiraIssue: jiraIssues.length ? jiraIssues : undefined,
-    status: statuses.length ? statuses : undefined,
-    priority: priorities.length ? priorities : undefined,
-    projectId: projectIds.length ? projectIds : undefined,
-    scope: parseScope(searchParams.get("scope"))
-  };
-}
-
-function updateSearchParam(
-  searchParams: URLSearchParams,
-  key: string,
-  value: string | undefined,
-  defaultValue?: string
-) {
-  if (!value || value === defaultValue) {
-    searchParams.delete(key);
-    return;
-  }
-
-  searchParams.set(key, value);
-}
-
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(new Date(value));
-}
-
-function formatLastChange(ticket: TicketListItem) {
-  if (ticket.archivedAt) {
-    return `Archived ${formatTimestamp(ticket.archivedAt)}`;
-  }
-
-  return `Updated ${formatTimestamp(ticket.updatedAt)}`;
-}
-
-function scopeLabel(scope: TicketScope) {
-  if (scope === "archived") {
-    return "Archived";
-  }
-
-  if (scope === "all") {
-    return "All";
-  }
-
-  return "Current";
-}
-
-function compareTicketValues(
-  left: TicketListItem,
-  right: TicketListItem,
-  field: TicketSortField,
-  statusOrder: Map<string, number>
-) {
-  switch (field) {
-    case "ticket":
-      return `${left.key} ${left.title}`.localeCompare(`${right.key} ${right.title}`);
-    case "jira":
-      return left.jiraIssues.map((issue) => issue.key).join(", ").localeCompare(right.jiraIssues.map((issue) => issue.key).join(", "));
-    case "status":
-      return (statusOrder.get(left.status) ?? Number.MAX_SAFE_INTEGER) - (statusOrder.get(right.status) ?? Number.MAX_SAFE_INTEGER);
-    case "priority":
-      return priorityRank[left.priority] - priorityRank[right.priority];
-    case "projects":
-      return left.projectBadges.map((project) => project.name).join(", ").localeCompare(right.projectBadges.map((project) => project.name).join(", "));
-    case "updated":
-    default: {
-      const leftTimestamp = left.archivedAt ?? left.updatedAt;
-      const rightTimestamp = right.archivedAt ?? right.updatedAt;
-      return new Date(leftTimestamp).getTime() - new Date(rightTimestamp).getTime();
-    }
-  }
-}
-
-function sortTickets(
-  tickets: TicketListItem[],
-  sortField: TicketSortField | null,
-  sortDirection: TicketSortDirection,
-  statusOrder: Map<string, number>
-) {
-  if (!sortField) {
-    return tickets;
-  }
-
-  const directionMultiplier = sortDirection === "asc" ? 1 : -1;
-
-  return [...tickets].sort((left, right) => {
-    const comparison = compareTicketValues(left, right, sortField, statusOrder);
-
-    if (comparison !== 0) {
-      return comparison * directionMultiplier;
-    }
-
-    return right.id - left.id;
-  });
-}
-
-function ProjectChip({ project }: { project: Pick<Project, "name" | "color"> }) {
-  return (
-    <span
-      className={`${chipClassName} border-white/10 text-ink-100`}
-      style={{
-        borderColor: `${project.color}66`,
-        backgroundColor: `${project.color}1a`
-      }}
-      title={project.name}
-    >
-      {project.name}
-    </span>
-  );
-}
-
-function toggleStringFilter(searchParams: URLSearchParams, key: string, value: string) {
-  const currentValues = searchParams.getAll(key);
-  const nextValues = currentValues.includes(value)
-    ? currentValues.filter((item) => item !== value)
-    : [...currentValues, value];
-
-  searchParams.delete(key);
-
-  for (const nextValue of nextValues) {
-    searchParams.append(key, nextValue);
-  }
-}
-
-function toggleNumericFilter(searchParams: URLSearchParams, key: string, value: number) {
-  toggleStringFilter(searchParams, key, String(value));
-}
-
-function ColumnHeader(props: {
-  label: string;
-  sortField: TicketSortField;
-  currentSortField: TicketSortField | null;
-  currentSortDirection: TicketSortDirection;
-  onSort: (field: TicketSortField) => void;
-}) {
-  const sorted = props.currentSortField === props.sortField;
-  const currentDirection =
-    sorted && props.currentSortDirection === "asc" ? "ascending" : sorted ? "descending" : "not sorted";
-
-  return (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        className={headerButtonClassName}
-        aria-label={`${props.label}, ${currentDirection}`}
-        onClick={() => {
-          props.onSort(props.sortField);
-        }}
-      >
-        <span>{props.label}</span>
-        <span aria-hidden="true" className="text-[10px] text-ink-300">
-          {sorted ? (props.currentSortDirection === "asc" ? "▲" : "▼") : "·"}
-        </span>
-      </button>
-    </div>
-  );
-}
-
-function FilterDropdown(props: {
-  filters: TicketFilters;
-  projects: Project[];
-  statuses: Array<{ status: string; label: string }>;
-  jiraIssues: string[];
-  onUpdateFilters: (updater: (nextSearchParams: URLSearchParams) => void) => void;
-  onClearFilters: () => void;
-  hotkeySignal: number;
-}) {
-  const [projectSearch, setProjectSearch] = useState("");
-  const [jiraSearch, setJiraSearch] = useState("");
-  const hasFilters = hasTicketFilters(props.filters);
-
-  const filteredProjects = useMemo(() => {
-    const searchValue = projectSearch.trim().toLowerCase();
-
-    if (!searchValue) {
-      return props.projects;
-    }
-
-    return props.projects.filter((project) => project.name.toLowerCase().includes(searchValue));
-  }, [projectSearch, props.projects]);
-
-  const filteredJiraIssues = useMemo(() => {
-    const searchValue = jiraSearch.trim().toLowerCase();
-
-    if (!searchValue) {
-      return props.jiraIssues;
-    }
-
-    return props.jiraIssues.filter((issue) => issue.toLowerCase().includes(searchValue));
-  }, [jiraSearch, props.jiraIssues]);
-
-  return (
-    <SectionedFilterDropdown
-      title="Ticket filters"
-      hotkeySignal={props.hotkeySignal}
-      hasFilters={hasFilters}
-      sections={[
-        { id: "status", label: "Status" },
-        { id: "priority", label: "Priority" },
-        { id: "project", label: "Project" },
-        { id: "jira", label: "Jira issue" }
-      ]}
-      initialSection="status"
-      activeButtonClassName={primaryButtonClassName}
-      inactiveButtonClassName={filterButtonClassName}
-      onClear={props.onClearFilters}
-      renderSection={(section) => {
-        if (section === "status") {
-          return (
-                <div className="grid gap-2">
-                  <span className="text-sm font-medium text-ink-100">Status</span>
-                  <div className="grid gap-1">
-                    {props.statuses.map((status) => {
-                      const checked = props.filters.status?.includes(status.status) ?? false;
-
-                      return (
-                        <label key={status.status} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={checked}
-                            onChange={() => {
-                              props.onUpdateFilters((nextSearchParams) => {
-                                toggleStringFilter(nextSearchParams, "status", status.status);
-                              });
-                            }}
-                          />
-                          <span>{status.label || formatStatusLabel(status.status)}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-          );
-        }
-
-        if (section === "priority") {
-          return (
-                <div className="grid gap-2">
-                  <span className="text-sm font-medium text-ink-100">Priority</span>
-                  <div className="grid gap-1">
-                    {TICKET_PRIORITIES.map((priority) => {
-                      const checked = props.filters.priority?.includes(priority) ?? false;
-
-                      return (
-                        <label key={priority} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={checked}
-                            onChange={() => {
-                              props.onUpdateFilters((nextSearchParams) => {
-                                toggleStringFilter(nextSearchParams, "priority", priority);
-                              });
-                            }}
-                          />
-                          <span>{priority}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-          );
-        }
-
-        if (section === "project") {
-          return (
-                <div className="grid gap-2">
-                  <span className="text-sm font-medium text-ink-100">Project</span>
-                  <input
-                    className={inputClassName}
-                    aria-label="Project filter"
-                    placeholder="Search projects…"
-                    value={projectSearch}
-                    onChange={(event) => {
-                      setProjectSearch(event.target.value);
-                    }}
-                  />
-                  <div className="grid max-h-[16rem] gap-1 overflow-auto pr-1">
-                    {filteredProjects.map((project) => {
-                      const checked = props.filters.projectId?.includes(project.id) ?? false;
-
-                      return (
-                        <label key={project.id} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={checked}
-                            onChange={() => {
-                              props.onUpdateFilters((nextSearchParams) => {
-                                toggleNumericFilter(nextSearchParams, "projectId", project.id);
-                              });
-                            }}
-                          />
-                          <span className="min-w-0 truncate">{project.name}</span>
-                        </label>
-                      );
-                    })}
-                    {filteredProjects.length === 0 ? <p className="m-0 px-2 py-1 text-sm text-ink-300">No projects match</p> : null}
-                  </div>
-                </div>
-          );
-        }
-
-        if (section === "jira") {
-          return (
-                <div className="grid gap-2">
-                  <span className="text-sm font-medium text-ink-100">Jira issue</span>
-                  <input
-                    className={inputClassName}
-                    aria-label="Jira issue filter"
-                    placeholder="Search Jira issues…"
-                    value={jiraSearch}
-                    onChange={(event) => {
-                      setJiraSearch(event.target.value);
-                    }}
-                  />
-                  <div className="grid max-h-[16rem] gap-1 overflow-auto pr-1">
-                    {filteredJiraIssues.map((jiraIssue) => {
-                      const checked = props.filters.jiraIssue?.includes(jiraIssue) ?? false;
-
-                      return (
-                        <label key={jiraIssue} className="flex min-h-10 items-center gap-3 rounded-[8px] px-2 py-1 text-sm text-ink-200 hover:bg-white/[0.03]">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={checked}
-                            onChange={() => {
-                              props.onUpdateFilters((nextSearchParams) => {
-                                toggleStringFilter(nextSearchParams, "jiraIssue", jiraIssue);
-                              });
-                            }}
-                          />
-                          <span>{jiraIssue}</span>
-                        </label>
-                      );
-                    })}
-                    {filteredJiraIssues.length === 0 ? <p className="m-0 px-2 py-1 text-sm text-ink-300">No Jira issues on the board</p> : null}
-                  </div>
-                </div>
-          );
-        }
-
-        return null;
-      }}
-    />
-  );
-}
 
 export function TicketsPage() {
   const { setActions, setRightActions, hasHost } = useAppHeader();
@@ -785,11 +344,14 @@ export function TicketsPage() {
 
   const renderFilterControls = () => (
     <div className="flex shrink-0 items-center">
-      <FilterDropdown
+      <TicketFilterDropdown
         filters={parsedFilters}
         projects={projects}
         statuses={boardColumns}
         jiraIssues={boardJiraIssues}
+        inputClassName={inputClassName}
+        primaryButtonClassName={primaryButtonClassName}
+        filterButtonClassName={filterButtonClassName}
         onUpdateFilters={updateFilters}
         onClearFilters={clearTicketFilters}
         hotkeySignal={filterHotkeySignal}

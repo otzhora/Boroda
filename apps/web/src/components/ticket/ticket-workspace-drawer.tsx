@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TicketFormState, TicketProjectLinkFormState, TicketWorkspaceFormState } from "../../features/tickets/form";
+import {
+  normalizeTicketProjectLinkFormState,
+  sortProjectFolders,
+  sortTicketProjectLinkFormState
+} from "../../features/tickets/project-links";
 import type { Project } from "../../lib/types";
 import { ModalDialog } from "../ui/modal-dialog";
 import { inputClassName, labelClassName } from "./ticket-form";
@@ -41,52 +46,6 @@ function ChevronIcon(props: { className?: string }) {
   );
 }
 
-function sortProjectLinks(links: TicketProjectLinkFormState[]) {
-  return [...links].sort((left, right) => {
-    if (left.relationship === right.relationship) {
-      return Number(left.projectId || 0) - Number(right.projectId || 0);
-    }
-
-    if (left.relationship === "PRIMARY") {
-      return -1;
-    }
-
-    if (right.relationship === "PRIMARY") {
-      return 1;
-    }
-
-    return Number(left.projectId || 0) - Number(right.projectId || 0);
-  });
-}
-
-function sortFolders(project: Project) {
-  return [...project.folders].sort((left, right) => {
-    if (left.isPrimary !== right.isPrimary) {
-      return Number(right.isPrimary) - Number(left.isPrimary);
-    }
-
-    return left.label.localeCompare(right.label);
-  });
-}
-
-function normalizeProjectLinks(projectLinks: TicketProjectLinkFormState[]) {
-  const seen = new Set<string>();
-
-  return projectLinks
-    .filter((link) => {
-      if (!link.projectId || seen.has(link.projectId)) {
-        return false;
-      }
-
-      seen.add(link.projectId);
-      return true;
-    })
-    .map((link, index) => ({
-      ...link,
-      relationship: index === 0 ? ("PRIMARY" as const) : ("RELATED" as const)
-    }));
-}
-
 function buildFolderProjectLookup(projects: Project[]) {
   const lookup = new Map<string, number>();
 
@@ -125,7 +84,7 @@ function buildFolderRows(form: TicketFormState, projects: Project[]) {
   return projects
     .filter((project) => linkedIds.has(project.id))
     .flatMap((project) =>
-      sortFolders(project).map((folder) => {
+      sortProjectFolders(project).map((folder) => {
         const workspace = workspaceByFolderId.get(String(folder.id));
 
         return {
@@ -172,7 +131,7 @@ export function TicketWorkspaceDrawer({
   const [projectToAdd, setProjectToAdd] = useState("");
   const [isProjectsExpanded, setIsProjectsExpanded] = useState(false);
   const openedSnapshotRef = useRef<string | null>(null);
-  const sortedProjectLinks = useMemo(() => sortProjectLinks(form.projectLinks), [form.projectLinks]);
+  const sortedProjectLinks = useMemo(() => sortTicketProjectLinkFormState(form.projectLinks), [form.projectLinks]);
   const availableProjectOptions = useMemo(
     () => getAvailableProjectOptions(projects, sortedProjectLinks),
     [projects, sortedProjectLinks]
@@ -200,7 +159,7 @@ export function TicketWorkspaceDrawer({
   };
 
   const updateProjectLinks = (projectLinks: TicketProjectLinkFormState[]) => {
-    const normalizedProjectLinks = normalizeProjectLinks(projectLinks);
+    const normalizedProjectLinks = normalizeTicketProjectLinkFormState(projectLinks);
 
     onChange((current) => ({
       ...current,
