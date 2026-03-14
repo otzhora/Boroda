@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../lib/api-client";
 import { boardColumnsFixture, defaultEditableBoardColumn, doneBoardColumn } from "../test/fixtures/board-columns";
+import { createProject, createTicket, createTicketListItem } from "../test/fixtures/models";
 import { renderWithProviders } from "../test/render-with-providers";
 
 const mocks = vi.hoisted(() => ({
@@ -140,18 +141,7 @@ describe("TicketsPage", () => {
     mocks.refreshJiraMutate.mockReset();
 
     mocks.useProjectsQuery.mockReturnValue({
-      data: [
-        {
-          id: 1,
-          name: "Payments Backend",
-          slug: "payments-backend",
-          description: "",
-          color: "#355c7d",
-          createdAt: "",
-          updatedAt: "",
-          folders: []
-        }
-      ]
+      data: [createProject({ createdAt: "", updatedAt: "" })]
     });
     mocks.useBoardColumnsQuery.mockReturnValue({
       data: {
@@ -161,18 +151,13 @@ describe("TicketsPage", () => {
 
     mocks.useTicketsQuery.mockReturnValue({
       data: [
-        {
+        createTicketListItem({
           id: 12,
-          key: "BRD-12",
           title: "Fix drawer save state",
-          description: "",
-          branch: null,
           status: "IN_PROGRESS",
           priority: "HIGH",
-          dueAt: null,
           createdAt: "",
           updatedAt: "2026-03-06T10:00:00.000Z",
-          archivedAt: null,
           contextsCount: 2,
           projectBadges: [
             {
@@ -183,23 +168,19 @@ describe("TicketsPage", () => {
             }
           ],
           jiraIssues: [{ key: "PAY-128", summary: "Fix drawer save state" }]
-        },
-        {
+        }),
+        createTicketListItem({
           id: 21,
           key: "BRD-21",
           title: "Archive export mismatch",
-          description: "",
-          branch: null,
           status: secondaryTicketStatus,
           priority: "LOW",
-          dueAt: null,
           createdAt: "",
           updatedAt: "2026-03-07T10:00:00.000Z",
-          archivedAt: null,
           contextsCount: 0,
           projectBadges: [],
           jiraIssues: [{ key: "OPS-42", summary: "Archive export mismatch" }]
-        }
+        })
       ],
       isLoading: false,
       isError: false,
@@ -339,38 +320,29 @@ describe("TicketsPage", () => {
 
     mocks.useTicketsQuery.mockReturnValue({
       data: [
-        {
+        createTicketListItem({
           id: 12,
-          key: "BRD-12",
           title: "Fix drawer save state",
-          description: "",
-          branch: null,
           status: "IN_PROGRESS",
           priority: "HIGH",
-          dueAt: null,
           createdAt: "",
           updatedAt: "2026-03-06T10:00:00.000Z",
           archivedAt: "2026-03-10T10:00:00.000Z",
           contextsCount: 2,
           projectBadges: [],
           jiraIssues: []
-        }
+        })
       ],
       isLoading: false,
       isError: false,
       refetch: mocks.refetchTickets
     });
     mocks.useTicketQuery.mockReturnValue({
-      data: {
+      data: createTicket({
         id: 12,
-        key: "BRD-12",
         title: "Fix drawer save state",
-        description: "",
-        branch: null,
-        workspaces: [],
         status: "IN_PROGRESS",
         priority: "HIGH",
-        dueAt: null,
         createdAt: "",
         updatedAt: "2026-03-06T10:00:00.000Z",
         archivedAt: "2026-03-10T10:00:00.000Z",
@@ -378,7 +350,7 @@ describe("TicketsPage", () => {
         jiraIssues: [],
         workContexts: [],
         activities: []
-      },
+      }),
       isLoading: false,
       isError: false
     });

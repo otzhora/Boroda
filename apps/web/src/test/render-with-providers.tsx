@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { createTestQueryClient } from "./query-client";
 
 interface RenderWithProvidersOptions extends Omit<RenderOptions, "wrapper"> {
   initialEntries?: string[];
@@ -10,7 +11,7 @@ interface RenderWithProvidersOptions extends Omit<RenderOptions, "wrapper"> {
 
 export function renderWithProviders(
   ui: ReactElement,
-  { initialEntries, queryClient = new QueryClient(), ...renderOptions }: RenderWithProvidersOptions = {}
+  { initialEntries, queryClient = createTestQueryClient(), ...renderOptions }: RenderWithProvidersOptions = {}
 ) {
   function Wrapper({ children }: { children: ReactNode }) {
     return (

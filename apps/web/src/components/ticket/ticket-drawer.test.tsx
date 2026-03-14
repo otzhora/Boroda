@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { toTicketForm } from "../../features/tickets/form";
 import { setStoredDefaultOpenInMode } from "../../lib/user-preferences";
 import type { Project, Ticket } from "../../lib/types";
+import { createProject, createTicket, createTicketProjectLink, createTicketWorkspace } from "../../test/fixtures/models";
 
 const uploadTicketImageSpy = vi.fn(async () => ({
   alt: "Pasted image",
@@ -54,36 +55,48 @@ vi.mock("../../features/jira/queries", () => ({
 
 import { TicketDrawer } from "./ticket-drawer";
 
-const project: Project = {
-  id: 1,
-  name: "Payments Backend",
-  slug: "payments-backend",
+const project: Project = createProject({
   description: "Core payment services",
-  color: "#355c7d",
   createdAt: "2026-02-28T12:00:00.000Z",
-  updatedAt: "2026-02-28T12:00:00.000Z",
-  archivedAt: null,
-  folders: []
-};
+  updatedAt: "2026-02-28T12:00:00.000Z"
+});
 
-const ticket: Ticket = {
-  id: 12,
-  key: "BRD-12",
+const ticket: Ticket = createTicket({
   title: "Fix save state in drawer",
   description: "Saving should return the ticket drawer to read mode.",
-  branch: null,
-  workspaces: [],
-  jiraIssues: [],
-  status: "INBOX",
   priority: "HIGH",
-  dueAt: null,
   createdAt: "2026-02-28T12:00:00.000Z",
-  updatedAt: "2026-02-28T12:00:00.000Z",
-  archivedAt: null,
-  projectLinks: [],
-  workContexts: [],
-  activities: []
-};
+  updatedAt: "2026-02-28T12:00:00.000Z"
+});
+
+function renderTicketDrawer(overrides: Partial<React.ComponentProps<typeof TicketDrawer>> = {}) {
+  const drawerTicket = overrides.ticket ?? ticket;
+
+  return render(
+    <TicketDrawer
+      ticketId={drawerTicket?.id ?? ticket.id}
+      ticket={drawerTicket}
+      isLoading={false}
+      isError={false}
+      form={overrides.form ?? (drawerTicket ? toTicketForm(drawerTicket) : toTicketForm(ticket))}
+      projects={[project]}
+      isSaving={false}
+      saveSuccessCount={0}
+      isArchiving={false}
+      isRestoring={false}
+      isOpeningInApp={false}
+      isRefreshingJira={false}
+      onChange={vi.fn()}
+      onSave={vi.fn()}
+      onArchive={vi.fn()}
+      onRestore={vi.fn()}
+      onOpenInApp={vi.fn()}
+      onRefreshJira={vi.fn()}
+      onClose={vi.fn()}
+      {...overrides}
+    />
+  );
+}
 
 function createDeferred() {
   let resolve!: () => void;
@@ -101,137 +114,72 @@ describe("TicketDrawer", () => {
   it("uses folder as the default open mode", () => {
     setStoredDefaultOpenInMode("folder");
 
-    render(
-      <TicketDrawer
-        ticketId={ticket.id}
-        ticket={{
-          ...ticket,
-          projectLinks: [
-            {
-              id: 1,
-              ticketId: ticket.id,
-              projectId: project.id,
-              relationship: "PRIMARY",
-              createdAt: "2026-02-28T12:00:00.000Z",
-              project: {
-                ...project,
-                folders: [
-                  {
-                    id: 42,
-                    projectId: project.id,
-                    label: "workspace",
-                    path: "/home/otzhora/projects/payments",
-                    defaultBranch: null,
-                    kind: "APP",
-                    isPrimary: true,
-                    existsOnDisk: true,
-                    createdAt: "2026-02-28T12:00:00.000Z",
-                    updatedAt: "2026-02-28T12:00:00.000Z"
-                  }
-                ]
-              }
+    const folderProject = createProject({
+      ...project,
+      folders: [
+        {
+          id: 42,
+          projectId: project.id,
+          label: "workspace",
+          path: "/home/otzhora/projects/payments",
+          defaultBranch: null,
+          kind: "APP",
+          isPrimary: true,
+          existsOnDisk: true,
+          createdAt: "2026-02-28T12:00:00.000Z",
+          updatedAt: "2026-02-28T12:00:00.000Z"
+        }
+      ]
+    });
+
+    renderTicketDrawer({
+      ticket: createTicket({
+        ...ticket,
+        projectLinks: [
+          createTicketProjectLink({
+            ticketId: ticket.id,
+            projectId: project.id,
+            project: folderProject,
+            createdAt: "2026-02-28T12:00:00.000Z"
+          })
+        ],
+        workspaces: [
+          createTicketWorkspace({
+            id: 91,
+            ticketId: ticket.id,
+            projectFolderId: 42,
+            branchName: "feature/open-flow",
+            worktreePath: "/tmp/worktree",
+            createdAt: "2026-02-28T12:00:00.000Z",
+            updatedAt: "2026-02-28T12:00:00.000Z",
+            projectFolder: {
+              ...folderProject.folders[0],
+              project
             }
-          ],
-          workspaces: [
-            {
-              id: 91,
-              ticketId: ticket.id,
-              projectFolderId: 42,
-              branchName: "feature/open-flow",
-              baseBranch: null,
-              role: "primary",
-              worktreePath: "/tmp/worktree",
-              createdByBoroda: true,
-              lastOpenedAt: null,
-              createdAt: "2026-02-28T12:00:00.000Z",
-              updatedAt: "2026-02-28T12:00:00.000Z",
-              projectFolder: {
-                id: 42,
-                projectId: project.id,
-                label: "workspace",
-                path: "/home/otzhora/projects/payments",
-                defaultBranch: null,
-                kind: "APP",
-                isPrimary: true,
-                existsOnDisk: true,
-                createdAt: "2026-02-28T12:00:00.000Z",
-                updatedAt: "2026-02-28T12:00:00.000Z",
-                project
-              }
-            }
-          ]
-        }}
-        isLoading={false}
-        isError={false}
-        form={toTicketForm(ticket)}
-        projects={[project]}
-        isSaving={false}
-        saveSuccessCount={0}
-        isArchiving={false}
-        isRestoring={false}
-        isOpeningInApp={false}
-        isRefreshingJira={false}
-        onChange={vi.fn()}
-        onSave={vi.fn()}
-        onArchive={vi.fn()}
-        onRestore={vi.fn()}
-        onOpenInApp={vi.fn()}
-        onRefreshJira={vi.fn()}
-        onClose={vi.fn()}
-      />
-    );
+          })
+        ]
+      })
+    });
 
     expect(screen.getByRole("button", { name: "Folder" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("renders branch and linked Jira issues in read mode", () => {
-    render(
-      <TicketDrawer
-        ticketId={ticket.id}
-        ticket={{
-          ...ticket,
-          branch: "feature/fix-save-state",
-          jiraIssues: [
-            {
-              id: 9,
-              ticketId: ticket.id,
-              key: "BRD-321",
-              summary: "Follow-up issue",
-              createdAt: "2026-02-28T12:00:00.000Z"
-            }
-          ]
-        }}
-        isLoading={false}
-        isError={false}
-        form={toTicketForm({
-          ...ticket,
-          branch: "feature/fix-save-state",
-          jiraIssues: [
-            {
-              id: 9,
-              ticketId: ticket.id,
-              key: "BRD-321",
-              summary: "Follow-up issue",
-              createdAt: "2026-02-28T12:00:00.000Z"
-            }
-          ]
-        })}
-        projects={[project]}
-        isSaving={false}
-        saveSuccessCount={0}
-        isArchiving={false}
-        isRestoring={false}
-        isOpeningInApp={false}
-        isRefreshingJira={false}
-        onChange={vi.fn()}
-        onSave={vi.fn()}
-        onArchive={vi.fn()}
-        onRestore={vi.fn()}
-        onOpenInApp={vi.fn()}
-        onRefreshJira={vi.fn()}
-        onClose={vi.fn()}
-      />
-    );
+    renderTicketDrawer({
+      ticket: createTicket({
+        ...ticket,
+        branch: "feature/fix-save-state",
+        jiraIssues: [
+          {
+            id: 9,
+            ticketId: ticket.id,
+            key: "BRD-321",
+            summary: "Follow-up issue",
+            createdAt: "2026-02-28T12:00:00.000Z"
+          }
+        ]
+      })
+    });
 
     expect(screen.getByText("feature/fix-save-state")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "BRD-321" })).toHaveAttribute(
@@ -242,35 +190,12 @@ describe("TicketDrawer", () => {
   });
 
   it("renders markdown descriptions in read mode", () => {
-    render(
-      <TicketDrawer
-        ticketId={ticket.id}
-        ticket={{
-          ...ticket,
-          description: "# Summary\n\n- [x] Added support\n\n![Architecture](/api/tickets/12/images/diagram.png)"
-        }}
-        isLoading={false}
-        isError={false}
-        form={toTicketForm({
-          ...ticket,
-          description: "# Summary\n\n- [x] Added support\n\n![Architecture](/api/tickets/12/images/diagram.png)"
-        })}
-        projects={[project]}
-        isSaving={false}
-        saveSuccessCount={0}
-        isArchiving={false}
-        isRestoring={false}
-        isOpeningInApp={false}
-        isRefreshingJira={false}
-        onChange={vi.fn()}
-        onSave={vi.fn()}
-        onArchive={vi.fn()}
-        onRestore={vi.fn()}
-        onOpenInApp={vi.fn()}
-        onRefreshJira={vi.fn()}
-        onClose={vi.fn()}
-      />
-    );
+    renderTicketDrawer({
+      ticket: createTicket({
+        ...ticket,
+        description: "# Summary\n\n- [x] Added support\n\n![Architecture](/api/tickets/12/images/diagram.png)"
+      })
+    });
 
     expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Architecture" })).toBeInTheDocument();

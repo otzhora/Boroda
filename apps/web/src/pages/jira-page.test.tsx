@@ -2,6 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { boardColumnsFixture, defaultEditableBoardColumn } from "../test/fixtures/board-columns";
+import { createProject, createTicketListItem } from "../test/fixtures/models";
 import { renderWithProviders } from "../test/render-with-providers";
 
 const mocks = vi.hoisted(() => ({
@@ -107,48 +108,28 @@ describe("JiraPage", () => {
     });
 
     mocks.useProjectsQuery.mockReturnValue({
-      data: [
-        {
-          id: 1,
-          name: "Payments Backend",
-          slug: "payments-backend",
-          description: "",
-          color: "#355c7d",
-          createdAt: "",
-          updatedAt: "",
-          folders: []
-        }
-      ]
+      data: [createProject({ createdAt: "", updatedAt: "" })]
     });
 
     mocks.useTicketsQuery.mockReturnValue({
       data: [
-        {
+        createTicketListItem({
           id: 12,
-          key: "BRD-12",
           title: "Refactor backend service",
-          description: "",
-          branch: null,
           status: "IN_PROGRESS",
           priority: "HIGH",
-          dueAt: null,
           createdAt: "",
-          updatedAt: "2026-03-06T10:00:00.000Z",
-          archivedAt: null
-        },
-        {
+          updatedAt: "2026-03-06T10:00:00.000Z"
+        }),
+        createTicketListItem({
           id: 21,
           key: "BRD-21",
           title: "Operational cleanup ticket",
-          description: "",
-          branch: null,
           status: quickCreateStatus,
           priority: "MEDIUM",
-          dueAt: null,
           createdAt: "",
-          updatedAt: "2026-03-06T11:00:00.000Z",
-          archivedAt: null
-        }
+          updatedAt: "2026-03-06T11:00:00.000Z"
+        })
       ],
       isLoading: false
     });

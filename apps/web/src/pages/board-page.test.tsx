@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../lib/api-client";
 import { boardColumnsFixture, defaultEditableBoardColumn } from "../test/fixtures/board-columns";
+import { createProject } from "../test/fixtures/models";
 import { renderWithProviders } from "../test/render-with-providers";
 
 const mocks = vi.hoisted(() => ({
@@ -207,26 +208,15 @@ describe("BoardPage", () => {
 
     mocks.useProjectsQuery.mockReturnValue({
       data: [
-        {
-          id: 1,
-          name: "Payments Backend",
-          slug: "payments-backend",
-          description: "",
-          color: "#355c7d",
-          createdAt: "",
-          updatedAt: "",
-          folders: []
-        },
-        {
+        createProject({ createdAt: "", updatedAt: "" }),
+        createProject({
           id: 2,
           name: "Infra",
           slug: "infra",
-          description: "",
           color: "#223344",
           createdAt: "",
-          updatedAt: "",
-          folders: []
-        }
+          updatedAt: ""
+        })
       ]
     });
 

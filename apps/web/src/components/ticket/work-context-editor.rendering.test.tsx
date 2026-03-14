@@ -1,8 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkContext } from "../../lib/types";
+import { createWorkContext } from "../../test/fixtures/models";
+import { renderWithProviders } from "../../test/render-with-providers";
 
 const mocks = vi.hoisted(() => ({
   createMutate: vi.fn(),
@@ -59,22 +60,7 @@ vi.mock("./ticket-form", () => ({
 import { WorkContextEditor } from "./work-context-editor";
 
 function renderEditor(contexts: WorkContext[]) {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false
-      },
-      mutations: {
-        retry: false
-      }
-    }
-  });
-
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <WorkContextEditor ticketId={7} contexts={contexts} />
-    </QueryClientProvider>
-  );
+  return renderWithProviders(<WorkContextEditor ticketId={7} contexts={contexts} />);
 }
 
 describe("WorkContextEditor rendering", () => {
@@ -89,26 +75,20 @@ describe("WorkContextEditor rendering", () => {
     const user = userEvent.setup();
 
     renderEditor([
-      {
+      createWorkContext({
         id: 1,
-        ticketId: 7,
         type: "NOTE",
         label: "Screenshot note",
-        value: "![diagram](/uploads/diagram.png)",
-        metaJson: "{}",
-        createdAt: "2026-03-01T10:00:00.000Z",
-        updatedAt: "2026-03-01T10:00:00.000Z"
-      },
-      {
+        value: "![diagram](/uploads/diagram.png)"
+      }),
+      createWorkContext({
         id: 2,
-        ticketId: 7,
         type: "LINK",
         label: "Build log",
         value: "https://example.test/build",
-        metaJson: "{}",
         createdAt: "2026-03-01T09:00:00.000Z",
         updatedAt: "2026-03-01T09:00:00.000Z"
-      }
+      })
     ]);
 
     await user.dblClick(screen.getByText("Build log"));
