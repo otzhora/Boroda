@@ -2,13 +2,14 @@
 
 ## Purpose
 
-This document captures the remaining issues after the recent refactors and turns them into a step-by-step execution plan that can be handed to Codex.
+This document turns the current audit findings into an execution plan that can be handed to Codex step by step.
 
 The goals are:
 
-- remove the remaining correctness risks
-- finish the maintainability cleanup consistently
-- avoid reintroducing hidden cache, state, or data-shape bugs
+- remove maintainability hotspots before they harden
+- reduce unnecessary coupling across UI and server modules
+- fix structural smells even when tests currently pass
+- keep the local-only app easy to expand without fear
 
 ## Working Policy
 
@@ -16,111 +17,91 @@ Adopt a zero-tolerance policy for code smells.
 
 Use this rule during every implementation step:
 
-- if something smells, fix it
-- if the fix is small and adjacent to the change being made, fix it in the same step
-- if the fix is large, risky, or not meaningfully adjacent to the current change, do not silently expand scope
-- instead, call it out explicitly in the final report for that step and add it back into this plan as a new follow-up item
+- if something smells and the fix is small and adjacent, fix it in the same step
+- if the fix is larger or not adjacent, do not silently widen scope
+- instead, report it explicitly and add it back into this plan
 
-Examples of smells that should be treated seriously:
+Examples of smells that matter in this repo:
 
-- duplicated logic
-- ambiguous naming
-- shape mismatches across layers
-- dead code
-- unnecessary indirection
-- large components or helpers growing past reasonable scope
-- type-safety shortcuts
-- cache key ambiguity
-- repeated inline rendering or state logic that clearly wants extraction
+- duplicated orchestration logic across pages
+- large files mixing unrelated responsibilities
+- server modules that combine OS, DB, and business logic
+- client hooks that fetch broader data than the feature actually needs
+- type contracts that promise more than runtime code actually supports
+- repeated timestamp helpers and repeated query/filter plumbing
 
-This policy is not permission to do opportunistic rewrites.
+Do not treat "tests pass" as proof that the code is healthy.
 
-The intended behavior is:
+## Current Status
 
-- clean up small adjacent smells immediately
-- avoid leaving obvious mess in touched code
-- keep larger unrelated refactors visible, explicit, and planned
+The repo is passing checks:
+
+- `npm test` passes
+- `npm run typecheck` passes
+
+The main remaining issues from the audit are:
+
+1. Jira page loads the full ticket list for linking and filters it client-side
+2. Tickets page still renders a non-virtualized full table and remains a large orchestration page
+3. Board, Tickets, and Jira pages duplicate search/header/keyboard behavior
+4. `packages/server/src/modules/integrations/open-in/service.ts` is a god module
+5. project archive/restore logic duplicates sibling-project query rules
+6. board column reordering uses noisy multi-pass row updates
+7. `apps/web/src/lib/api-client.ts` is still type-unsound and too rigid about JSON
+8. projects page complexity mostly moved into a large controller hook and prop-heavy boundaries
+9. the repo has no lint or structural guardrail step
 
 ## How Codex Should Apply This Plan
 
 For each step in this document:
 
-1. implement the requested change
-2. inspect the touched area for adjacent smells
-3. fix the small adjacent ones immediately
-4. list any larger or unrelated smells discovered during the step
-5. append those larger items to this plan or report them clearly for addition
+1. implement only that step
+2. fix small adjacent smells discovered while touching the same area
+3. do not batch unrelated refactors
+4. run the requested verification
+5. report any newly discovered follow-up items
 
-Do not treat "tests pass" as sufficient if the touched code still obviously smells.
-
-## Current Status
-
-The repo is in materially better shape than before:
-
-- tests pass
-- typecheck passes
-- ticket service is decomposed
-- ticket drawer is decomposed
-- board and tickets pages are smaller
-- header composition is better
-- runtime files are no longer tracked by git
-
-The main remaining issues are:
-
-1. React Query cache key collision between `useTicketsQuery` and `useTicketListQuery`
-2. `projects-page.tsx` is still a large monolith
-3. duplicated UI state helpers still exist in `jira-page.tsx`
-4. noisy request logging still floods local test output
-5. `db: any` remains in `packages/server/src/modules/board/columns.ts`
-6. `api-client.ts` still has duplicated request logic and rigid JSON assumptions
+Use separate Codex prompts per step.
 
 ## Execution Order
 
-Work through these steps in order. Do not batch unrelated refactors together.
+Work through these steps in order.
 
-### Step 1: Fix the React Query cache-shape bug
+### Step 1: Narrow Jira ticket linking data flow
 
 #### Problem
 
-`apps/web/src/features/tickets/queries.ts` defines:
+`apps/web/src/pages/jira-page.tsx` currently calls `useTicketsQuery()` with no narrowing and filters the result on the client.
 
-- `useTicketsQuery`
-- `useTicketListQuery`
-
-Both currently use the same query key factory:
-
-- `ticketsQueryKey(filters)`
-
-But they return different shapes:
-
-- `useTicketsQuery` returns `TicketListItem[]`
-- `useTicketListQuery` returns `TicketListResponse`
-
-That means one page can poison the cache for another page.
+That creates avoidable coupling between the Jira page and the generic ticket list query, and it scales badly as ticket count grows.
 
 #### Files
 
-- `apps/web/src/features/tickets/queries.ts`
 - `apps/web/src/pages/jira-page.tsx`
-- `apps/web/src/pages/tickets-page.tsx`
-- any tests covering tickets or Jira page data loading
+- `apps/web/src/features/tickets/queries.ts`
+- optionally add a Jira-specific ticket lookup hook under `apps/web/src/features/jira/`
+- related tests for Jira page data loading
 
 #### Required change
 
-Split the query keys by response shape.
+Replace the broad "load everything, then filter in the page" approach with a narrower query shape.
 
-Recommended structure:
+Acceptable approaches:
 
-- `ticketListQueryKey(filters)` for `TicketListResponse`
-- `ticketItemsQueryKey(filters)` for `TicketListItem[]`
+- create a dedicated hook for linkable ticket options
+- add explicit server-side filtering for the Jira linking flow
+- reuse the existing ticket list endpoint only if the query is intentionally narrowed and the response shape is appropriate
 
-Or remove `useTicketsQuery` entirely if only one shape should exist.
+The important rule is:
+
+- Jira page should fetch only what it needs for linking existing tickets
+- page-level code should stop owning broad list filtering that belongs in the data layer
 
 #### Acceptance criteria
 
-- no two query hooks share a key while returning different shapes
-- tickets page still receives `meta.jiraIssues`
-- Jira page still loads its linkable ticket list
+- Jira page no longer fetches the full unbounded ticket inventory by default
+- link-existing behavior still works
+- no cache-shape regressions are introduced
 - tests pass
 
 #### Verification
@@ -132,122 +113,158 @@ npm test
 npm run typecheck
 ```
 
-## Step 2: Finish helper extraction in Jira page
+### Step 2: Extract shared page command-bar behavior
 
-### Problem
+#### Problem
 
-`apps/web/src/pages/jira-page.tsx` still duplicates helper logic that already exists elsewhere.
+Board, Tickets, and Jira pages duplicate:
 
-Examples:
+- search input rendering
+- keyboard shortcut handling
+- header action composition
 
-- `isTypingTarget`
-- `isSearchFocused`
-- local search/sort helpers that should live in feature helpers if reused
+These implementations are already drifting.
 
-This is small debt, but it keeps the cleanup inconsistent and makes future changes drift again.
+#### Files
 
-### Files
-
+- `apps/web/src/pages/board-page.tsx`
+- `apps/web/src/pages/tickets-page.tsx`
 - `apps/web/src/pages/jira-page.tsx`
 - `apps/web/src/features/tickets/url-state.ts`
-- optionally create `apps/web/src/features/jira/page-helpers.ts`
+- optionally create shared helpers/components under `apps/web/src/components/ui/` or `apps/web/src/features/`
 
-### Required change
+#### Required change
 
-Move generic reusable helpers out of the page.
+Extract the repeated command-bar/search/shortcut behavior into shared primitives.
 
 Use this rule:
 
-- if logic is generic UI state logic, put it in shared helper modules
-- if logic is Jira-page specific, move it into a Jira feature helper file
-- keep page components focused on orchestration and rendering
+- generic search focus and keyboard behavior goes into shared helpers/hooks
+- page-specific filter controls stay page-specific
+- page components should orchestrate, not redefine the same command-bar behavior
 
-### Acceptance criteria
+Good extraction targets:
 
-- Jira page stops defining helpers already present in shared modules
-- page size decreases
-- no behavior changes
+- reusable search field shell
+- reusable search hotkey hook
+- reusable header actions wrapper for host/fallback rendering
 
-### Verification
+#### Acceptance criteria
+
+- duplicated keyboard shortcut logic is materially reduced
+- duplicated search control rendering is materially reduced
+- Board, Tickets, and Jira behavior stays unchanged
+- page files get smaller and more focused
+
+#### Verification
 
 Run:
 
 ```bash
-npm test -- --runInBand
-```
-
-Or the repo equivalent:
-
-```bash
 npm test
+npm run typecheck
 ```
 
-## Step 3: Decompose `projects-page.tsx`
+### Step 3: Decompose the Tickets page and add list virtualization
 
-### Problem
+#### Problem
 
-`apps/web/src/pages/projects-page.tsx` is now the largest remaining UI monolith.
+`apps/web/src/pages/tickets-page.tsx` is still large and renders the full table body directly.
 
-It currently mixes:
+That is both a maintainability hotspot and a clear performance smell once the ticket count grows.
 
-- query setup
-- optimistic update behavior
-- modal state
-- create/edit form logic
-- folder create/edit logic
-- rendering of expanded project rows
-- path validation presentation
+#### Files
 
-This is the main remaining maintainability hotspot.
+- `apps/web/src/pages/tickets-page.tsx`
+- `apps/web/src/features/tickets/`
+- `apps/web/src/components/ticket/`
+- related tests for tickets page behavior
 
-### Files
+#### Required change
 
-- `apps/web/src/pages/projects-page.tsx`
-- new files under `apps/web/src/features/projects/`
-- new files under `apps/web/src/components/project/` if needed
-
-### Required change
-
-Split by responsibility, not by arbitrary file size.
+Split the page by responsibility and introduce virtualization for the ticket list.
 
 Recommended extraction order:
 
-1. project page helpers
-2. project query/mutation hooks
-3. project and folder form state helpers
-4. project list row/body components
-5. project dialogs/modals
+1. filter/search/scope controller logic
+2. ticket table header and row rendering
+3. empty/error/loading state sections
+4. virtualized list body
 
-Suggested target structure:
+Do not over-engineer a generic table system.
+The goal is a focused tickets feature structure with a virtualized list that preserves current behavior.
+
+#### Acceptance criteria
+
+- `tickets-page.tsx` becomes a thinner orchestration page
+- ticket rows are not all rendered at once for large lists
+- selection, sorting, filtering, and drawer behavior stay unchanged
+- tests pass
+
+#### Verification
+
+Run:
+
+```bash
+npm test
+npm run typecheck
+```
+
+Add or update tests for the extracted behavior if needed.
+
+### Step 4: Decompose open-in server service
+
+#### Problem
+
+`packages/server/src/modules/integrations/open-in/service.ts` currently mixes:
+
+- OS/platform detection
+- launcher argument construction
+- Windows Terminal settings discovery
+- workspace resolution
+- DB updates
+- ticket activity writes
+- high-level open-in orchestration
+
+It is already too coupled to evolve safely.
+
+#### Files
+
+- `packages/server/src/modules/integrations/open-in/service.ts`
+- existing sibling files in `packages/server/src/modules/integrations/open-in/`
+- optionally new files under that same folder
+- relevant tests around open-in behavior
+
+#### Required change
+
+Split by responsibility, not by arbitrary line count.
+
+Recommended target structure:
 
 ```text
-apps/web/src/features/projects/
-  queries.ts
-  mutations.ts
-  page-helpers.ts
-  optimistic-updates.ts
-  forms.ts
-
-apps/web/src/components/project/
-  project-list.tsx
-  project-row.tsx
-  project-expanded-body.tsx
-  project-create-dialog.tsx
-  project-edit-section.tsx
-  project-folder-list.tsx
-  project-folder-form.tsx
+packages/server/src/modules/integrations/open-in/
+  service.ts
+  launchers.ts
+  windows-terminal.ts
+  workspace-resolution.ts
+  activity.ts
+  types.ts
 ```
 
-Do not try to perfect the final architecture in one pass. The goal is to remove the monolith and isolate logic.
+Rules:
 
-### Acceptance criteria
+- `service.ts` should remain the orchestration entry point
+- OS-specific launch behavior should move out
+- workspace preparation and DB persistence should not be mixed with launcher detection
 
-- `projects-page.tsx` becomes a thin orchestration page
-- optimistic update logic is no longer embedded inline in the page
-- project/folder row rendering moves into components
-- tests still pass
+#### Acceptance criteria
 
-### Verification
+- `service.ts` is substantially smaller
+- launcher logic and workspace logic are separated
+- behavior is unchanged
+- tests pass
+
+#### Verification
 
 Run:
 
@@ -256,187 +273,270 @@ npm test
 npm run typecheck
 ```
 
-Add or update tests if needed for extracted behavior.
+### Step 5: Deduplicate project archive and restore rules
 
-## Step 4: Remove remaining `any` from board column infrastructure
+#### Problem
 
-### Problem
+`packages/server/src/modules/projects/service.ts` contains nearly duplicated logic for:
 
-`packages/server/src/modules/board/columns.ts` still uses `db: any` in shared helpers.
+- finding tickets to archive when archiving a project
+- finding tickets to restore when restoring a project
 
-This weakens type safety in a core shared path.
+This is business-rule duplication in a sensitive path.
 
-### Files
+#### Files
+
+- `packages/server/src/modules/projects/service.ts`
+- related project and ticket tests
+
+#### Required change
+
+Extract the shared sibling-project decision logic into one helper with explicit parameters.
+
+The helper should make the rule obvious:
+
+- start from tickets linked to this project in one archive state
+- exclude tickets that still have another active linked project
+- return the final ticket ids to archive or restore
+
+Prefer one clear helper over two similar functions.
+
+#### Acceptance criteria
+
+- duplicated project archive/restore query logic is removed
+- resulting helper names make the rule easier to understand
+- project archive/restore behavior is unchanged
+- tests pass
+
+#### Verification
+
+Run:
+
+```bash
+npm test
+npm run typecheck
+```
+
+### Step 6: Simplify board column reorder mechanics
+
+#### Problem
+
+`packages/server/src/modules/board/columns.ts` reorders columns with noisy multi-pass updates.
+
+It works, but the intent is harder to read than it needs to be.
+
+#### Files
 
 - `packages/server/src/modules/board/columns.ts`
-- optionally reuse types from `packages/server/src/modules/tickets/service/shared.ts`
+- board tests
 
-### Required change
+#### Required change
 
-Replace `any` with a typed DB executor abstraction similar to the ticket service split.
+Refactor reorder operations into one clearer shared primitive.
 
-Recommended pattern:
+Possible directions:
 
-- define `AppDb`
-- define `DbTransaction`
-- define `DbExecutor`
+- compute the final ordered column list in memory, then persist final positions once
+- extract shared reorder persistence helper used by insert and delete paths
 
-Then use `DbExecutor` in:
+Do not optimize for SQL cleverness.
+Optimize for clarity and single-source-of-truth behavior.
 
-- `listBoardColumnsFromDb`
-- `ensureColumnsForStatuses`
+#### Acceptance criteria
 
-### Acceptance criteria
+- insert/delete reorder behavior stays unchanged
+- repeated multi-pass update logic is materially reduced
+- code becomes easier to reason about
+- tests pass
 
-- no `db: any` remains in board column helpers
-- typecheck passes without casts added just to silence errors
-
-### Verification
-
-Run:
-
-```bash
-npm run typecheck
-```
-
-## Step 5: Gate noisy request logging by environment
-
-### Problem
-
-`packages/server/src/app.ts` logs request start and completion for every request.
-
-That is useful sometimes, but it makes test output noisy and lowers signal.
-
-### Files
-
-- `packages/server/src/app.ts`
-- `packages/server/src/config.ts`
-- optionally `packages/server/src/shared/observability.ts`
-
-### Required change
-
-Introduce a config flag for request-level logging.
-
-Recommended behavior:
-
-- default to quieter logs in tests
-- keep structured logs available
-- allow enabling verbose request logs explicitly via env var
-
-One acceptable approach:
-
-- add `requestLoggingEnabled` to config
-- disable the request hooks when running under test or when env disables them
-
-Do not remove error logging.
-
-### Acceptance criteria
-
-- failing tests are easier to read
-- successful tests do not dump every request by default
-- server behavior is unchanged apart from log volume
-
-### Verification
+#### Verification
 
 Run:
 
 ```bash
 npm test
+npm run typecheck
 ```
 
-Inspect that test output is materially quieter.
+### Step 7: Tighten the API client contract
 
-## Step 6: Normalize the API client
+#### Problem
 
-### Problem
+`apps/web/src/lib/api-client.ts` has two maintainability problems:
 
-`apps/web/src/lib/api-client.ts` still duplicates request flow between:
+- generic JSON helpers can return `undefined as T`
+- success handling assumes JSON for any non-empty body
 
-- `apiClient`
-- `apiClientBlob`
+That makes the type contract looser and more misleading than it should be.
 
-It also assumes JSON success responses too rigidly.
-
-### Files
+#### Files
 
 - `apps/web/src/lib/api-client.ts`
-- any tests touching API client behavior
+- `apps/web/src/lib/api-client.test.ts`
+- any callers that depend on current behavior
 
-### Required change
+#### Required change
 
-Extract a shared internal request helper that handles:
+Refactor the API client so its runtime contract and TypeScript contract match more honestly.
 
-- timing
-- fetch execution
-- request logging
-- error payload parsing
+Recommended direction:
 
-Then layer response parsing on top.
+- keep one shared request executor
+- make JSON parsing explicit rather than implied for all successful responses
+- handle empty-body responses without pretending they are arbitrary `T`
+- keep blob handling as a thin typed layer on top
 
-Recommended shape:
+If needed, introduce separate helpers for:
 
-- one low-level `performRequest`
-- one JSON helper
-- one blob helper
+- JSON responses
+- empty responses
+- blob responses
 
-Make the JSON path resilient to future `204 No Content` responses.
+#### Acceptance criteria
 
-### Acceptance criteria
+- no `undefined as T` remains
+- response parsing behavior is explicit
+- current callers still work or are updated intentionally
+- tests pass
 
-- duplicated request/error code is reduced
-- behavior remains unchanged for current callers
-- future response-type additions become simpler
-
-### Verification
+#### Verification
 
 Run:
 
 ```bash
-npm run typecheck
 npm test
+npm run typecheck
 ```
 
-## Step 7: Optional cleanup pass after the main fixes
+### Step 8: Finish project page decomposition
 
-Only do this after Steps 1 through 6 are complete.
+#### Problem
 
-Potential follow-up cleanup:
+The projects page is improved, but complexity mainly moved into `useProjectsPageController` and into a prop-heavy `ProjectListItem` boundary.
 
-- reduce remaining duplicated class-name constants across pages
-- extract repeated search control rendering from board/tickets if it keeps drifting
-- review `projects-page.tsx` for smaller helper splits still worth doing
-- review `jira-page.tsx` for whether `useTicketsQuery()` should be narrowed or paged later
+That is better than one monolith, but still harder to extend than necessary.
 
-This step is optional because it is polish, not risk reduction.
+#### Files
 
-## Recommended Codex Prompt Sequence
+- `apps/web/src/pages/projects-page.tsx`
+- `apps/web/src/features/projects/use-projects-page-controller.ts`
+- `apps/web/src/components/project/project-list-item.tsx`
+- related project components and tests
 
-Use separate prompts for each step. Do not ask Codex to do all of this in one pass.
+#### Required change
 
-### Prompt 1
+Further split the projects feature by domain responsibility.
+
+Recommended extraction order:
+
+1. separate URL/scope state from form/editing state
+2. extract project-row orchestration from folder-row orchestration
+3. reduce prop surface passed into `ProjectListItem`
+4. move mutation side-effect bookkeeping closer to feature-specific hooks
+
+The target is not "many tiny files".
+The target is explicit boundaries with smaller public surfaces.
+
+#### Acceptance criteria
+
+- controller hook becomes meaningfully smaller
+- `ProjectListItem` receives a smaller, clearer prop surface
+- page remains a thin orchestrator
+- tests pass
+
+#### Verification
+
+Run:
+
+```bash
+npm test
+npm run typecheck
+```
+
+### Step 9: Add lint and structural guardrails
+
+#### Problem
+
+The repo currently relies on tests and typecheck only.
+
+That does not enforce:
+
+- dead-code cleanup
+- duplication warnings
+- unsafe type shortcuts
+- consistent import/style hygiene
+
+With a zero-smell policy, this is a process gap.
+
+#### Files
+
+- root `package.json`
+- workspace `package.json` files
+- new lint config files as needed
+
+#### Required change
+
+Add a lightweight lint/quality gate that fits the repo.
+
+Minimum target:
+
+- one root `lint` script
+- workspace lint scripts
+- rules for unused code, unsafe suppressions, and obvious hygiene failures
+
+Optional additions if they stay pragmatic:
+
+- import ordering
+- simple complexity caps for extreme files
+- CI-friendly `verify` integration
+
+Do not turn this into config theater.
+Choose the smallest useful guardrail set.
+
+#### Acceptance criteria
+
+- repo has a `lint` command
+- lint can run at root and workspace level
+- `verify` can include lint without becoming brittle
+- docs or scripts make the quality gate obvious
+
+#### Verification
+
+Run:
+
+```bash
+npm run lint
+npm run verify
+```
+
+## Suggested Codex Prompt Sequence
+
+Use separate prompts. Do not ask Codex to do the whole plan in one pass.
+
+### Prompt 1 -- Done
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 1 only.
-Fix the React Query cache-key/data-shape collision in apps/web/src/features/tickets/queries.ts.
+Narrow the Jira ticket-linking data flow so apps/web/src/pages/jira-page.tsx no longer loads and filters the full ticket inventory by default.
 Do not work on any other step.
 Run tests and typecheck after the change and report the result.
 ```
 
-### Prompt 2
+### Prompt 2 -- Done
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 2 only.
-Finish helper extraction for apps/web/src/pages/jira-page.tsx.
+Extract the duplicated command-bar, search, and keyboard shortcut behavior shared by the Board, Tickets, and Jira pages.
 Do not work on any other step.
 Run tests and typecheck after the change and report the result.
 ```
 
-### Prompt 3
+### Prompt 3 -- Done
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 3 only.
-Decompose apps/web/src/pages/projects-page.tsx by responsibility without changing behavior.
-Keep the page as an orchestrator and extract components/helpers/hooks where appropriate.
+Decompose apps/web/src/pages/tickets-page.tsx and add virtualization for the ticket list without changing behavior.
+Do not work on any other step.
 Run tests and typecheck after the change and report the result.
 ```
 
@@ -444,35 +544,68 @@ Run tests and typecheck after the change and report the result.
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 4 only.
-Remove the remaining db:any usage from packages/server/src/modules/board/columns.ts using typed DB abstractions.
-Run typecheck and tests after the change and report the result.
+Decompose packages/server/src/modules/integrations/open-in/service.ts by responsibility while keeping service.ts as the orchestration entry point.
+Do not work on any other step.
+Run tests and typecheck after the change and report the result.
 ```
 
 ### Prompt 5
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 5 only.
-Gate noisy request logging by environment in the server without removing error logging.
-Run tests and confirm the output is quieter.
+Deduplicate the project archive and restore rules in packages/server/src/modules/projects/service.ts without changing behavior.
+Do not work on any other step.
+Run tests and typecheck after the change and report the result.
 ```
 
 ### Prompt 6
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 6 only.
-Refactor apps/web/src/lib/api-client.ts to remove duplicated request flow and make response parsing more resilient.
+Simplify the board column reorder mechanics in packages/server/src/modules/board/columns.ts so insert/delete paths share a clearer reorder primitive.
+Do not work on any other step.
 Run tests and typecheck after the change and report the result.
+```
+
+### Prompt 7
+
+```text
+Read docs/remediation-plan-2026-03.md and implement Step 7 only.
+Tighten the API client contract in apps/web/src/lib/api-client.ts so its runtime behavior and TypeScript behavior match more honestly.
+Do not work on any other step.
+Run tests and typecheck after the change and report the result.
+```
+
+### Prompt 8
+
+```text
+Read docs/remediation-plan-2026-03.md and implement Step 8 only.
+Finish the project page decomposition by shrinking useProjectsPageController and reducing the prop surface of ProjectListItem.
+Do not work on any other step.
+Run tests and typecheck after the change and report the result.
+```
+
+### Prompt 9
+
+```text
+Read docs/remediation-plan-2026-03.md and implement Step 9 only.
+Add pragmatic lint and structural guardrails to the repo and integrate them into the verification flow.
+Do not work on any other step.
+Run lint, tests, and typecheck after the change and report the result.
 ```
 
 ## Definition of Done
 
-This remediation plan is complete when all of the following are true:
+This plan is complete when all of the following are true:
 
-- no query hooks share the same key while returning different shapes
-- `projects-page.tsx` is no longer the dominant UI monolith
-- Jira page no longer duplicates generic shared helpers
-- board column helpers are typed
-- request logging is quieter during tests
-- API client request flow is consolidated
+- Jira page no longer depends on a broad unbounded ticket fetch for linking
+- shared command-bar behavior is extracted instead of copied across pages
+- tickets page is thinner and uses virtualization for larger lists
+- open-in server logic is decomposed by responsibility
+- project archive and restore business rules have one clear shared source
+- board column reorder logic is simpler and less repetitive
+- API client contracts are explicit and type-honest
+- project page orchestration surfaces are smaller and clearer
+- the repo has lint/quality guardrails in addition to tests and typecheck
 - `npm test` passes
 - `npm run typecheck` passes

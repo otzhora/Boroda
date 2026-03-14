@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../lib/api-client";
@@ -401,5 +401,49 @@ describe("TicketsPage", () => {
 
     await user.keyboard("{Control>}k{/Control}");
     expect(searchInput).toHaveFocus();
+  });
+
+  it("virtualizes long ticket lists and renders deeper rows on scroll", async () => {
+    mocks.useTicketListQuery.mockReturnValue({
+      data: {
+        items: Array.from({ length: 40 }, (_, index) =>
+          createTicketListItem({
+            id: index + 1,
+            key: `BRD-${index + 1}`,
+            title: `Ticket ${index + 1}`,
+            createdAt: "",
+            updatedAt: "2026-03-07T10:00:00.000Z",
+            projectBadges: [],
+            jiraIssues: []
+          })
+        ),
+        meta: {
+          jiraIssues: []
+        }
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetchTickets
+    });
+
+    renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets"] });
+
+    expect(screen.getByRole("button", { name: "Open ticket BRD-1 Ticket 1" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open ticket BRD-40 Ticket 40" })).not.toBeInTheDocument();
+
+    const list = screen.getByLabelText("Ticket list");
+    Object.defineProperty(list, "clientHeight", {
+      configurable: true,
+      value: 320
+    });
+
+    fireEvent.scroll(list, {
+      target: {
+        scrollTop: 3200
+      }
+    });
+
+    expect(await screen.findByRole("button", { name: "Open ticket BRD-40 Ticket 40" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open ticket BRD-1 Ticket 1" })).not.toBeInTheDocument();
   });
 });

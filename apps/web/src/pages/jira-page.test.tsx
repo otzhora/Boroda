@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { boardColumnsFixture, defaultEditableBoardColumn } from "../test/fixtures/board-columns";
@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => ({
   useBoardColumnsQuery: vi.fn(),
   useJiraSettingsQuery: vi.fn(),
   useAssignedJiraIssueLinksQuery: vi.fn(),
+  useJiraLinkableTicketsQuery: vi.fn(),
   useProjectsQuery: vi.fn(),
-  useTicketsQuery: vi.fn(),
   createMutate: vi.fn(),
   addJiraLinkMutate: vi.fn()
 }));
@@ -21,7 +21,8 @@ vi.mock("../features/board/queries", () => ({
 
 vi.mock("../features/jira/queries", () => ({
   useJiraSettingsQuery: mocks.useJiraSettingsQuery,
-  useAssignedJiraIssueLinksQuery: mocks.useAssignedJiraIssueLinksQuery
+  useAssignedJiraIssueLinksQuery: mocks.useAssignedJiraIssueLinksQuery,
+  useJiraLinkableTicketsQuery: mocks.useJiraLinkableTicketsQuery
 }));
 
 vi.mock("../features/projects/queries", () => ({
@@ -42,10 +43,6 @@ vi.mock("../features/tickets/mutations", () => ({
   }))
 }));
 
-vi.mock("../features/tickets/queries", () => ({
-  useTicketsQuery: mocks.useTicketsQuery
-}));
-
 import { JiraPage } from "./jira-page";
 
 const quickCreateStatus = defaultEditableBoardColumn.status;
@@ -55,8 +52,8 @@ describe("JiraPage", () => {
     mocks.useBoardColumnsQuery.mockReset();
     mocks.useJiraSettingsQuery.mockReset();
     mocks.useAssignedJiraIssueLinksQuery.mockReset();
+    mocks.useJiraLinkableTicketsQuery.mockReset();
     mocks.useProjectsQuery.mockReset();
-    mocks.useTicketsQuery.mockReset();
     mocks.createMutate.mockReset();
     mocks.addJiraLinkMutate.mockReset();
 
@@ -111,7 +108,7 @@ describe("JiraPage", () => {
       data: [createProject({ createdAt: "", updatedAt: "" })]
     });
 
-    mocks.useTicketsQuery.mockReturnValue({
+    mocks.useJiraLinkableTicketsQuery.mockReturnValue({
       data: [
         createTicketListItem({
           id: 12,
@@ -236,8 +233,12 @@ describe("JiraPage", () => {
     await user.click(screen.getByRole("button", { name: "Link existing Boroda" }));
 
     expect(await screen.findByRole("dialog", { name: "Link existing Boroda ticket" })).toBeInTheDocument();
+    expect(screen.getByText("Search to find a Boroda ticket to link.")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Search Boroda tickets"), "BRD-21");
-    await user.click(screen.getByRole("button", { name: "Link ticket" }));
+    expect(mocks.useJiraLinkableTicketsQuery).toHaveBeenLastCalledWith("OPS-42", "BRD-21");
+    const targetTicketRow = screen.getByText("BRD-21").closest("li");
+    expect(targetTicketRow).not.toBeNull();
+    await user.click(within(targetTicketRow as HTMLLIElement).getByRole("button", { name: "Link ticket" }));
 
     expect(mocks.addJiraLinkMutate).toHaveBeenCalledWith(
       {

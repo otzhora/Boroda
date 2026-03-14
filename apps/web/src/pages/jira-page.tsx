@@ -1,8 +1,14 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { AppHeaderActions, AppHeaderRightActions, useAppHeader } from "../app/router";
+import { useAppHeader } from "../app/router";
+import { PageCommandBar } from "../components/ui/page-command-bar";
+import { PageSearchInput } from "../components/ui/page-search-input";
 import { useBoardColumnsQuery } from "../features/board/queries";
-import { useAssignedJiraIssueLinksQuery, useJiraSettingsQuery } from "../features/jira/queries";
+import {
+  useAssignedJiraIssueLinksQuery,
+  useJiraLinkableTicketsQuery,
+  useJiraSettingsQuery
+} from "../features/jira/queries";
 import {
   JiraIssueSort,
   normalizeIssueSearch,
@@ -20,8 +26,7 @@ import {
 import { DEFAULT_BOARD_STATUS } from "../lib/constants";
 import { ModalDialog } from "../components/ui/modal-dialog";
 import { useAddTicketJiraLinkMutation } from "../features/tickets/mutations";
-import { useTicketsQuery } from "../features/tickets/queries";
-import { isSearchFocused, isTypingTarget } from "../features/tickets/url-state";
+import { usePageSearchHotkeys } from "../features/tickets/url-state";
 
 const headerActionButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900";
@@ -84,7 +89,6 @@ export function JiraPage() {
   const issuesQuery = useAssignedJiraIssueLinksQuery();
   const boardColumnsQuery = useBoardColumnsQuery();
   const projectsQuery = useProjectsQuery();
-  const ticketsQuery = useTicketsQuery();
   const [issueSearchInput, setIssueSearchInput] = useState(() => normalizeIssueSearch(searchParams.get("q")));
   const [issueToCreateFrom, setIssueToCreateFrom] = useState<{ key: string; summary: string } | null>(null);
   const [issueToLinkToExisting, setIssueToLinkToExisting] = useState<{ key: string; summary: string } | null>(null);
@@ -128,7 +132,8 @@ export function JiraPage() {
     );
   });
   const projects = projectsQuery.data ?? [];
-  const tickets = ticketsQuery.data ?? [];
+  const linkableTicketsQuery = useJiraLinkableTicketsQuery(issueToLinkToExisting?.key ?? null, ticketSearch);
+  const searchedTickets = linkableTicketsQuery.data ?? [];
   const linkedIssuesCount = issues.filter((issue) => issue.borodaTickets.length > 0).length;
 
   useEffect(() => {
@@ -148,77 +153,31 @@ export function JiraPage() {
     });
   }, [boardColumns, defaultBoardStatus]);
 
-  const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
-    if (event.defaultPrevented) {
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-
-      if (isSearchFocused(searchInputRef)) {
-        searchInputRef.current?.blur();
-        return;
-      }
-
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-      return;
-    }
-
-    if (event.key === "Escape" && isSearchFocused(searchInputRef)) {
-      event.preventDefault();
-      searchInputRef.current?.blur();
-      return;
-    }
-
-    if (isTypingTarget(event.target)) {
-      return;
-    }
-
-    if (event.key === "/") {
-      event.preventDefault();
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-    }
+  usePageSearchHotkeys({
+    searchInputRef
   });
 
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyboardShortcuts);
-    return () => {
-      window.removeEventListener("keydown", handleKeyboardShortcuts);
-    };
-  }, []);
+  const searchControl = (
+    <PageSearchInput
+      inputRef={searchInputRef}
+      inputClassName={inputClassName}
+      name="jiraIssueSearch"
+      wrapperClassName="min-w-0 flex-1 basis-[18rem] max-w-[32rem]"
+      value={issueSearchInput}
+      onChange={(nextSearch) => {
+        const nextSearchParams = new URLSearchParams(searchParams);
 
-  const renderSearchControl = () => (
-    <label className="min-w-0 flex-1 basis-[18rem] max-w-[32rem]">
-      <span className="sr-only">Search</span>
-      <input
-        ref={searchInputRef}
-        type="search"
-        inputMode="search"
-        name="jiraIssueSearch"
-        autoComplete="off"
-        spellCheck={false}
-        className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
-        placeholder="Search…"
-        value={issueSearchInput}
-        onChange={(event) => {
-          const nextSearch = event.target.value;
-          const nextSearchParams = new URLSearchParams(searchParams);
+        setIssueSearchInput(nextSearch);
 
-          setIssueSearchInput(nextSearch);
+        if (nextSearch.trim()) {
+          nextSearchParams.set("q", nextSearch);
+        } else {
+          nextSearchParams.delete("q");
+        }
 
-          if (nextSearch.trim()) {
-            nextSearchParams.set("q", nextSearch);
-          } else {
-            nextSearchParams.delete("q");
-          }
-
-          setSearchParams(nextSearchParams, { replace: true });
-        }}
-      />
-    </label>
+        setSearchParams(nextSearchParams, { replace: true });
+      }}
+    />
   );
 
   const openQuickCreate = (issue: { key: string; summary: string }) => {
@@ -238,27 +197,25 @@ export function JiraPage() {
   };
 
   const linkableTickets = issueToLinkToExisting
-    ? tickets.filter((ticket) => {
+    ? searchedTickets.filter((ticket) => {
         const searchValue = ticketSearch.trim().toLowerCase();
-        const matchesSearch =
-          !searchValue ||
-          ticket.key.toLowerCase().includes(searchValue) ||
-          ticket.title.toLowerCase().includes(searchValue);
         const selectedIssue = issues.find((issue) => issue.key === issueToLinkToExisting.key);
         const alreadyLinked = selectedIssue?.borodaTickets.some((linkedTicket) => linkedTicket.id === ticket.id) ?? false;
 
-        return matchesSearch && !alreadyLinked;
+        return searchValue.length > 0 && !alreadyLinked;
       })
     : [];
 
   return (
     <section className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-3">
-      <AppHeaderActions>{renderSearchControl()}</AppHeaderActions>
-      <AppHeaderRightActions>
-        <Link to="/settings" className={headerActionButtonClassName}>
-          Settings
-        </Link>
-      </AppHeaderRightActions>
+      <PageCommandBar
+        actions={searchControl}
+        rightActions={
+          <Link to="/settings" className={headerActionButtonClassName}>
+            Settings
+          </Link>
+        }
+      />
 
       <div className="flex min-h-12 flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-3">
         <h1 className="m-0 text-base font-semibold text-ink-50">Assigned Jira issues</h1>
@@ -268,7 +225,7 @@ export function JiraPage() {
             <span aria-hidden="true">/</span>
             <span>{linkedIssuesCount} linked</span>
           </div>
-          {!hasHost ? renderSearchControl() : null}
+          {!hasHost ? searchControl : null}
           <label className="min-w-[12rem]">
             <span className="sr-only">Sort Jira issues</span>
             <select
@@ -524,6 +481,11 @@ export function JiraPage() {
             <span className="m-0 text-sm font-medium text-ink-100">Search Boroda tickets</span>
             <input
               ref={linkExistingSearchRef}
+              type="search"
+              inputMode="search"
+              name="borodaTicketSearch"
+              autoComplete="off"
+              spellCheck={false}
               className="min-h-10 rounded-[10px] border border-white/10 bg-canvas-950 px-3 py-2.5 text-sm text-ink-50 placeholder:text-ink-300"
               value={ticketSearch}
               onChange={(event) => {
@@ -539,9 +501,13 @@ export function JiraPage() {
             </p>
           ) : null}
 
-          {ticketsQuery.isLoading ? <p className="m-0 text-sm text-ink-300">Loading Boroda tickets…</p> : null}
+          {!ticketSearch.trim() ? <p className="m-0 text-sm text-ink-300">Search to find a Boroda ticket to link.</p> : null}
 
-          {!ticketsQuery.isLoading ? (
+          {ticketSearch.trim() && linkableTicketsQuery.isLoading ? (
+            <p className="m-0 text-sm text-ink-300">Loading Boroda tickets…</p>
+          ) : null}
+
+          {ticketSearch.trim() && !linkableTicketsQuery.isLoading ? (
             linkableTickets.length > 0 ? (
               <ul className="m-0 grid list-none gap-3 p-0" role="list">
                 {linkableTickets.map((ticket) => (
@@ -587,11 +553,7 @@ export function JiraPage() {
                 ))}
               </ul>
             ) : (
-              <p className="m-0 text-sm text-ink-300">
-                {ticketSearch.trim()
-                  ? "No matching Boroda tickets."
-                  : "No available Boroda tickets to link."}
-              </p>
+              <p className="m-0 text-sm text-ink-300">No matching Boroda tickets.</p>
             )
           ) : null}
         </div>

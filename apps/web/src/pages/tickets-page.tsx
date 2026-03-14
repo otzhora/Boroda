@@ -2,8 +2,10 @@ import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "r
 import { Link, useSearchParams } from "react-router-dom";
 import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
-import { AppHeaderActions, AppHeaderRightActions, useAppHeader } from "../app/router";
-import { TICKET_PRIORITIES, formatStatusLabel } from "../lib/constants";
+import { TicketList } from "../components/ticket/ticket-list";
+import { TicketListEmptyState, TicketListErrorState, TicketListLoadingState } from "../components/ticket/ticket-list-states";
+import { PageCommandBar } from "../components/ui/page-command-bar";
+import { PageSearchInput } from "../components/ui/page-search-input";
 import { useBoardColumnsQuery, type BoardFilters } from "../features/board/queries";
 import { useProjectsQuery } from "../features/projects/queries";
 import {
@@ -25,10 +27,7 @@ import {
   type TicketSortField
 } from "../features/tickets/queries";
 import {
-  ColumnHeader,
-  ProjectChip,
   TicketFilterDropdown,
-  formatLastChange,
   formatStandupWindowLabel,
   getDefaultStandupWindowStart,
   hasTicketFilters,
@@ -45,7 +44,7 @@ import {
   setStoredLastStandupCompletedAt
 } from "../lib/user-preferences";
 import { ApiError } from "../lib/api-client";
-import { isSearchFocused, isTypingTarget, parseTicketId } from "../features/tickets/url-state";
+import { parseTicketId, usePageSearchHotkeys } from "../features/tickets/url-state";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
 const panelClassName = "grid gap-4 rounded-[10px] border border-white/8 bg-canvas-925 px-5 py-5";
@@ -62,7 +61,6 @@ const filterButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900";
 
 export function TicketsPage() {
-  const { hasHost } = useAppHeader();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => parseTicketId(searchParams.get("ticketId")));
   const [editForm, setEditForm] = useState<TicketFormState>(createEmptyTicketForm());
@@ -186,59 +184,17 @@ export function TicketsPage() {
     unarchiveTicketMutation.error?.message ??
     refreshTicketJiraLinksMutation.error?.message;
 
-  const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
-    if (event.defaultPrevented) {
-      return;
-    }
-
-    if (!isTypingTarget(event.target) && event.shiftKey && event.key.toLowerCase() === "f") {
-      event.preventDefault();
+  usePageSearchHotkeys({
+    searchInputRef,
+    onOpenFilters: () => {
       setFilterHotkeySignal((current) => current + 1);
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-
-      if (isSearchFocused(searchInputRef)) {
-        searchInputRef.current?.blur();
-        return;
+    },
+    onEscape: () => {
+      if (selectedTicketId !== null) {
+        setSelectedTicketId(null);
       }
-
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-      return;
-    }
-
-    if (event.key === "Escape" && isSearchFocused(searchInputRef)) {
-      event.preventDefault();
-      searchInputRef.current?.blur();
-      return;
-    }
-
-    if (isTypingTarget(event.target)) {
-      return;
-    }
-
-    if (event.key === "/") {
-      event.preventDefault();
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-      return;
-    }
-
-    if (event.key === "Escape" && selectedTicketId !== null) {
-      event.preventDefault();
-      setSelectedTicketId(null);
     }
   });
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyboardShortcuts);
-    return () => {
-      window.removeEventListener("keydown", handleKeyboardShortcuts);
-    };
-  }, []);
 
   const updateFilters = (updater: (nextSearchParams: URLSearchParams) => void) => {
     const nextSearchParams = new URLSearchParams(searchParams);
@@ -291,28 +247,19 @@ export function TicketsPage() {
     });
   });
 
-  const renderSearchControl = () => (
-    <label className="shrink-0">
-      <span className="sr-only">Search</span>
-      <input
-        ref={searchInputRef}
-        type="search"
-        inputMode="search"
-        name="ticketSearch"
-        autoComplete="off"
-        spellCheck={false}
-        className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
-        placeholder="Search…"
-        value={searchInputValue}
-        onChange={(event) => {
-          const value = event.target.value;
-          setSearchInputValue(value);
-          updateFilters((nextSearchParams) => {
-            updateSearchParam(nextSearchParams, "q", value.trim() || undefined);
-          });
-        }}
-      />
-    </label>
+  const searchControl = (
+    <PageSearchInput
+      inputRef={searchInputRef}
+      inputClassName={inputClassName}
+      name="ticketSearch"
+      value={searchInputValue}
+      onChange={(value) => {
+        setSearchInputValue(value);
+        updateFilters((nextSearchParams) => {
+          updateSearchParam(nextSearchParams, "q", value.trim() || undefined);
+        });
+      }}
+    />
   );
 
   const renderFilterControls = () => (
@@ -334,26 +281,34 @@ export function TicketsPage() {
 
   const renderHeaderActions = () => (
     <div className="flex min-w-0 items-center justify-center gap-2">
-      {renderSearchControl()}
+      {searchControl}
       {renderFilterControls()}
     </div>
   );
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col gap-4">
-      <AppHeaderActions>{renderHeaderActions()}</AppHeaderActions>
-      <AppHeaderRightActions>
-        <>
-          {standupOnly ? (
-            <button type="button" className={primaryButtonClassName} onClick={handleMarkStandupDone}>
-              Standup done
-            </button>
-          ) : null}
-          <Link to="/settings" className={secondaryButtonClassName}>
-            Settings
-          </Link>
-        </>
-      </AppHeaderRightActions>
+      <PageCommandBar
+        actions={renderHeaderActions()}
+        rightActions={
+          <>
+            {standupOnly ? (
+              <button type="button" className={primaryButtonClassName} onClick={handleMarkStandupDone}>
+                Standup done
+              </button>
+            ) : null}
+            <Link to="/settings" className={secondaryButtonClassName}>
+              Settings
+            </Link>
+          </>
+        }
+        fallback={
+          <section className={`${softPanelClassName} grid-cols-[minmax(0,1fr)_auto] items-center gap-3`}>
+            {searchControl}
+            {renderFilterControls()}
+          </section>
+        }
+      />
 
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-3">
         <div className="grid gap-1">
@@ -399,149 +354,41 @@ export function TicketsPage() {
         </p>
       ) : null}
 
-      {!hasHost ? (
-        <section className={`${softPanelClassName} grid-cols-[minmax(0,1fr)_auto] items-center gap-3`}>
-          {renderSearchControl()}
-          {renderFilterControls()}
-        </section>
-      ) : null}
-
       {ticketsQuery.isLoading && ticketsQuery.data === undefined ? (
-        <p className={`${softPanelClassName} m-0 text-sm text-ink-50`}>Loading tickets…</p>
+        <TicketListLoadingState className={softPanelClassName} />
       ) : null}
       {ticketsQuery.isError ? (
-        <section className={`${panelClassName} h-full content-start`} aria-live="polite">
-          <h2 className="m-0 text-lg font-semibold text-ink-50">Tickets request failed</h2>
-          <p className="m-0 max-w-[48rem] text-sm text-ink-200">
-            The ticket list could not be loaded. Retry the request or inspect the local API logs.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <button className={primaryButtonClassName} type="button" onClick={() => void ticketsQuery.refetch()}>
-              Retry tickets
-            </button>
-          </div>
-        </section>
+        <TicketListErrorState
+          className={panelClassName}
+          primaryButtonClassName={primaryButtonClassName}
+          onRetry={() => {
+            void ticketsQuery.refetch();
+          }}
+        />
       ) : null}
 
       {!ticketsQuery.isLoading && !ticketsQuery.isError && tickets.length === 0 ? (
-        <section className={`${panelClassName} h-full content-start`} aria-live="polite">
-          <h2 className="m-0 text-lg font-semibold text-ink-50">
-            {ticketFiltersApplied ? "No tickets match these filters" : standupOnly ? "No tickets updated for standup" : "No tickets available"}
-          </h2>
-          <p className="m-0 max-w-[44rem] text-sm text-ink-200">
-            {ticketFiltersApplied
-              ? "Clear the current filters or switch scope to review a different slice of work."
-              : standupOnly
-                ? "Turn off standup mode or switch scope to review a different slice of work."
-              : "Create a ticket from the board or import your local sample data to populate the list."}
-          </p>
-          {ticketFiltersApplied ? (
-            <div className="flex flex-wrap gap-3">
-              <button type="button" className={secondaryButtonClassName} onClick={clearFilters}>
-                Clear filters
-              </button>
-            </div>
-          ) : null}
-        </section>
+        <TicketListEmptyState
+          className={panelClassName}
+          ticketFiltersApplied={ticketFiltersApplied}
+          standupOnly={standupOnly}
+          secondaryButtonClassName={secondaryButtonClassName}
+          onClearFilters={clearFilters}
+        />
       ) : null}
 
       {!ticketsQuery.isLoading && !ticketsQuery.isError && tickets.length > 0 ? (
-        <section className={`${listClassName} min-h-0 min-w-0 flex-1 overflow-auto`}>
-          <div className="grid min-w-[72rem] grid-cols-[minmax(0,2.3fr)_minmax(0,1.1fr)_10rem_9rem_minmax(0,1.6fr)_10rem] gap-3 border-b border-white/8 px-4 py-3 text-xs text-ink-300">
-            <ColumnHeader
-              label="Ticket"
-              sortField="ticket"
-              currentSortField={sortField}
-              currentSortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <ColumnHeader
-              label="Jira"
-              sortField="jira"
-              currentSortField={sortField}
-              currentSortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <ColumnHeader
-              label="Status"
-              sortField="status"
-              currentSortField={sortField}
-              currentSortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <ColumnHeader
-              label="Priority"
-              sortField="priority"
-              currentSortField={sortField}
-              currentSortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <ColumnHeader
-              label="Projects"
-              sortField="projects"
-              currentSortField={sortField}
-              currentSortDirection={sortDirection}
-              onSort={handleSort}
-            />
-            <ColumnHeader
-              label="Last change"
-              sortField="updated"
-              currentSortField={sortField}
-              currentSortDirection={sortDirection}
-              onSort={handleSort}
-            />
-          </div>
-          <ul className="m-0 min-w-[72rem] list-none p-0">
-            {tickets.map((ticket) => {
-              const selected = ticket.id === selectedTicketId;
-
-              return (
-                <li key={ticket.id} className="border-t border-white/8 first:border-t-0">
-                  <button
-                    type="button"
-                    className={`grid w-full min-w-[72rem] grid-cols-[minmax(0,2.3fr)_minmax(0,1.1fr)_10rem_9rem_minmax(0,1.6fr)_10rem] gap-3 px-4 py-4 text-left transition-colors hover:bg-white/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ink-50 ${selected ? "bg-white/[0.03]" : ""}`}
-                    aria-pressed={selected}
-                    aria-label={`Open ticket ${ticket.key} ${ticket.title}`}
-                    onClick={() => {
-                      setSelectedTicketId(ticket.id);
-                    }}
-                  >
-                    <div className="min-w-0 grid gap-1">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="shrink-0 font-mono text-sm tabular-nums text-ink-200">{ticket.key}</span>
-                        <span className="truncate text-sm font-medium text-ink-50">{ticket.title}</span>
-                      </div>
-                      <div className="text-xs text-ink-300">{ticket.archivedAt ? "Archived ticket" : "Current ticket"}</div>
-                    </div>
-                    <div className="min-w-0 text-sm text-ink-200">
-                      <span className="block truncate">
-                        {ticket.jiraIssues.length
-                          ? ticket.jiraIssues.map((issue) => issue.key).join(", ")
-                          : "No Jira links"}
-                      </span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className={`${chipClassName} border-white/10 text-ink-200`}>
-                        {boardColumns.find((column) => column.status === ticket.status)?.label ?? formatStatusLabel(ticket.status)}
-                      </span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className={`${chipClassName} border-white/10 text-ink-200`}>{ticket.priority}</span>
-                    </div>
-                    <div className="flex min-w-0 flex-wrap gap-2">
-                      {ticket.projectBadges.length ? (
-                        ticket.projectBadges.map((project) => <ProjectChip key={project.id} project={project} />)
-                      ) : (
-                        <span className="text-sm text-ink-300">No projects</span>
-                      )}
-                    </div>
-                    <div className="text-sm text-ink-300">{formatLastChange(ticket)}</div>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        <TicketList
+          tickets={tickets}
+          selectedTicketId={selectedTicketId}
+          sortField={sortField}
+          sortDirection={sortDirection}
+          boardColumns={boardColumns}
+          listClassName={listClassName}
+          chipClassName={chipClassName}
+          onSort={handleSort}
+          onSelectTicket={setSelectedTicketId}
+        />
       ) : null}
 
       <TicketDrawer

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
+import type { TicketListItem, TicketListResponse } from "../../lib/types";
 
 export interface JiraSettings {
   baseUrl: string;
@@ -55,6 +56,10 @@ export function assignedJiraIssueLinksQueryKey() {
   return ["jira", "issues", "assigned", "links"] as const;
 }
 
+export function jiraLinkableTicketsQueryKey(issueKey: string | null, search: string) {
+  return ["jira", "linkable-tickets", issueKey, search] as const;
+}
+
 export function useJiraSettingsQuery() {
   return useQuery({
     queryKey: jiraSettingsQueryKey(),
@@ -73,6 +78,24 @@ export function useAssignedJiraIssueLinksQuery() {
   return useQuery({
     queryKey: assignedJiraIssueLinksQueryKey(),
     queryFn: () => apiClient<AssignedJiraIssuesWithLinksResponse>("/api/integrations/jira/issues/assigned/links")
+  });
+}
+
+export function useJiraLinkableTicketsQuery(issueKey: string | null, search: string) {
+  const normalizedSearch = search.trim();
+
+  return useQuery({
+    queryKey: jiraLinkableTicketsQueryKey(issueKey, normalizedSearch),
+    queryFn: async () => {
+      const searchParams = new URLSearchParams({
+        q: normalizedSearch
+      });
+      const response = await apiClient<TicketListResponse>(`/api/tickets?${searchParams.toString()}`);
+      return response.items;
+    },
+    enabled: issueKey !== null && normalizedSearch.length > 0,
+    gcTime: 30 * 1000,
+    placeholderData: (previousData) => previousData
   });
 }
 

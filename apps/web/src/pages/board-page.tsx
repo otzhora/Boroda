@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { BoardView } from "../components/board/board-view";
@@ -11,7 +11,9 @@ import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescrip
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
 import { SectionedFilterDropdown } from "../components/ui/sectioned-filter-dropdown";
 import { ModalDialog } from "../components/ui/modal-dialog";
-import { AppHeaderActions, AppHeaderRightActions, useAppHeader } from "../app/router";
+import { useAppHeader } from "../app/router";
+import { PageCommandBar } from "../components/ui/page-command-bar";
+import { PageSearchInput } from "../components/ui/page-search-input";
 import { BoardFilterDropdown, hasBoardFilters, toQuickCreatePayload } from "../features/board/board-page-helpers";
 import {
   useCreateBoardColumnMutation,
@@ -38,7 +40,7 @@ import { useTicketQuery } from "../features/tickets/queries";
 import { DEFAULT_BOARD_STATUS, TICKET_PRIORITIES } from "../lib/constants";
 import { ApiError } from "../lib/api-client";
 import { getStoredAutoRunWorktreeSetup } from "../lib/user-preferences";
-import { isSearchFocused, isTypingTarget, parseTicketId } from "../features/tickets/url-state";
+import { parseTicketId, usePageSearchHotkeys } from "../features/tickets/url-state";
 
 const EMPTY_BOARD_FILTERS: BoardFilters = {};
 const panelClassName =
@@ -204,88 +206,39 @@ export function BoardPage() {
   const totalTickets = columns.reduce((count, column) => count + column.tickets.length, 0);
   const boardHasFilters = hasBoardFilters(boardFilters);
 
-  const handleKeyboardShortcuts = useEffectEvent((event: KeyboardEvent) => {
-    if (event.defaultPrevented) {
-      return;
-    }
-
-    if (!isTypingTarget(event.target) && event.shiftKey && event.key.toLowerCase() === "f") {
-      event.preventDefault();
+  usePageSearchHotkeys({
+    searchInputRef,
+    onOpenFilters: () => {
       setFilterHotkeySignal((current) => current + 1);
-      return;
-    }
-
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-
-      if (isSearchFocused(searchInputRef)) {
-        searchInputRef.current?.blur();
-        return;
-      }
-
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-      return;
-    }
-
-    if (event.key === "Escape" && isSearchFocused(searchInputRef)) {
-      event.preventDefault();
-      searchInputRef.current?.blur();
-      return;
-    }
-
-    if (isTypingTarget(event.target)) {
-      return;
-    }
-
-    if (event.key === "/") {
-      event.preventDefault();
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
-      return;
-    }
-
-    if (event.key.toLowerCase() === "c") {
-      event.preventDefault();
+    },
+    onCreate: () => {
       setIsQuickCreateOpen(true);
-      return;
-    }
-
-    if (event.key === "Escape" && selectedTicketId !== null) {
-      event.preventDefault();
-      setSelectedTicketId(null);
+    },
+    onEscape: () => {
+      if (selectedTicketId !== null) {
+        setSelectedTicketId(null);
+      }
     }
   });
 
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyboardShortcuts);
-    return () => {
-      window.removeEventListener("keydown", handleKeyboardShortcuts);
-    };
-  }, []);
-
-  const renderSearchControl = () => (
-    <label className="shrink-0">
-      <span className="sr-only">Search</span>
-      <input
-        ref={searchInputRef}
-        className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
-        placeholder="Search…"
-        value={boardFilters.q ?? ""}
-        onChange={(event) => {
-          const value = event.target.value;
-          setBoardFilters((current) => ({
-            ...current,
-            q: value || undefined
-          }));
-        }}
-      />
-    </label>
+  const searchControl = (
+    <PageSearchInput
+      inputRef={searchInputRef}
+      inputClassName={inputClassName}
+      name="boardSearch"
+      value={boardFilters.q ?? ""}
+      onChange={(value) => {
+        setBoardFilters((current) => ({
+          ...current,
+          q: value || undefined
+        }));
+      }}
+    />
   );
 
   const renderHeaderActions = () => (
     <div className="flex min-w-0 items-center justify-center gap-2">
-      {renderSearchControl()}
+      {searchControl}
       <BoardFilterDropdown
         filters={boardFilters}
         projects={projects}
@@ -312,61 +265,47 @@ export function BoardPage() {
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col gap-4">
-      <AppHeaderActions>{renderHeaderActions()}</AppHeaderActions>
-      <AppHeaderRightActions>
-        <Link to="/settings" className={secondaryButtonClassName}>
-          Settings
-        </Link>
-      </AppHeaderRightActions>
+      <PageCommandBar
+        actions={renderHeaderActions()}
+        rightActions={
+          <Link to="/settings" className={secondaryButtonClassName}>
+            Settings
+          </Link>
+        }
+        fallback={
+          <section className={`${softPanelClassName} grid-cols-[minmax(0,1fr)_auto] items-center gap-3`}>
+            {searchControl}
+            <div className="flex items-center gap-2">
+              <BoardFilterDropdown
+                filters={boardFilters}
+                projects={projects}
+                inputClassName={inputClassName}
+                primaryButtonClassName={primaryButtonClassName}
+                secondaryButtonClassName={secondaryButtonClassName}
+                onUpdateFilters={setBoardFilters}
+                onClearFilters={() => {
+                  setBoardFilters(EMPTY_BOARD_FILTERS);
+                }}
+                hotkeySignal={filterHotkeySignal}
+              />
+              <button
+                type="button"
+                className={primaryButtonClassName}
+                onClick={() => {
+                  setIsQuickCreateOpen(true);
+                }}
+              >
+                Create
+              </button>
+            </div>
+          </section>
+        }
+      />
 
       {actionError ? (
         <p className={`${softPanelClassName} m-0 text-sm text-danger-400`} role="alert">
           {actionError}
         </p>
-      ) : null}
-
-      {!hasHost ? (
-        <section className={`${softPanelClassName} grid-cols-[minmax(0,1fr)_auto] items-center gap-3`}>
-          <label className="shrink-0">
-            <span className="sr-only">Search</span>
-            <input
-              ref={searchInputRef}
-              className={`${inputClassName} w-[18rem] transition-[width] duration-200 ease-out focus:w-[32rem] motion-reduce:transition-none`}
-              placeholder="Search…"
-              value={boardFilters.q ?? ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                setBoardFilters((current) => ({
-                  ...current,
-                  q: value || undefined
-                }));
-              }}
-            />
-          </label>
-          <div className="flex items-center gap-2">
-            <BoardFilterDropdown
-              filters={boardFilters}
-              projects={projects}
-              inputClassName={inputClassName}
-              primaryButtonClassName={primaryButtonClassName}
-              secondaryButtonClassName={secondaryButtonClassName}
-              onUpdateFilters={setBoardFilters}
-              onClearFilters={() => {
-                setBoardFilters(EMPTY_BOARD_FILTERS);
-              }}
-              hotkeySignal={filterHotkeySignal}
-            />
-            <button
-              type="button"
-              className={primaryButtonClassName}
-              onClick={() => {
-                setIsQuickCreateOpen(true);
-              }}
-            >
-              Create
-            </button>
-          </div>
-        </section>
       ) : null}
 
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden w-full">
