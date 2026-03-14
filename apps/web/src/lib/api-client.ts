@@ -19,82 +19,68 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiClient<T>(path: string, init?: RequestInit): Promise<T> {
+interface RequestLogContext {
+  method: string;
+  path: string;
+  startedAt: number;
+}
+
+function createRequestContext(path: string, init?: RequestInit): RequestLogContext {
+  return {
+    method: init?.method ?? "GET",
+    path,
+    startedAt: performance.now()
+  };
+}
+
+function withRequestHeaders(init?: RequestInit): RequestInit | undefined {
   const headers = new Headers(init?.headers);
   const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
-  const method = init?.method ?? "GET";
-  const startedAt = performance.now();
 
   if (init?.body && !isFormDataBody && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }
 
-  logClientEvent("info", "api.request.started", {
-    method,
-    path
-  });
-
-  let response: Response;
-
-  try {
-    response = await fetch(path, {
-      ...init,
-      headers
-    });
-  } catch (error) {
-    logClientError("api.request.network_failed", error, {
-      method,
-      path,
-      durationMs: Math.round(performance.now() - startedAt)
-    });
-    throw error;
-  }
-
-  if (!response.ok) {
-    let payload: ErrorResponse | null = null;
-
-    try {
-      payload = (await response.json()) as ErrorResponse;
-    } catch {
-      payload = null;
-    }
-
-    const error = new ApiError(
-      payload?.error?.message ?? `Request failed: ${response.status}`,
-      response.status,
-      payload?.error?.code,
-      payload?.error?.details
-    );
-    logClientError("api.request.failed", error, {
-      method,
-      path,
-      statusCode: response.status,
-      requestId: response.headers.get("x-request-id"),
-      errorCode: payload?.error?.code,
-      errorDetails: payload?.error?.details,
-      durationMs: Math.round(performance.now() - startedAt)
-    });
-    throw error;
-  }
-
-  logClientEvent("info", "api.request.completed", {
-    method,
-    path,
-    statusCode: response.status,
-    requestId: response.headers.get("x-request-id"),
-    durationMs: Math.round(performance.now() - startedAt)
-  });
-
-  return response.json() as Promise<T>;
+  return {
+    ...init,
+    headers
+  };
 }
 
-export async function apiClientBlob(path: string, init?: RequestInit): Promise<Blob> {
-  const method = init?.method ?? "GET";
-  const startedAt = performance.now();
+async function parseErrorResponse(response: Response): Promise<ErrorResponse | null> {
+  const rawBody = await response.text();
 
-  logClientEvent("info", "api.blob_request.started", {
-    method,
-    path
+  if (!rawBody.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawBody) as ErrorResponse;
+  } catch {
+    return null;
+  }
+}
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  if (response.status === 204 || response.status === 205) {
+    return undefined as T;
+  }
+
+  const rawBody = await response.text();
+
+  if (!rawBody.trim()) {
+    return undefined as T;
+  }
+
+  return JSON.parse(rawBody) as T;
+}
+
+async function performRequest(path: string, init: RequestInit | undefined, eventName: string) {
+  const context = createRequestContext(path, init);
+
+  logClientEvent("info", `${eventName}.started`, {
+    method: context.method,
+    path: context.path
   });
 
   let response: Response;
@@ -102,22 +88,16 @@ export async function apiClientBlob(path: string, init?: RequestInit): Promise<B
   try {
     response = await fetch(path, init);
   } catch (error) {
-    logClientError("api.blob_request.network_failed", error, {
-      method,
-      path,
-      durationMs: Math.round(performance.now() - startedAt)
+    logClientError(`${eventName}.network_failed`, error, {
+      method: context.method,
+      path: context.path,
+      durationMs: Math.round(performance.now() - context.startedAt)
     });
     throw error;
   }
 
   if (!response.ok) {
-    let payload: ErrorResponse | null = null;
-
-    try {
-      payload = (await response.json()) as ErrorResponse;
-    } catch {
-      payload = null;
-    }
+    const payload = await parseErrorResponse(response);
 
     const error = new ApiError(
       payload?.error?.message ?? `Request failed: ${response.status}`,
@@ -125,25 +105,35 @@ export async function apiClientBlob(path: string, init?: RequestInit): Promise<B
       payload?.error?.code,
       payload?.error?.details
     );
-    logClientError("api.blob_request.failed", error, {
-      method,
-      path,
+    logClientError(`${eventName}.failed`, error, {
+      method: context.method,
+      path: context.path,
       statusCode: response.status,
       requestId: response.headers.get("x-request-id"),
       errorCode: payload?.error?.code,
       errorDetails: payload?.error?.details,
-      durationMs: Math.round(performance.now() - startedAt)
+      durationMs: Math.round(performance.now() - context.startedAt)
     });
     throw error;
   }
 
-  logClientEvent("info", "api.blob_request.completed", {
-    method,
-    path,
+  logClientEvent("info", `${eventName}.completed`, {
+    method: context.method,
+    path: context.path,
     statusCode: response.status,
     requestId: response.headers.get("x-request-id"),
-    durationMs: Math.round(performance.now() - startedAt)
+    durationMs: Math.round(performance.now() - context.startedAt)
   });
 
+  return response;
+}
+
+export async function apiClient<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await performRequest(path, withRequestHeaders(init), "api.request");
+  return parseJsonResponse<T>(response);
+}
+
+export async function apiClientBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const response = await performRequest(path, init, "api.blob_request");
   return response.blob();
 }

@@ -1,7 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
 import type { BoardColumnsResponse } from "../../lib/types";
+import { ticketItemsQueryKey, ticketListQueryKey } from "../tickets/queries";
 import { boardColumnsQueryKey } from "./queries";
+
+function invalidateTicketListQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ticketItemsQueryKey() });
+  void queryClient.invalidateQueries({ queryKey: ticketListQueryKey() });
+}
 
 export function useCreateBoardColumnMutation() {
   const queryClient = useQueryClient();
@@ -15,7 +21,7 @@ export function useCreateBoardColumnMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["board"] });
       void queryClient.invalidateQueries({ queryKey: boardColumnsQueryKey() });
-      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      invalidateTicketListQueries(queryClient);
     }
   });
 }
@@ -31,7 +37,7 @@ export function useDeleteBoardColumnMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["board"] });
       void queryClient.invalidateQueries({ queryKey: boardColumnsQueryKey() });
-      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      invalidateTicketListQueries(queryClient);
     }
   });
 }
@@ -48,7 +54,7 @@ export function useRenameBoardColumnMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["board"] });
       void queryClient.invalidateQueries({ queryKey: boardColumnsQueryKey() });
-      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      invalidateTicketListQueries(queryClient);
     }
   });
 }

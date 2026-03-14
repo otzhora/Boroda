@@ -3,7 +3,7 @@ import { apiClient } from "../../lib/api-client";
 import type { BoardResponse, OpenInMode, OpenInTarget, Ticket, TicketJiraIssueLink, TicketStatus } from "../../lib/types";
 import { boardQueryKey, type BoardFilters } from "../board/queries";
 import { assignedJiraIssueLinksQueryKey, assignedJiraIssuesQueryKey } from "../jira/queries";
-import { ticketQueryKey, ticketsQueryKey } from "./queries";
+import { ticketItemsQueryKey, ticketListQueryKey, ticketQueryKey } from "./queries";
 import { createEmptyTicketForm, toTicketForm, type TicketFormState } from "./form";
 
 interface TicketPayload {
@@ -40,6 +40,11 @@ export interface UploadedTicketImage {
   markdown: string;
 }
 
+function invalidateTicketListQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ticketItemsQueryKey() });
+  void queryClient.invalidateQueries({ queryKey: ticketListQueryKey() });
+}
+
 export function useCreateTicketMutation(options: {
   boardFilters: BoardFilters;
   onCreated: (ticket: Ticket) => void;
@@ -57,7 +62,7 @@ export function useCreateTicketMutation(options: {
       options.onReset();
       options.onCreated(ticket);
       void queryClient.invalidateQueries({ queryKey: ["board"] });
-      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      invalidateTicketListQueries(queryClient);
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
@@ -87,7 +92,7 @@ export function useUpdateTicketMutation(options: {
     onSuccess: (ticket) => {
       options.onUpdated(toTicketForm(ticket));
       void queryClient.invalidateQueries({ queryKey: ["board"] });
-      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      invalidateTicketListQueries(queryClient);
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
@@ -124,7 +129,7 @@ export function useDeleteTicketMutation(options: {
       options.onDeleted();
       options.onReset(createEmptyTicketForm());
       void queryClient.invalidateQueries({ queryKey: ["board"] });
-      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      invalidateTicketListQueries(queryClient);
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
@@ -155,7 +160,7 @@ export function useUnarchiveTicketMutation(options: {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["board"] });
-      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      invalidateTicketListQueries(queryClient);
       void queryClient.invalidateQueries({ queryKey: boardQueryKey(options.boardFilters) });
 
       if (options.ticketId !== null) {
@@ -277,7 +282,7 @@ export function useRefreshTicketJiraLinksMutation(ticketId: number | null) {
     },
     onSuccess: (ticket) => {
       void queryClient.invalidateQueries({ queryKey: ["board"] });
-      void queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      invalidateTicketListQueries(queryClient);
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
       void queryClient.invalidateQueries({ queryKey: ticketQueryKey(ticket.id) });
     }
@@ -316,7 +321,7 @@ export function useAddTicketJiraLinkMutation() {
       }),
     onSuccess: (_jiraLink, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["board"] });
-      void queryClient.invalidateQueries({ queryKey: ticketsQueryKey() });
+      invalidateTicketListQueries(queryClient);
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssuesQueryKey() });
       void queryClient.invalidateQueries({ queryKey: assignedJiraIssueLinksQueryKey() });
       void queryClient.invalidateQueries({ queryKey: ticketQueryKey(variables.ticketId) });

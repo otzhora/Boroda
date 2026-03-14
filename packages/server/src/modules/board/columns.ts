@@ -3,6 +3,12 @@ import type { FastifyInstance } from "fastify";
 import { boardColumns, tickets } from "../../db/schema";
 import { AppError } from "../../shared/errors";
 
+type AppDb = FastifyInstance["db"];
+type TransactionCallback = Parameters<AppDb["transaction"]>[0];
+type DbTransaction = TransactionCallback extends (tx: infer Tx, ...args: never[]) => unknown ? Tx : never;
+type DbExecutor = AppDb | DbTransaction;
+type BoardColumnRecord = typeof boardColumns.$inferSelect;
+
 export const DEFAULT_BOARD_COLUMNS = [
   { status: "INBOX", label: "Inbox", position: 0 },
   { status: "READY", label: "Ready", position: 1 },
@@ -17,15 +23,8 @@ export async function listBoardColumns(app: FastifyInstance) {
   return ensureBoardColumnsPresent(app);
 }
 
-export function listBoardColumnsFromDb(db: any) {
-  return db.select().from(boardColumns).orderBy(asc(boardColumns.position), asc(boardColumns.id)).all() as Array<{
-    id: number;
-    status: string;
-    label: string;
-    position: number;
-    createdAt: string;
-    updatedAt: string;
-  }>;
+export function listBoardColumnsFromDb(db: DbExecutor): BoardColumnRecord[] {
+  return db.select().from(boardColumns).orderBy(asc(boardColumns.position), asc(boardColumns.id)).all();
 }
 
 export function createStatusKey(label: string, existingStatuses: Iterable<string>) {
@@ -69,7 +68,7 @@ export async function ensureBoardColumnsPresent(app: FastifyInstance) {
 }
 
 export function ensureColumnsForStatuses(
-  db: any,
+  db: DbExecutor,
   statuses: string[]
 ) {
   const existing = listBoardColumnsFromDb(db);

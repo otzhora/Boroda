@@ -22,8 +22,12 @@ export function ticketQueryKey(ticketId: number | null) {
   return ["ticket", ticketId] as const;
 }
 
-export function ticketsQueryKey(filters: TicketFilters = {}) {
-  return ["tickets", filters] as const;
+export function ticketItemsQueryKey(filters: TicketFilters = {}) {
+  return ["ticket-items", filters] as const;
+}
+
+export function ticketListQueryKey(filters: TicketFilters = {}) {
+  return ["ticket-list", filters] as const;
 }
 
 function toTicketSearchParams(filters: TicketFilters) {
@@ -78,7 +82,7 @@ export function useTicketQuery(ticketId: number | null) {
 
 export function useTicketsQuery(filters: TicketFilters = {}) {
   return useQuery({
-    queryKey: ticketsQueryKey(filters),
+    queryKey: ticketItemsQueryKey(filters),
     queryFn: async () => {
       const response = await apiClient<TicketListResponse>(`/api/tickets${toTicketSearchParams(filters)}`);
       return response.items;
@@ -90,7 +94,7 @@ export function useTicketsQuery(filters: TicketFilters = {}) {
 
 export function useTicketListQuery(filters: TicketFilters = {}) {
   return useQuery({
-    queryKey: ticketsQueryKey(filters),
+    queryKey: ticketListQueryKey(filters),
     queryFn: () => apiClient<TicketListResponse>(`/api/tickets${toTicketSearchParams(filters)}`),
     gcTime: 30 * 1000,
     placeholderData: (previousData) => previousData

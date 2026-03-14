@@ -4,6 +4,34 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
+function isTruthyEnvValue(value: string) {
+  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+}
+
+function isFalsyEnvValue(value: string) {
+  return ["0", "false", "no", "off"].includes(value.toLowerCase());
+}
+
+function isTestRuntime() {
+  return process.env.NODE_ENV === "test" || process.env.NODE_TEST_CONTEXT !== undefined;
+}
+
+function getRequestLoggingEnabled() {
+  const configuredValue = process.env.BORODA_REQUEST_LOGGING;
+
+  if (configuredValue) {
+    if (isTruthyEnvValue(configuredValue)) {
+      return true;
+    }
+
+    if (isFalsyEnvValue(configuredValue)) {
+      return false;
+    }
+  }
+
+  return !isTestRuntime();
+}
+
 function getDefaultDataRoot() {
   const appDirName = "Boroda";
 
@@ -35,6 +63,7 @@ export function getConfig() {
     vscodeBinary: process.env.BORODA_VSCODE_BIN ?? "code",
     cursorBinary: process.env.BORODA_CURSOR_BIN ?? "cursor",
     terminalBinary: process.env.BORODA_TERMINAL_BIN ?? defaultTerminalBinary,
-    windowsTerminalSettingsPath: process.env.BORODA_WINDOWS_TERMINAL_SETTINGS_PATH ?? ""
+    windowsTerminalSettingsPath: process.env.BORODA_WINDOWS_TERMINAL_SETTINGS_PATH ?? "",
+    requestLoggingEnabled: getRequestLoggingEnabled()
   };
 }

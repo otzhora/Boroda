@@ -31,26 +31,31 @@ export function buildApp() {
 
   app.addHook("onRequest", async (request) => {
     request.borodaRequestStartedAt = process.hrtime.bigint();
-    logServerEvent(request.log, "info", "http.request.started", {
-      requestId: request.id,
-      method: request.method,
-      url: request.url
-    });
   });
 
-  app.addHook("onResponse", async (request, reply) => {
-    const startedAt = request.borodaRequestStartedAt;
-    const durationMs = startedAt ? Number(process.hrtime.bigint() - startedAt) / 1_000_000 : undefined;
-
-    logServerEvent(request.log, "info", "http.request.completed", {
-      requestId: request.id,
-      method: request.method,
-      route: request.routeOptions.url,
-      url: request.url,
-      statusCode: reply.statusCode,
-      durationMs
+  if (config.requestLoggingEnabled) {
+    app.addHook("onRequest", async (request) => {
+      logServerEvent(request.log, "info", "http.request.started", {
+        requestId: request.id,
+        method: request.method,
+        url: request.url
+      });
     });
-  });
+
+    app.addHook("onResponse", async (request, reply) => {
+      const startedAt = request.borodaRequestStartedAt;
+      const durationMs = startedAt ? Number(process.hrtime.bigint() - startedAt) / 1_000_000 : undefined;
+
+      logServerEvent(request.log, "info", "http.request.completed", {
+        requestId: request.id,
+        method: request.method,
+        route: request.routeOptions.url,
+        url: request.url,
+        statusCode: reply.statusCode,
+        durationMs
+      });
+    });
+  }
 
   app.register(dbPlugin);
   app.register(fastifyMultipart, {
