@@ -1,4 +1,5 @@
 export const TICKET_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+export const DEFAULT_BOARD_STATUS = "INBOX";
 
 export const TICKET_PROJECT_RELATIONSHIPS = ["PRIMARY", "RELATED", "DEPENDENCY"] as const;
 

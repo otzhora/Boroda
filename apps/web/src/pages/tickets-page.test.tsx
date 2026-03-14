@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "../lib/api-client";
+import { boardColumnsFixture, defaultEditableBoardColumn, doneBoardColumn } from "../test/fixtures/board-columns";
+import { renderWithProviders } from "../test/render-with-providers";
 
 const mocks = vi.hoisted(() => ({
   useBoardColumnsQuery: vi.fn(),
@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   openTerminalMutateAsync: vi.fn(),
   refreshJiraMutate: vi.fn()
 }));
+
+const doneColumn = doneBoardColumn;
+const secondaryTicketStatus = defaultEditableBoardColumn.status;
 
 vi.mock("../features/board/queries", () => ({
   useBoardColumnsQuery: mocks.useBoardColumnsQuery
@@ -121,18 +124,6 @@ vi.mock("../components/ticket/ticket-drawer", () => ({
 
 import { TicketsPage } from "./tickets-page";
 
-function renderTicketsPage(options?: { initialEntries?: string[] }) {
-  const queryClient = new QueryClient();
-
-  return render(
-    <MemoryRouter initialEntries={options?.initialEntries ?? ["/tickets"]}>
-      <QueryClientProvider client={queryClient}>
-        <TicketsPage />
-      </QueryClientProvider>
-    </MemoryRouter>
-  );
-}
-
 describe("TicketsPage", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -164,12 +155,7 @@ describe("TicketsPage", () => {
     });
     mocks.useBoardColumnsQuery.mockReturnValue({
       data: {
-        columns: [
-          { id: 1, status: "INBOX", label: "Inbox", position: 0, createdAt: "", updatedAt: "" },
-          { id: 2, status: "READY", label: "Ready", position: 1, createdAt: "", updatedAt: "" },
-          { id: 3, status: "IN_PROGRESS", label: "In progress", position: 2, createdAt: "", updatedAt: "" },
-          { id: 4, status: "DONE", label: "Done", position: 3, createdAt: "", updatedAt: "" }
-        ]
+        columns: boardColumnsFixture
       }
     });
 
@@ -204,7 +190,7 @@ describe("TicketsPage", () => {
           title: "Archive export mismatch",
           description: "",
           branch: null,
-          status: "READY",
+          status: secondaryTicketStatus,
           priority: "LOW",
           dueAt: null,
           createdAt: "",
@@ -230,7 +216,7 @@ describe("TicketsPage", () => {
   it("updates tickets filters from search, scope, and dropdown filters", async () => {
     const user = userEvent.setup();
 
-    renderTicketsPage();
+    renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets"] });
 
     expect(mocks.useTicketsQuery).toHaveBeenCalledWith({ q: undefined, scope: "active" });
 
@@ -241,11 +227,11 @@ describe("TicketsPage", () => {
     expect(mocks.useTicketsQuery).toHaveBeenCalledWith({ q: "drawer", scope: "archived" });
 
     await user.click(screen.getByRole("button", { name: "Filter" }));
-    await user.click(screen.getByLabelText("Done"));
+    await user.click(screen.getByLabelText(doneColumn.label));
     expect(mocks.useTicketsQuery).toHaveBeenCalledWith({
       q: "drawer",
       scope: "archived",
-      status: ["DONE"]
+      status: [doneColumn.status]
     });
 
     await user.click(screen.getByRole("button", { name: "Jira issue" }));
@@ -255,14 +241,14 @@ describe("TicketsPage", () => {
       q: "drawer",
       jiraIssue: ["PAY-128"],
       scope: "archived",
-      status: ["DONE"]
+      status: [doneColumn.status]
     });
   });
 
   it("cycles sort from ascending to descending to default", async () => {
     const user = userEvent.setup();
 
-    renderTicketsPage();
+    renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets"] });
 
     const rowsBefore = screen.getAllByRole("button", { name: /Open ticket /i });
     expect(rowsBefore[0]).toHaveAccessibleName("Open ticket BRD-12 Fix drawer save state");
@@ -288,7 +274,7 @@ describe("TicketsPage", () => {
 
     window.localStorage.setItem("boroda.lastStandupCompletedAt", "2026-03-10T06:06:00.000Z");
 
-    renderTicketsPage();
+    renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets"] });
 
     expect(screen.queryByRole("button", { name: "Clear filters" })).not.toBeInTheDocument();
     expect(screen.getByText("2 tickets in current")).toBeInTheDocument();
@@ -313,7 +299,7 @@ describe("TicketsPage", () => {
   it("opens the shared ticket drawer from a list row", async () => {
     const user = userEvent.setup();
 
-    renderTicketsPage();
+    renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets"] });
     await user.click(screen.getByRole("button", { name: "Open ticket BRD-12 Fix drawer save state" }));
 
     expect(await screen.findByTestId("ticket-drawer")).toBeInTheDocument();
@@ -334,7 +320,7 @@ describe("TicketsPage", () => {
     );
     mocks.deleteMutateAsync.mockResolvedValueOnce({ ok: true });
 
-    renderTicketsPage();
+    renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets"] });
     await user.click(screen.getByRole("button", { name: "Open ticket BRD-12 Fix drawer save state" }));
     await user.click(screen.getByRole("button", { name: "Archive ticket" }));
 
@@ -397,7 +383,7 @@ describe("TicketsPage", () => {
       isError: false
     });
 
-    renderTicketsPage({ initialEntries: ["/tickets?scope=archived"] });
+    renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets?scope=archived"] });
     await user.click(screen.getByRole("button", { name: "Open ticket BRD-12 Fix drawer save state" }));
     await user.click(screen.getByRole("button", { name: "Restore ticket" }));
 
@@ -407,7 +393,7 @@ describe("TicketsPage", () => {
   it("focuses the search field from the board-style hotkeys", async () => {
     const user = userEvent.setup();
 
-    renderTicketsPage();
+    renderWithProviders(<TicketsPage />, { initialEntries: ["/tickets"] });
     const searchInput = screen.getByLabelText("Search");
 
     expect(searchInput).not.toHaveFocus();

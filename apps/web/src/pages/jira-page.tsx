@@ -10,6 +10,7 @@ import {
   QuickTicketForm,
   type QuickTicketFormState
 } from "../components/board/quick-ticket-form";
+import { DEFAULT_BOARD_STATUS } from "../lib/constants";
 import { ModalDialog } from "../components/ui/modal-dialog";
 import { useAddTicketJiraLinkMutation } from "../features/tickets/mutations";
 import { useTicketsQuery } from "../features/tickets/queries";
@@ -161,7 +162,7 @@ export function JiraPage() {
   const quickCreateTitleRef = useRef<HTMLInputElement>(null);
   const linkExistingSearchRef = useRef<HTMLInputElement>(null);
   const boardColumns = boardColumnsQuery.data?.columns ?? [];
-  const defaultBoardStatus = boardColumns[0]?.status ?? "INBOX";
+  const defaultBoardStatus = boardColumns[0]?.status ?? DEFAULT_BOARD_STATUS;
   const createTicketMutation = useCreateTicketMutation({
     boardFilters: {},
     onCreated: () => {

@@ -1,3 +1,4 @@
+import { DEFAULT_BOARD_STATUS } from "../../lib/constants";
 import type { JiraIssueLinkSummary, Ticket, TicketPriority, TicketProjectRelationship, TicketStatus } from "../../lib/types";
 
 export interface TicketProjectLinkFormState {
@@ -27,7 +28,7 @@ export interface TicketFormState {
   projectLinks: TicketProjectLinkFormState[];
 }
 
-export function createEmptyTicketForm(defaultStatus = "INBOX"): TicketFormState {
+export function createEmptyTicketForm(defaultStatus = DEFAULT_BOARD_STATUS): TicketFormState {
   return {
     title: "",
     description: "",

@@ -1,16 +1,21 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { boardColumnsFixture, defaultEditableBoardColumn } from "../test/fixtures/board-columns";
+import { renderWithProviders } from "../test/render-with-providers";
 
 const mocks = vi.hoisted(() => ({
+  useBoardColumnsQuery: vi.fn(),
   useJiraSettingsQuery: vi.fn(),
   useAssignedJiraIssueLinksQuery: vi.fn(),
   useProjectsQuery: vi.fn(),
   useTicketsQuery: vi.fn(),
   createMutate: vi.fn(),
   addJiraLinkMutate: vi.fn()
+}));
+
+vi.mock("../features/board/queries", () => ({
+  useBoardColumnsQuery: mocks.useBoardColumnsQuery
 }));
 
 vi.mock("../features/jira/queries", () => ({
@@ -42,20 +47,11 @@ vi.mock("../features/tickets/queries", () => ({
 
 import { JiraPage } from "./jira-page";
 
-function renderJiraPage(options?: { initialEntries?: string[] }) {
-  const queryClient = new QueryClient();
-
-  return render(
-    <MemoryRouter initialEntries={options?.initialEntries}>
-      <QueryClientProvider client={queryClient}>
-        <JiraPage />
-      </QueryClientProvider>
-    </MemoryRouter>
-  );
-}
+const quickCreateStatus = defaultEditableBoardColumn.status;
 
 describe("JiraPage", () => {
   beforeEach(() => {
+    mocks.useBoardColumnsQuery.mockReset();
     mocks.useJiraSettingsQuery.mockReset();
     mocks.useAssignedJiraIssueLinksQuery.mockReset();
     mocks.useProjectsQuery.mockReset();
@@ -68,6 +64,12 @@ describe("JiraPage", () => {
         baseUrl: "https://jira.example.test",
         email: "me@example.test",
         hasApiToken: true
+      }
+    });
+
+    mocks.useBoardColumnsQuery.mockReturnValue({
+      data: {
+        columns: boardColumnsFixture
       }
     });
 
@@ -140,7 +142,7 @@ describe("JiraPage", () => {
           title: "Operational cleanup ticket",
           description: "",
           branch: null,
-          status: "READY",
+          status: quickCreateStatus,
           priority: "MEDIUM",
           dueAt: null,
           createdAt: "",
@@ -153,7 +155,7 @@ describe("JiraPage", () => {
   });
 
   it("renders only the needs-boroda status chip and defaults to needs-boroda sorting", () => {
-    renderJiraPage();
+    renderWithProviders(<JiraPage />);
 
     expect(screen.getByRole("link", { name: "Open Jira issue PAY-128" })).toHaveAttribute(
       "href",
@@ -175,7 +177,7 @@ describe("JiraPage", () => {
   it("re-sorts Jira issues from the sort control", async () => {
     const user = userEvent.setup();
 
-    renderJiraPage();
+    renderWithProviders(<JiraPage />);
     await user.selectOptions(screen.getByLabelText("Sort Jira issues"), "linked-first");
 
     const jiraLinks = screen.getAllByRole("link", { name: /Open Jira issue/i });
@@ -185,7 +187,7 @@ describe("JiraPage", () => {
   it("filters Jira issues from the search field", async () => {
     const user = userEvent.setup();
 
-    renderJiraPage();
+    renderWithProviders(<JiraPage />);
     await user.type(screen.getByLabelText("Search"), "ops");
 
     expect(screen.getByText("1 of 2 issues")).toBeInTheDocument();
@@ -196,7 +198,7 @@ describe("JiraPage", () => {
   it("shows a filtered empty state when search has no matches", async () => {
     const user = userEvent.setup();
 
-    renderJiraPage();
+    renderWithProviders(<JiraPage />);
     await user.type(screen.getByLabelText("Search"), "missing");
 
     expect(screen.getByText("No Jira issues match this search.")).toBeInTheDocument();
@@ -205,7 +207,7 @@ describe("JiraPage", () => {
   it("focuses the search field from the board-style hotkeys", async () => {
     const user = userEvent.setup();
 
-    renderJiraPage();
+    renderWithProviders(<JiraPage />);
     const searchInput = screen.getByLabelText("Search");
 
     expect(searchInput).not.toHaveFocus();
@@ -223,7 +225,7 @@ describe("JiraPage", () => {
   it("shows Boroda links when a Jira issue is expanded", async () => {
     const user = userEvent.setup();
 
-    renderJiraPage();
+    renderWithProviders(<JiraPage />);
     await user.click(screen.getByRole("button", { name: "Show links for PAY-128" }));
 
     expect(screen.getByRole("link", { name: "Open Boroda ticket BRD-12" })).toHaveAttribute(
@@ -236,7 +238,7 @@ describe("JiraPage", () => {
   it("opens the quick-create dialog for an unlinked Jira issue", async () => {
     const user = userEvent.setup();
 
-    renderJiraPage();
+    renderWithProviders(<JiraPage />);
     await user.click(screen.getByRole("button", { name: "Show links for OPS-42" }));
     await user.click(screen.getByRole("button", { name: "Create new Boroda" }));
 
@@ -248,7 +250,7 @@ describe("JiraPage", () => {
   it("links an existing Boroda ticket to the Jira issue", async () => {
     const user = userEvent.setup();
 
-    renderJiraPage();
+    renderWithProviders(<JiraPage />);
     await user.click(screen.getByRole("button", { name: "Show links for OPS-42" }));
     await user.click(screen.getByRole("button", { name: "Link existing Boroda" }));
 
@@ -269,14 +271,14 @@ describe("JiraPage", () => {
   it("submits a linked Boroda ticket from the quick-create dialog", async () => {
     const user = userEvent.setup();
 
-    renderJiraPage();
+    renderWithProviders(<JiraPage />);
     await user.click(screen.getByRole("button", { name: "Show links for OPS-42" }));
     await user.click(screen.getByRole("button", { name: "Create new Boroda" }));
 
     await user.clear(screen.getByLabelText("Title"));
     await user.type(screen.getByLabelText("Title"), "Operational cleanup follow-up");
     await user.selectOptions(screen.getByLabelText("Project"), "1");
-    await user.selectOptions(screen.getByLabelText("Status"), "READY");
+    await user.selectOptions(screen.getByLabelText("Status"), quickCreateStatus);
     await user.selectOptions(screen.getByLabelText("Priority"), "HIGH");
     await user.click(screen.getByRole("button", { name: "Create new Boroda ticket" }));
 
@@ -286,7 +288,7 @@ describe("JiraPage", () => {
       branch: null,
       workspaces: [],
       jiraIssues: [{ key: "OPS-42", summary: "Ops cleanup" }],
-      status: "READY",
+      status: quickCreateStatus,
       priority: "HIGH",
       dueAt: null,
       projectLinks: [

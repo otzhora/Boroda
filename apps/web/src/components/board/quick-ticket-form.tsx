@@ -1,5 +1,5 @@
 import type { Ref } from "react";
-import { TICKET_PRIORITIES, formatStatusLabel } from "../../lib/constants";
+import { DEFAULT_BOARD_STATUS, TICKET_PRIORITIES, formatStatusLabel } from "../../lib/constants";
 import type { BoardColumnDefinition, Project, TicketPriority, TicketStatus } from "../../lib/types";
 
 export interface QuickTicketFormState {
@@ -39,7 +39,7 @@ function LoadingSpinner() {
   );
 }
 
-export function createEmptyQuickTicketForm(defaultStatus = "INBOX"): QuickTicketFormState {
+export function createEmptyQuickTicketForm(defaultStatus = DEFAULT_BOARD_STATUS): QuickTicketFormState {
   return {
     title: "",
     projectId: "",

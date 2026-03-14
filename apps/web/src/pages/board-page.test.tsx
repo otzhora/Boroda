@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "../lib/api-client";
+import { boardColumnsFixture, defaultEditableBoardColumn } from "../test/fixtures/board-columns";
+import { renderWithProviders } from "../test/render-with-providers";
 
 const mocks = vi.hoisted(() => ({
   useBoardQuery: vi.fn(),
@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   openTerminalMutate: vi.fn(),
   refreshJiraMutate: vi.fn()
 }));
+
+const editableColumn = defaultEditableBoardColumn;
 
 vi.mock("../features/board/queries", () => ({
   useBoardQuery: mocks.useBoardQuery,
@@ -157,13 +159,13 @@ vi.mock("../components/board/board-view", () => ({
       <button type="button" onClick={() => onSelectTicket(12)}>
         Select ticket
       </button>
-      <button type="button" onClick={() => onAddColumn("READY", "after")}>
+      <button type="button" onClick={() => onAddColumn(editableColumn.status, "after")}>
         Trigger add column
       </button>
-      <button type="button" onClick={() => onRenameColumn("READY", "Ready")}>
+      <button type="button" onClick={() => onRenameColumn(editableColumn.status, editableColumn.label)}>
         Trigger rename column
       </button>
-      <button type="button" onClick={() => onDeleteColumn("READY")}>
+      <button type="button" onClick={() => onDeleteColumn(editableColumn.status)}>
         Trigger delete column
       </button>
     </>
@@ -171,18 +173,6 @@ vi.mock("../components/board/board-view", () => ({
 }));
 
 import { BoardPage } from "./board-page";
-
-function renderBoardPage(options?: { initialEntries?: string[] }) {
-  const queryClient = new QueryClient();
-
-  return render(
-    <MemoryRouter initialEntries={options?.initialEntries}>
-      <QueryClientProvider client={queryClient}>
-        <BoardPage />
-      </QueryClientProvider>
-    </MemoryRouter>
-  );
-}
 
 describe("BoardPage", () => {
   beforeEach(() => {
@@ -211,32 +201,7 @@ describe("BoardPage", () => {
     });
     mocks.useBoardColumnsQuery.mockReturnValue({
       data: {
-        columns: [
-          {
-            id: 1,
-            status: "INBOX",
-            label: "Inbox",
-            position: 0,
-            createdAt: "",
-            updatedAt: ""
-          },
-          {
-            id: 2,
-            status: "READY",
-            label: "Ready",
-            position: 1,
-            createdAt: "",
-            updatedAt: ""
-          },
-          {
-            id: 3,
-            status: "DONE",
-            label: "Done",
-            position: 2,
-            createdAt: "",
-            updatedAt: ""
-          }
-        ]
+        columns: boardColumnsFixture
       }
     });
 
@@ -275,7 +240,7 @@ describe("BoardPage", () => {
   it("updates board filters and clears them", async () => {
     const user = userEvent.setup();
 
-    renderBoardPage();
+    renderWithProviders(<BoardPage />);
 
     await user.type(screen.getByLabelText("Search"), "bug");
     expect(mocks.useBoardQuery).toHaveBeenLastCalledWith({ q: "bug" });
@@ -305,7 +270,7 @@ describe("BoardPage", () => {
   it("submits quick create with a primary project link", async () => {
     const user = userEvent.setup();
 
-    renderBoardPage();
+    renderWithProviders(<BoardPage />);
 
     await user.keyboard("c");
 
@@ -313,7 +278,7 @@ describe("BoardPage", () => {
 
     await user.type(within(dialog).getByLabelText("Title"), "Wire board filters");
     await user.selectOptions(within(dialog).getByLabelText("Project"), "1");
-    await user.selectOptions(within(dialog).getByLabelText("Status"), "READY");
+    await user.selectOptions(within(dialog).getByLabelText("Status"), editableColumn.status);
     await user.selectOptions(within(dialog).getByLabelText("Priority"), "HIGH");
     await user.click(within(dialog).getAllByRole("button", { name: "Create ticket" })[0]);
 
@@ -323,7 +288,7 @@ describe("BoardPage", () => {
       branch: null,
       workspaces: [],
       jiraIssues: [],
-      status: "READY",
+      status: editableColumn.status,
       priority: "HIGH",
       dueAt: null,
       projectLinks: [
@@ -364,7 +329,7 @@ describe("BoardPage", () => {
       refetch: mocks.refetchBoard
     });
 
-    renderBoardPage();
+    renderWithProviders(<BoardPage />);
     await user.click(screen.getByRole("button", { name: "Trigger move" }));
 
     expect(mocks.moveMutate).toHaveBeenCalledWith({
@@ -376,7 +341,7 @@ describe("BoardPage", () => {
   it("supports keyboard shortcuts for search and quick create", async () => {
     const user = userEvent.setup();
 
-    renderBoardPage();
+    renderWithProviders(<BoardPage />);
 
     await user.keyboard("/");
     expect(screen.getByLabelText("Search")).toHaveFocus();
@@ -392,8 +357,8 @@ describe("BoardPage", () => {
       data: {
         columns: [
           {
-            status: "READY",
-            label: "Ready",
+            status: editableColumn.status,
+            label: editableColumn.label,
             tickets: []
           }
         ]
@@ -403,7 +368,7 @@ describe("BoardPage", () => {
       refetch: mocks.refetchBoard
     });
 
-    renderBoardPage();
+    renderWithProviders(<BoardPage />);
 
     await user.click(screen.getByRole("button", { name: "Trigger add column" }));
     const dialog = await screen.findByRole("dialog", { name: "Add board column" });
@@ -412,7 +377,7 @@ describe("BoardPage", () => {
 
     expect(mocks.createBoardColumnMutate).toHaveBeenCalledWith(
       {
-        relativeToStatus: "READY",
+        relativeToStatus: editableColumn.status,
         placement: "after",
         label: "Needs QA"
       },
@@ -426,8 +391,8 @@ describe("BoardPage", () => {
       data: {
         columns: [
           {
-            status: "READY",
-            label: "Ready",
+            status: editableColumn.status,
+            label: editableColumn.label,
             tickets: []
           }
         ]
@@ -437,7 +402,7 @@ describe("BoardPage", () => {
       refetch: mocks.refetchBoard
     });
 
-    renderBoardPage();
+    renderWithProviders(<BoardPage />);
 
     await user.click(screen.getByRole("button", { name: "Trigger rename column" }));
     const dialog = await screen.findByRole("dialog");
@@ -448,7 +413,7 @@ describe("BoardPage", () => {
 
     expect(mocks.renameBoardColumnMutate).toHaveBeenCalledWith(
       {
-        status: "READY",
+        status: editableColumn.status,
         label: "Needs QA"
       },
       expect.any(Object)
@@ -483,7 +448,7 @@ describe("BoardPage", () => {
       refetch: mocks.refetchBoard
     });
 
-    renderBoardPage();
+    renderWithProviders(<BoardPage />);
 
     await user.click(screen.getByRole("button", { name: "Select ticket" }));
     expect(screen.getByTestId("ticket-drawer")).toBeInTheDocument();
@@ -494,14 +459,14 @@ describe("BoardPage", () => {
   });
 
   it("opens the deep-linked ticket from the search params", () => {
-    renderBoardPage({ initialEntries: ["/?ticketId=12"] });
+    renderWithProviders(<BoardPage />, { initialEntries: ["/?ticketId=12"] });
 
     expect(mocks.useTicketQuery).toHaveBeenLastCalledWith(12);
     expect(screen.getByTestId("ticket-drawer")).toBeInTheDocument();
   });
 
   it("resets the document title for the board route", () => {
-    renderBoardPage();
+    renderWithProviders(<BoardPage />);
 
     expect(document.title).toBe("Boroda");
   });
@@ -521,7 +486,7 @@ describe("BoardPage", () => {
     );
     mocks.deleteMutateAsync.mockResolvedValueOnce({ ok: true });
 
-    renderBoardPage({ initialEntries: ["/?ticketId=12"] });
+    renderWithProviders(<BoardPage />, { initialEntries: ["/?ticketId=12"] });
 
     await user.click(screen.getByRole("button", { name: "Archive ticket" }));
 

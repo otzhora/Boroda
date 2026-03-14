@@ -34,7 +34,7 @@ import {
   useUpdateTicketMutation
 } from "../features/tickets/mutations";
 import { useTicketQuery } from "../features/tickets/queries";
-import { TICKET_PRIORITIES } from "../lib/constants";
+import { DEFAULT_BOARD_STATUS, TICKET_PRIORITIES } from "../lib/constants";
 import { ApiError } from "../lib/api-client";
 import { getStoredAutoRunWorktreeSetup } from "../lib/user-preferences";
 
@@ -237,7 +237,7 @@ export function BoardPage() {
     createdAt: "",
     updatedAt: ""
   })) ?? [];
-  const defaultBoardStatus = boardColumns[0]?.status ?? "INBOX";
+  const defaultBoardStatus = boardColumns[0]?.status ?? DEFAULT_BOARD_STATUS;
 
   useEffect(() => {
     document.title = "Boroda";
