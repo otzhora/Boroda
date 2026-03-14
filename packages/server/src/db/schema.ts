@@ -33,9 +33,7 @@ export const projectFolders = sqliteTable(
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
   },
-  (table) => ({
-    projectIdIdx: index("idx_project_folders_project_id").on(table.projectId)
-  })
+  (table) => [index("idx_project_folders_project_id").on(table.projectId)]
 );
 
 export const boardColumns = sqliteTable(
@@ -48,9 +46,7 @@ export const boardColumns = sqliteTable(
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
   },
-  (table) => ({
-    positionUnique: uniqueIndex("board_columns_position_unique").on(table.position)
-  })
+  (table) => [uniqueIndex("board_columns_position_unique").on(table.position)]
 );
 
 export const tickets = sqliteTable(
@@ -68,13 +64,13 @@ export const tickets = sqliteTable(
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     archivedAt: text("archived_at")
   },
-  (table) => ({
-    statusPriorityUpdatedIdx: index("idx_tickets_status_priority_updated").on(
+  (table) => [
+    index("idx_tickets_status_priority_updated").on(
       table.status,
       table.priority,
       table.updatedAt
     )
-  })
+  ]
 );
 
 export const ticketProjectLinks = sqliteTable(
@@ -90,11 +86,11 @@ export const ticketProjectLinks = sqliteTable(
     relationship: text("relationship").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
   },
-  (table) => ({
-    ticketIdIdx: index("idx_ticket_project_links_ticket_id").on(table.ticketId),
-    projectIdIdx: index("idx_ticket_project_links_project_id").on(table.projectId),
-    ticketProjectUnique: uniqueIndex("ticket_project_unique").on(table.ticketId, table.projectId)
-  })
+  (table) => [
+    index("idx_ticket_project_links_ticket_id").on(table.ticketId),
+    index("idx_ticket_project_links_project_id").on(table.projectId),
+    uniqueIndex("ticket_project_unique").on(table.ticketId, table.projectId)
+  ]
 );
 
 export const ticketWorkspaces = sqliteTable(
@@ -116,15 +112,15 @@ export const ticketWorkspaces = sqliteTable(
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
   },
-  (table) => ({
-    ticketIdIdx: index("idx_ticket_workspaces_ticket_id").on(table.ticketId),
-    projectFolderIdIdx: index("idx_ticket_workspaces_project_folder_id").on(table.projectFolderId),
-    ticketFolderBranchUnique: uniqueIndex("ticket_workspace_unique").on(
+  (table) => [
+    index("idx_ticket_workspaces_ticket_id").on(table.ticketId),
+    index("idx_ticket_workspaces_project_folder_id").on(table.projectFolderId),
+    uniqueIndex("ticket_workspace_unique").on(
       table.ticketId,
       table.projectFolderId,
       table.branchName
     )
-  })
+  ]
 );
 
 export const ticketJiraIssueLinks = sqliteTable(
@@ -138,11 +134,11 @@ export const ticketJiraIssueLinks = sqliteTable(
     issueSummary: text("issue_summary").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
   },
-  (table) => ({
-    ticketIdIdx: index("idx_ticket_jira_issue_links_ticket_id").on(table.ticketId),
-    issueKeyIdx: index("idx_ticket_jira_issue_links_issue_key").on(table.issueKey),
-    ticketIssueUnique: uniqueIndex("ticket_jira_issue_unique").on(table.ticketId, table.issueKey)
-  })
+  (table) => [
+    index("idx_ticket_jira_issue_links_ticket_id").on(table.ticketId),
+    index("idx_ticket_jira_issue_links_issue_key").on(table.issueKey),
+    uniqueIndex("ticket_jira_issue_unique").on(table.ticketId, table.issueKey)
+  ]
 );
 
 export const workContexts = sqliteTable(
@@ -159,9 +155,7 @@ export const workContexts = sqliteTable(
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
   },
-  (table) => ({
-    ticketIdIdx: index("idx_work_contexts_ticket_id").on(table.ticketId)
-  })
+  (table) => [index("idx_work_contexts_ticket_id").on(table.ticketId)]
 );
 
 export const ticketActivities = sqliteTable("ticket_activities", {
