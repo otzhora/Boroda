@@ -1,10 +1,10 @@
 import { useEffect } from "react";
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../lib/api-client";
-import { boardColumnsFixture, defaultEditableBoardColumn } from "../test/fixtures/board-columns";
-import { createProject } from "../test/fixtures/models";
+import { boardColumnsFixture, defaultEditableBoardColumn, doneBoardColumn } from "../test/fixtures/board-columns";
+import { createBoardColumn, createBoardTicket, createProject } from "../test/fixtures/models";
 import { renderWithProviders } from "../test/render-with-providers";
 
 const mocks = vi.hoisted(() => ({
@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const editableColumn = defaultEditableBoardColumn;
+const targetMoveStatus = doneBoardColumn.status;
 
 vi.mock("../features/board/queries", () => ({
   useBoardQuery: mocks.useBoardQuery,
@@ -154,7 +155,7 @@ vi.mock("../components/board/board-view", () => ({
     onDeleteColumn: (status: string) => void;
   }) => (
     <>
-      <button type="button" onClick={() => onMoveTicket(12, "DONE")}>
+      <button type="button" onClick={() => onMoveTicket(12, targetMoveStatus)}>
         Trigger move
       </button>
       <button type="button" onClick={() => onSelectTicket(12)}>
@@ -295,23 +296,14 @@ describe("BoardPage", () => {
     mocks.useBoardQuery.mockReturnValue({
       data: {
         columns: [
-          {
-            status: "INBOX",
-            label: "Inbox",
+          createBoardColumn({
             tickets: [
-              {
-                id: 12,
-                key: "BRD-12",
+              createBoardTicket({
                 title: "Trigger card",
-                status: "INBOX",
-                priority: "MEDIUM",
-                contextsCount: 0,
-                updatedAt: "",
-                projectBadges: [],
-                jiraIssues: []
-              }
+                updatedAt: ""
+              })
             ]
-          }
+          })
         ]
       },
       isLoading: false,
@@ -324,7 +316,7 @@ describe("BoardPage", () => {
 
     expect(mocks.moveMutate).toHaveBeenCalledWith({
       ticketId: 12,
-      status: "DONE"
+      status: targetMoveStatus
     });
   });
 
@@ -345,13 +337,7 @@ describe("BoardPage", () => {
     const user = userEvent.setup();
     mocks.useBoardQuery.mockReturnValue({
       data: {
-        columns: [
-          {
-            status: editableColumn.status,
-            label: editableColumn.label,
-            tickets: []
-          }
-        ]
+        columns: [createBoardColumn({ status: editableColumn.status, label: editableColumn.label })]
       },
       isLoading: false,
       isError: false,
@@ -379,13 +365,7 @@ describe("BoardPage", () => {
     const user = userEvent.setup();
     mocks.useBoardQuery.mockReturnValue({
       data: {
-        columns: [
-          {
-            status: editableColumn.status,
-            label: editableColumn.label,
-            tickets: []
-          }
-        ]
+        columns: [createBoardColumn({ status: editableColumn.status, label: editableColumn.label })]
       },
       isLoading: false,
       isError: false,
@@ -415,22 +395,14 @@ describe("BoardPage", () => {
     mocks.useBoardQuery.mockReturnValue({
       data: {
         columns: [
-          {
-            status: "INBOX",
-            label: "Inbox",
+          createBoardColumn({
             tickets: [
-              {
-                id: 12,
-                key: "BRD-12",
+              createBoardTicket({
                 title: "Trigger card",
-                status: "INBOX",
-                priority: "MEDIUM",
-                contextsCount: 0,
-                updatedAt: "",
-                projectBadges: []
-              }
+                updatedAt: ""
+              })
             ]
-          }
+          })
         ]
       },
       isLoading: false,

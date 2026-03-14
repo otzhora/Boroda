@@ -1,4 +1,6 @@
 import type {
+  BoardColumn,
+  BoardTicket,
   JiraIssueLinkSummary,
   Project,
   Ticket,
@@ -50,6 +52,30 @@ export function createTicketListItem(overrides: Partial<TicketListItem> = {}): T
     contextsCount: 0,
     projectBadges: [],
     jiraIssues: [],
+    ...overrides
+  };
+}
+
+export function createBoardTicket(overrides: Partial<BoardTicket> = {}): BoardTicket {
+  return {
+    id: 12,
+    key: "BRD-12",
+    title: "Default board ticket",
+    status: "INBOX",
+    priority: "MEDIUM",
+    contextsCount: 0,
+    updatedAt: defaultTimestamp,
+    projectBadges: [],
+    jiraIssues: [],
+    ...overrides
+  };
+}
+
+export function createBoardColumn(overrides: Partial<BoardColumn> = {}): BoardColumn {
+  return {
+    status: "INBOX",
+    label: "Inbox",
+    tickets: [],
     ...overrides
   };
 }

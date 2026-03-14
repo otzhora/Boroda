@@ -1,6 +1,7 @@
 import { DndContext } from "@dnd-kit/core";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { createBoardTicket } from "../../test/fixtures/models";
 import { TicketCard } from "./ticket-card";
 
 describe("TicketCard", () => {
@@ -8,11 +9,9 @@ describe("TicketCard", () => {
     render(
       <DndContext>
         <TicketCard
-          ticket={{
-            id: 12,
+          ticket={createBoardTicket({
             key: "PAY-42",
             title: "Wire board filters",
-            status: "INBOX",
             priority: "HIGH",
             contextsCount: 1,
             updatedAt: "2026-03-06T00:00:00.000Z",
@@ -25,7 +24,7 @@ describe("TicketCard", () => {
               }
             ],
             jiraIssues: []
-          }}
+          })}
           isSelected={false}
           isDragging={false}
           onSelect={() => undefined}
@@ -45,13 +44,11 @@ describe("TicketCard", () => {
     render(
       <DndContext>
         <TicketCard
-          ticket={{
+          ticket={createBoardTicket({
             id: 13,
             key: "PAY-43",
             title: "Review board layout",
             status: "READY",
-            priority: "MEDIUM",
-            contextsCount: 0,
             updatedAt: "2026-03-06T00:00:00.000Z",
             projectBadges: [
               {
@@ -62,7 +59,7 @@ describe("TicketCard", () => {
               }
             ],
             jiraIssues: []
-          }}
+          })}
           isSelected={false}
           isDragging={false}
           onSelect={() => undefined}
