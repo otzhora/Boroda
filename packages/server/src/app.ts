@@ -25,8 +25,13 @@ declare module "fastify" {
 
 export function buildApp() {
   const config = getConfig();
+  return buildConfiguredApp(config.requestLoggingEnabled);
+}
+
+export function buildConfiguredApp(requestLoggingEnabled: boolean, logger: boolean = true) {
+  const config = getConfig();
   const app = Fastify({
-    logger: true,
+    logger,
     disableRequestLogging: true
   });
 
@@ -34,7 +39,7 @@ export function buildApp() {
     request.borodaRequestStartedAt = process.hrtime.bigint();
   });
 
-  if (config.requestLoggingEnabled) {
+  if (requestLoggingEnabled) {
     app.addHook("onRequest", async (request) => {
       logServerEvent(request.log, "info", "http.request.started", {
         requestId: request.id,

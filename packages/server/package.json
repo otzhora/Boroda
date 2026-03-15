@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --import tsx --watch src/index.ts",
+    "mcp": "node --import tsx src/modules/integrations/mcp/stdio.ts",
     "build": "tsc -p tsconfig.json",
     "lint": "npm run lint:types && npm run lint:guardrails",
     "lint:guardrails": "node ../../scripts/quality-gate.mjs packages/server",
