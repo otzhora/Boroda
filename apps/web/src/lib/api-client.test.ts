@@ -38,4 +38,25 @@ describe("apiClient", () => {
       details: undefined
     } satisfies Partial<ApiError>);
   });
+
+  it("passes request cancellation signals through to fetch", async () => {
+    const controller = new AbortController();
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      })
+    );
+
+    await apiClient<{ ok: true }>("/api/example", { signal: controller.signal });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "/api/example",
+      expect.objectContaining({
+        signal: controller.signal
+      })
+    );
+  });
 });

@@ -98,6 +98,15 @@ async function performRequest(path: string, init: RequestInit | undefined, event
   try {
     response = await fetch(path, init);
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      logClientEvent("info", `${eventName}.aborted`, {
+        method: context.method,
+        path: context.path,
+        durationMs: Math.round(performance.now() - context.startedAt)
+      });
+      throw error;
+    }
+
     logClientError(`${eventName}.network_failed`, error, {
       method: context.method,
       path: context.path,
@@ -148,6 +157,6 @@ export async function apiClientVoid(path: string, init?: RequestInit): Promise<v
 }
 
 export async function apiClientBlob(path: string, init?: RequestInit): Promise<Blob> {
-  const response = await performRequest(path, init, "api.blob_request");
+  const response = await performRequest(path, withRequestHeaders(init), "api.blob_request");
   return response.blob();
 }

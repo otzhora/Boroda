@@ -701,6 +701,129 @@ test("refreshing linked Jira issues updates cached summaries", async () => {
   }
 });
 
+test("jira settings upsert persists a single singleton row", async () => {
+  const firstResponse = await app.inject({
+    method: "PUT",
+    url: "/api/integrations/jira/settings",
+    payload: {
+      baseUrl: "https://jira.example.test",
+      email: "me@example.test",
+      apiToken: "first-token"
+    }
+  });
+
+  const secondResponse = await app.inject({
+    method: "PUT",
+    url: "/api/integrations/jira/settings",
+    payload: {
+      baseUrl: "https://jira.example.test/updated/",
+      email: "updated@example.test",
+      apiToken: "second-token"
+    }
+  });
+
+  assert.equal(firstResponse.statusCode, 200);
+  assert.equal(secondResponse.statusCode, 200);
+
+  const rows = app.db.select().from(schema.jiraSettings).all();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, 1);
+  assert.equal(rows[0].baseUrl, "https://jira.example.test/updated");
+  assert.equal(rows[0].email, "updated@example.test");
+  assert.equal(rows[0].apiToken, "second-token");
+});
+
+test("assigned Jira issues paginate past the previous 200-result ceiling", async () => {
+  const originalFetch = globalThis.fetch;
+  const fetchCalls: string[] = [];
+
+  try {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      fetchCalls.push(url);
+      const startAt = Number(new URL(url).searchParams.get("startAt") ?? "0");
+
+      const issues = Array.from({ length: startAt === 0 ? 100 : 25 }, (_, index) => {
+        const issueNumber = startAt + index + 1;
+        return {
+          key: `OPS-${issueNumber}`,
+          fields: {
+            summary: `Issue ${issueNumber}`
+          }
+        };
+      });
+
+      return new Response(
+        JSON.stringify({
+          issues,
+          total: 125
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json"
+          }
+        }
+      );
+    };
+
+    app.db.insert(schema.jiraSettings).values({
+      id: 1,
+      baseUrl: "https://jira.example.test",
+      email: "me@example.test",
+      apiToken: "secret-token"
+    }).run();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/integrations/jira/issues/assigned"
+    });
+
+    assert.equal(response.statusCode, 200);
+    const payload = response.json();
+    assert.equal(payload.total, 125);
+    assert.equal(payload.issues.length, 125);
+    assert.equal(fetchCalls.length, 2);
+    assert.equal(new URL(fetchCalls[0]).searchParams.get("startAt"), "0");
+    assert.equal(new URL(fetchCalls[1]).searchParams.get("startAt"), "100");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("assigned Jira issues fail fast when the Jira request aborts", async () => {
+  const originalFetch = globalThis.fetch;
+
+  try {
+    globalThis.fetch = async () => {
+      throw new DOMException("The operation was aborted.", "AbortError");
+    };
+
+    app.db.insert(schema.jiraSettings).values({
+      id: 1,
+      baseUrl: "https://jira.example.test",
+      email: "me@example.test",
+      apiToken: "secret-token"
+    }).run();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/integrations/jira/issues/assigned"
+    });
+
+    assert.equal(response.statusCode, 504);
+    assert.deepEqual(response.json(), {
+      error: {
+        code: "JIRA_REQUEST_TIMEOUT",
+        message: "Jira request timed out after 10 seconds",
+        details: {}
+      }
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("assigned Jira issues include linked Boroda tickets", async () => {
   const originalFetch = globalThis.fetch;
 

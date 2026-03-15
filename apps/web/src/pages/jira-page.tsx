@@ -10,8 +10,11 @@ import {
   useJiraSettingsQuery
 } from "../features/jira/queries";
 import {
+  buildJiraPageItems,
+  JIRA_PAGE_SIZE,
   JiraIssueSort,
   normalizeIssueSearch,
+  parseIssuePage,
   parseIssueSort,
   sortIssues,
   trimTrailingSlash
@@ -51,6 +54,10 @@ const issueCountChipClassName =
   `${issueChipClassName} w-[12.5rem] justify-center border-white/10 bg-white/[0.04] text-center text-ink-200`;
 const issueKeyClassName =
   "inline-flex w-[9ch] shrink-0 font-mono text-sm font-medium tabular-nums text-[#6ea8ff]";
+const paginationButtonClassName =
+  "inline-flex h-10 min-w-10 items-center justify-center rounded-[10px] border border-white/8 bg-white/[0.04] px-3 text-sm font-medium text-ink-100 transition-colors hover:border-white/14 hover:bg-white/[0.07] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50 disabled:text-ink-300 disabled:hover:border-white/8 disabled:hover:bg-white/[0.04]";
+const activePaginationButtonClassName =
+  "border-white/16 bg-canvas-950 text-ink-50";
 
 function createLinkedQuickTicketForm(issue: { key: string; summary: string }): QuickTicketFormState {
   return {
@@ -95,6 +102,7 @@ export function JiraPage() {
   const [quickCreateForm, setQuickCreateForm] = useState<QuickTicketFormState>(createEmptyQuickTicketForm());
   const [expandedIssueKeys, setExpandedIssueKeys] = useState<string[]>([]);
   const [ticketSearch, setTicketSearch] = useState("");
+  const [debouncedTicketSearch, setDebouncedTicketSearch] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const quickCreateTitleRef = useRef<HTMLInputElement>(null);
   const linkExistingSearchRef = useRef<HTMLInputElement>(null);
@@ -119,6 +127,7 @@ export function JiraPage() {
   const issueSort = parseIssueSort(searchParams.get("sort"));
   const payload = issuesQuery.data;
   const issueSearch = normalizeIssueSearch(searchParams.get("q"));
+  const requestedPage = parseIssuePage(searchParams.get("page"));
   const sortedIssues = sortIssues(payload?.issues ?? [], issueSort);
   const issues = sortedIssues.filter((issue) => {
     if (!issueSearchInput.trim()) {
@@ -132,13 +141,39 @@ export function JiraPage() {
     );
   });
   const projects = projectsQuery.data ?? [];
-  const linkableTicketsQuery = useJiraLinkableTicketsQuery(issueToLinkToExisting?.key ?? null, ticketSearch);
+  const linkableTicketsQuery = useJiraLinkableTicketsQuery(issueToLinkToExisting?.key ?? null, debouncedTicketSearch);
   const linkableTickets = linkableTicketsQuery.data ?? [];
   const linkedIssuesCount = issues.filter((issue) => issue.borodaTickets.length > 0).length;
+  const hasTicketSearch = ticketSearch.trim().length > 0;
+  const isTicketSearchDebouncing = hasTicketSearch && ticketSearch.trim() !== debouncedTicketSearch;
+  const isLinkableTicketsLoading =
+    hasTicketSearch && (isTicketSearchDebouncing || linkableTicketsQuery.isLoading || linkableTicketsQuery.isFetching);
+  const totalPages = Math.max(1, Math.ceil(issues.length / JIRA_PAGE_SIZE));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const paginatedIssues = issues.slice((currentPage - 1) * JIRA_PAGE_SIZE, currentPage * JIRA_PAGE_SIZE);
+  const pageStart = issues.length === 0 ? 0 : (currentPage - 1) * JIRA_PAGE_SIZE + 1;
+  const pageEnd = Math.min(currentPage * JIRA_PAGE_SIZE, issues.length);
+  const pageItems = buildJiraPageItems(totalPages, currentPage);
 
   useEffect(() => {
     setIssueSearchInput((current) => (current === issueSearch ? current : issueSearch));
   }, [issueSearch]);
+
+  useEffect(() => {
+    if (requestedPage === currentPage) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+
+    if (currentPage <= 1) {
+      nextSearchParams.delete("page");
+    } else {
+      nextSearchParams.set("page", String(currentPage));
+    }
+
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [currentPage, requestedPage, searchParams, setSearchParams]);
 
   useEffect(() => {
     setQuickCreateForm((current) => {
@@ -152,6 +187,16 @@ export function JiraPage() {
       };
     });
   }, [boardColumns, defaultBoardStatus]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedTicketSearch(ticketSearch.trim());
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [ticketSearch]);
 
   usePageSearchHotkeys({
     searchInputRef
@@ -196,6 +241,19 @@ export function JiraPage() {
     );
   };
 
+  const setIssuePage = (nextPage: number) => {
+    const boundedPage = Math.min(Math.max(nextPage, 1), totalPages);
+    const nextSearchParams = new URLSearchParams(searchParams);
+
+    if (boundedPage <= 1) {
+      nextSearchParams.delete("page");
+    } else {
+      nextSearchParams.set("page", String(boundedPage));
+    }
+
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
   return (
     <section className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-3">
       <PageCommandBar
@@ -214,6 +272,12 @@ export function JiraPage() {
             <span>{issueSearch ? `${issues.length} of ${sortedIssues.length} issues` : `${issues.length} issues`}</span>
             <span aria-hidden="true">/</span>
             <span>{linkedIssuesCount} linked</span>
+            {issues.length > 0 ? (
+              <>
+                <span aria-hidden="true">/</span>
+                <span>{pageStart}-{pageEnd}</span>
+              </>
+            ) : null}
           </div>
           {!hasHost ? searchControl : null}
           <label className="min-w-[12rem]">
@@ -279,10 +343,69 @@ export function JiraPage() {
         <p className={`${emptyPanelClassName} m-0 text-sm text-ink-200`}>No Jira issues match this search.</p>
       ) : null}
 
-      {issues.length > 0 ? (
+      {issues.length > JIRA_PAGE_SIZE ? (
+        <nav
+          className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-white/8 bg-canvas-925 px-3 py-2"
+          aria-label="Jira issue pages"
+        >
+          <p className="m-0 text-sm text-ink-300">
+            Page {currentPage} of {totalPages}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={paginationButtonClassName}
+              onClick={() => {
+                setIssuePage(currentPage - 1);
+              }}
+              disabled={currentPage === 1}
+              aria-label="Previous page"
+            >
+              <span aria-hidden="true">‹</span>
+            </button>
+            {pageItems.map((item, index) =>
+              item === "ellipsis" ? (
+                <span
+                  className="inline-flex h-10 min-w-8 items-center justify-center px-1 text-lg font-medium text-ink-300"
+                  aria-hidden="true"
+                  key={`ellipsis-${index}`}
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className={`${paginationButtonClassName} ${item === currentPage ? activePaginationButtonClassName : ""}`}
+                  onClick={() => {
+                    setIssuePage(item);
+                  }}
+                  aria-label={item === currentPage ? `Page ${item}, current page` : `Go to page ${item}`}
+                  aria-current={item === currentPage ? "page" : undefined}
+                  key={item}
+                >
+                  {item}
+                </button>
+              )
+            )}
+            <button
+              type="button"
+              className={paginationButtonClassName}
+              onClick={() => {
+                setIssuePage(currentPage + 1);
+              }}
+              disabled={currentPage === totalPages}
+              aria-label="Next page"
+            >
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
+        </nav>
+      ) : null}
+
+      {paginatedIssues.length > 0 ? (
         <section className={issueListClassName}>
           <ul className="m-0 list-none p-0">
-            {issues.map((issue) => {
+            {paginatedIssues.map((issue) => {
               const jiraHref = baseUrl ? `${baseUrl}/browse/${issue.key}` : null;
               const isExpanded = expandedIssueKeys.includes(issue.key);
               const panelId = `jira-issue-links-${issue.key}`;
@@ -493,11 +616,11 @@ export function JiraPage() {
 
           {!ticketSearch.trim() ? <p className="m-0 text-sm text-ink-300">Search to find a Boroda ticket to link.</p> : null}
 
-          {ticketSearch.trim() && linkableTicketsQuery.isLoading ? (
+          {isLinkableTicketsLoading ? (
             <p className="m-0 text-sm text-ink-300">Loading Boroda tickets…</p>
           ) : null}
 
-          {ticketSearch.trim() && !linkableTicketsQuery.isLoading ? (
+          {hasTicketSearch && !isLinkableTicketsLoading ? (
             linkableTickets.length > 0 ? (
               <ul className="m-0 grid list-none gap-3 p-0" role="list">
                 {linkableTickets.map((ticket) => (

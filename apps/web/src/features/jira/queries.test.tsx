@@ -50,7 +50,10 @@ describe("useJiraLinkableTicketsQuery", () => {
     });
 
     expect(mocks.apiClient).toHaveBeenCalledWith(
-      "/api/integrations/jira/issues/OPS-42/linkable-tickets?q=BRD-21"
+      "/api/integrations/jira/issues/OPS-42/linkable-tickets?q=BRD-21",
+      expect.objectContaining({
+        signal: expect.any(AbortSignal)
+      })
     );
   });
 });

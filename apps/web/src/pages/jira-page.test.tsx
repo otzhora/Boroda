@@ -1,6 +1,7 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { JIRA_PAGE_SIZE } from "../features/jira/page-helpers";
 import { boardColumnsFixture, defaultEditableBoardColumn } from "../test/fixtures/board-columns";
 import { createProject, createTicketListItem } from "../test/fixtures/models";
 import { renderWithProviders } from "../test/render-with-providers";
@@ -154,6 +155,84 @@ describe("JiraPage", () => {
     expect(jiraLinks[0]).toHaveAccessibleName("Open Jira issue PAY-128");
   });
 
+  it("paginates Jira issues and moves through pages", async () => {
+    const user = userEvent.setup();
+    mocks.useAssignedJiraIssueLinksQuery.mockReturnValue({
+      data: {
+        total: JIRA_PAGE_SIZE + 1,
+        linked: 0,
+        unlinked: JIRA_PAGE_SIZE + 1,
+        issues: Array.from({ length: JIRA_PAGE_SIZE + 1 }, (_, index) => ({
+          key: `OPS-${String(index + 1).padStart(3, "0")}`,
+          summary: `Issue ${index + 1}`,
+          borodaTickets: []
+        }))
+      },
+      isLoading: false,
+      isFetching: false,
+      error: null,
+      refetch: vi.fn()
+    });
+
+    renderWithProviders(<JiraPage />);
+
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Jira issue OPS-001" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Jira issue OPS-051" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Jira issue OPS-011" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Jira issue OPS-001" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Page 2, current page" })).toBeInTheDocument();
+  });
+
+  it("resets Jira issue pagination when filtering changes the result set", async () => {
+    const user = userEvent.setup();
+    mocks.useAssignedJiraIssueLinksQuery.mockReturnValue({
+      data: {
+        total: JIRA_PAGE_SIZE + 2,
+        linked: 0,
+        unlinked: JIRA_PAGE_SIZE + 2,
+        issues: [
+          ...Array.from({ length: JIRA_PAGE_SIZE }, (_, index) => ({
+            key: `PAY-${String(index + 1).padStart(3, "0")}`,
+            summary: `Payments ${index + 1}`,
+            borodaTickets: []
+          })),
+          {
+            key: "OPS-777",
+            summary: "Ops match",
+            borodaTickets: []
+          },
+          {
+            key: "OPS-888",
+            summary: "Ops backup",
+            borodaTickets: []
+          }
+        ]
+      },
+      isLoading: false,
+      isFetching: false,
+      error: null,
+      refetch: vi.fn()
+    });
+
+    renderWithProviders(<JiraPage />);
+
+    await user.click(screen.getByRole("button", { name: "Next page" }));
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Search"), "ops");
+
+    await waitFor(() => {
+      expect(screen.queryByText("Page 2 of 2")).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("link", { name: "Open Jira issue OPS-777" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Previous page" })).not.toBeInTheDocument();
+  });
+
   it("filters Jira issues from the search field", async () => {
     const user = userEvent.setup();
 
@@ -227,7 +306,10 @@ describe("JiraPage", () => {
     expect(await screen.findByRole("dialog", { name: "Link existing Boroda ticket" })).toBeInTheDocument();
     expect(screen.getByText("Search to find a Boroda ticket to link.")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Search Boroda tickets"), "BRD-21");
-    expect(mocks.useJiraLinkableTicketsQuery).toHaveBeenLastCalledWith("OPS-42", "BRD-21");
+    expect(mocks.useJiraLinkableTicketsQuery).toHaveBeenLastCalledWith("OPS-42", "");
+    await waitFor(() => {
+      expect(mocks.useJiraLinkableTicketsQuery).toHaveBeenLastCalledWith("OPS-42", "BRD-21");
+    });
     expect(screen.queryByText("BRD-12")).not.toBeInTheDocument();
     const targetTicketRow = screen.getByText("BRD-21").closest("li");
     expect(targetTicketRow).not.toBeNull();

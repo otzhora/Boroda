@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const sequences = sqliteTable("sequences", {
   name: text("name").primaryKey(),
@@ -169,14 +169,18 @@ export const ticketActivities = sqliteTable("ticket_activities", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
 });
 
-export const jiraSettings = sqliteTable("jira_settings", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  baseUrl: text("base_url").notNull(),
-  email: text("email").notNull(),
-  apiToken: text("api_token").notNull(),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
-});
+export const jiraSettings = sqliteTable(
+  "jira_settings",
+  {
+    id: integer("id").primaryKey().notNull().default(1),
+    baseUrl: text("base_url").notNull(),
+    email: text("email").notNull(),
+    apiToken: text("api_token").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+  },
+  (table) => [check("jira_settings_singleton", sql`${table.id} = 1`)]
+);
 
 export const projectRelations = relations(projects, ({ many }) => ({
   folders: many(projectFolders),

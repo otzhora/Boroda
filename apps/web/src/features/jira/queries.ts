@@ -63,21 +63,22 @@ export function jiraLinkableTicketsQueryKey(issueKey: string | null, search: str
 export function useJiraSettingsQuery() {
   return useQuery({
     queryKey: jiraSettingsQueryKey(),
-    queryFn: () => apiClient<JiraSettings>("/api/integrations/jira/settings")
+    queryFn: ({ signal }) => apiClient<JiraSettings>("/api/integrations/jira/settings", { signal })
   });
 }
 
 export function useAssignedJiraIssuesQuery() {
   return useQuery({
     queryKey: assignedJiraIssuesQueryKey(),
-    queryFn: () => apiClient<AssignedJiraIssuesResponse>("/api/integrations/jira/issues/assigned")
+    queryFn: ({ signal }) => apiClient<AssignedJiraIssuesResponse>("/api/integrations/jira/issues/assigned", { signal })
   });
 }
 
 export function useAssignedJiraIssueLinksQuery() {
   return useQuery({
     queryKey: assignedJiraIssueLinksQueryKey(),
-    queryFn: () => apiClient<AssignedJiraIssuesWithLinksResponse>("/api/integrations/jira/issues/assigned/links")
+    queryFn: ({ signal }) =>
+      apiClient<AssignedJiraIssuesWithLinksResponse>("/api/integrations/jira/issues/assigned/links", { signal })
   });
 }
 
@@ -86,7 +87,7 @@ export function useJiraLinkableTicketsQuery(issueKey: string | null, search: str
 
   return useQuery({
     queryKey: jiraLinkableTicketsQueryKey(issueKey, normalizedSearch),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const searchParams = new URLSearchParams();
 
       if (normalizedSearch) {
@@ -94,7 +95,8 @@ export function useJiraLinkableTicketsQuery(issueKey: string | null, search: str
       }
 
       const response = await apiClient<TicketListResponse>(
-        `/api/integrations/jira/issues/${encodeURIComponent(issueKey ?? "")}/linkable-tickets?${searchParams.toString()}`
+        `/api/integrations/jira/issues/${encodeURIComponent(issueKey ?? "")}/linkable-tickets?${searchParams.toString()}`,
+        { signal }
       );
       return response.items;
     },
