@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, apiClient } from "./api-client";
+import { ApiError, apiClient, apiClientVoid } from "./api-client";
 
 describe("apiClient", () => {
   const originalFetch = globalThis.fetch;
@@ -14,10 +14,16 @@ describe("apiClient", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns undefined for empty successful responses", async () => {
+  it("returns undefined for empty successful responses via apiClientVoid", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
 
-    await expect(apiClient<void>("/api/example")).resolves.toBeUndefined();
+    await expect(apiClientVoid("/api/example")).resolves.toBeUndefined();
+  });
+
+  it("rejects empty successful responses when JSON is expected", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(apiClient("/api/example")).rejects.toThrow("Expected a JSON response body but received an empty response.");
   });
 
   it("falls back to a generic API error when an error response is not JSON", async () => {

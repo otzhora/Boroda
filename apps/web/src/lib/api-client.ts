@@ -19,6 +19,12 @@ export class ApiError extends Error {
   }
 }
 
+class InvalidApiResponseError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 interface RequestLogContext {
   method: string;
   path: string;
@@ -61,18 +67,22 @@ async function parseErrorResponse(response: Response): Promise<ErrorResponse | n
   }
 }
 
-async function parseJsonResponse<T>(response: Response): Promise<T> {
-  if (response.status === 204 || response.status === 205) {
-    return undefined as T;
-  }
+function hasEmptyResponseBody(response: Response, rawBody: string): boolean {
+  return response.status === 204 || response.status === 205 || !rawBody.trim();
+}
 
+async function parseJsonResponse<T>(response: Response): Promise<T> {
   const rawBody = await response.text();
 
-  if (!rawBody.trim()) {
-    return undefined as T;
+  if (hasEmptyResponseBody(response, rawBody)) {
+    throw new InvalidApiResponseError("Expected a JSON response body but received an empty response.");
   }
 
-  return JSON.parse(rawBody) as T;
+  try {
+    return JSON.parse(rawBody) as T;
+  } catch {
+    throw new InvalidApiResponseError("Expected a valid JSON response body.");
+  }
 }
 
 async function performRequest(path: string, init: RequestInit | undefined, eventName: string) {
@@ -131,6 +141,10 @@ async function performRequest(path: string, init: RequestInit | undefined, event
 export async function apiClient<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await performRequest(path, withRequestHeaders(init), "api.request");
   return parseJsonResponse<T>(response);
+}
+
+export async function apiClientVoid(path: string, init?: RequestInit): Promise<void> {
+  await performRequest(path, withRequestHeaders(init), "api.request");
 }
 
 export async function apiClientBlob(path: string, init?: RequestInit): Promise<Blob> {

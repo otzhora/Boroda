@@ -558,7 +558,7 @@ Do not work on any other step.
 Run tests and typecheck after the change and report the result.
 ```
 
-### Prompt 6
+### Prompt 6 -- Done
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 6 only.
@@ -567,7 +567,7 @@ Do not work on any other step.
 Run tests and typecheck after the change and report the result.
 ```
 
-### Prompt 7
+### Prompt 7 -- Done
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 7 only.
