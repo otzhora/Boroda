@@ -7,10 +7,12 @@ import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import type { FastifyInstance } from "fastify";
+import type { createTicket as CreateTicketService } from "./modules/tickets/service/mutations";
 
 let app: FastifyInstance;
 let sqlite: { close: () => void };
 let schema: typeof import("./db/schema");
+let createTicketService: typeof CreateTicketService;
 let tempRoot = "";
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
@@ -25,6 +27,7 @@ before(async () => {
     import("./db/client"),
     import("./db/schema")
   ]);
+  ({ createTicket: createTicketService } = await import("./modules/tickets/service/mutations"));
 
   sqlite = dbClient.sqlite;
   schema = importedSchema;
@@ -160,6 +163,10 @@ async function createTicketWorkspaceFixture() {
       worktreePath: openResponse.json().directory as string
     }
   };
+}
+
+function parseMetaJson(metaJson: string) {
+  return JSON.parse(metaJson) as Record<string, unknown>;
 }
 
 test("ticket CRUD supports multi-project links, filters, and activity writes", async () => {
@@ -318,6 +325,64 @@ test("ticket CRUD supports multi-project links, filters, and activity writes", a
   const visibleTickets = board.columns.flatMap((column: { tickets: Array<{ id: number }> }) => column.tickets);
   assert.equal(visibleTickets.length, 1);
   assert.equal(visibleTickets[0].id, createdTicket.id);
+});
+
+test("ticket service records agent provenance in activity metadata", async () => {
+  const project = await createProject("Agent Project", "agent-project");
+
+  const createdTicket = await createTicketService(
+    app,
+    {
+      title: "Agent-created ticket",
+      description: "Created through the service layer",
+      status: "INBOX",
+      priority: "HIGH",
+      projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }],
+      jiraIssues: [{ key: "AGENT-1", summary: "Agent provenance" }],
+      workspaces: []
+    },
+    {
+      actor: {
+        actorType: "agent",
+        agentKind: "codex",
+        sessionRef: "codex://session/test-123",
+        transport: "mcp"
+      }
+    }
+  );
+
+  const createdActivity = createdTicket.activities.find(
+    (activity: { type: string }) => activity.type === "ticket.created"
+  );
+  assert.ok(createdActivity);
+  assert.deepEqual(parseMetaJson(createdActivity.metaJson), {
+    actorType: "agent",
+    agentKind: "codex",
+    sessionRef: "codex://session/test-123",
+    transport: "mcp"
+  });
+
+  const projectLinkActivity = createdTicket.activities.find(
+    (activity: { type: string }) => activity.type === "ticket.project_linked"
+  );
+  assert.ok(projectLinkActivity);
+  assert.deepEqual(parseMetaJson(projectLinkActivity.metaJson), {
+    actorType: "agent",
+    agentKind: "codex",
+    sessionRef: "codex://session/test-123",
+    transport: "mcp"
+  });
+
+  const jiraLinkActivity = createdTicket.activities.find(
+    (activity: { type: string }) => activity.type === "ticket.jira_issue_linked"
+  );
+  assert.ok(jiraLinkActivity);
+  assert.deepEqual(parseMetaJson(jiraLinkActivity.metaJson), {
+    actorType: "agent",
+    agentKind: "codex",
+    sessionRef: "codex://session/test-123",
+    transport: "mcp"
+  });
 });
 
 test("ticket list returns Jira facets for the current slice and sorts on the server", async () => {

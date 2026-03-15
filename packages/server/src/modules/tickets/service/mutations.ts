@@ -5,6 +5,7 @@ import { getJiraIssuesByKeys } from "../../integrations/jira/service";
 import { projects, ticketJiraIssueLinks, ticketProjectLinks, tickets } from "../../../db/schema";
 import { AppError } from "../../../shared/errors";
 import { logServerEvent, withServerSpan } from "../../../shared/observability";
+import type { ActivityWriteOptions } from "../../../shared/types";
 import { cleanupTicketImages } from "./images";
 import { getTicketOrThrow } from "./queries";
 import { nowIso, nextTicketKey, rethrowTicketConflict } from "./shared";
@@ -45,7 +46,8 @@ export async function createTicket(
     priority: string;
     dueAt?: string | null;
     projectLinks: Array<{ projectId: number; relationship: string }>;
-  }
+  },
+  options: ActivityWriteOptions = {}
 ) {
   return withServerSpan(
     app,
@@ -97,7 +99,14 @@ export async function createTicket(
           replaceWorkspaces(tx, createdTicket.id, input.projectLinks, input.workspaces ?? []);
           replaceJiraIssueLinks(tx, createdTicket.id, input.jiraIssues);
 
-          recordActivity(tx, createdTicket.id, "ticket.created", `Ticket ${createdTicket.key} created`);
+          recordActivity(
+            tx,
+            createdTicket.id,
+            "ticket.created",
+            `Ticket ${createdTicket.key} created`,
+            {},
+            options.actor
+          );
           recordProjectLinkChanges(
             tx,
             createdTicket.id,
@@ -107,9 +116,10 @@ export async function createTicket(
               project: {
                 name: projectNamesById.get(link.projectId) ?? `Project ${link.projectId}`
               }
-            }))
+            })),
+            options.actor
           );
-          recordJiraIssueLinkChanges(tx, createdTicket.id, [], input.jiraIssues);
+          recordJiraIssueLinkChanges(tx, createdTicket.id, [], input.jiraIssues, options.actor);
 
           return createdTicket;
         });
@@ -145,7 +155,8 @@ export async function updateTicket(
     priority: string;
     dueAt: string | null;
     projectLinks: Array<{ projectId: number; relationship: string }>;
-  }>
+  }>,
+  options: ActivityWriteOptions = {}
 ) {
   return withServerSpan(
     app,
@@ -223,7 +234,8 @@ export async function updateTicket(
                 project: {
                   name: nextProjectNamesById?.get(link.projectId) ?? `Project ${link.projectId}`
                 }
-              }))
+              })),
+              options.actor
             );
           }
 
@@ -240,18 +252,26 @@ export async function updateTicket(
                 key: issue.key,
                 summary: issue.summary
               })),
-              input.jiraIssues
+              input.jiraIssues,
+              options.actor
             );
           }
 
           if (input.status && input.status !== existing.status) {
             recordActivity(tx, id, "ticket.status.changed", `Status changed to ${input.status}`, {
               status: input.status
-            });
+            }, options.actor);
           }
 
           if (input.priority && input.priority !== existing.priority) {
-            recordActivity(tx, id, "ticket.priority.changed", `Priority changed to ${input.priority}`);
+            recordActivity(
+              tx,
+              id,
+              "ticket.priority.changed",
+              `Priority changed to ${input.priority}`,
+              {},
+              options.actor
+            );
           }
 
           return nextTicket;

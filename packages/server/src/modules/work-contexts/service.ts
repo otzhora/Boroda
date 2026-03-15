@@ -1,25 +1,12 @@
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { ticketActivities, tickets, workContexts } from "../../db/schema";
+import { tickets, workContexts } from "../../db/schema";
 import { AppError } from "../../shared/errors";
+import type { ActivityWriteOptions } from "../../shared/types";
+import { recordActivity } from "../tickets/service/activity";
 
 function nowIso() {
   return new Date().toISOString();
-}
-
-type AppDb = FastifyInstance["db"];
-type TransactionCallback = Parameters<AppDb["transaction"]>[0];
-type DbTransaction = TransactionCallback extends (tx: infer Tx, ...args: never[]) => unknown ? Tx : never;
-type DbExecutor = AppDb | DbTransaction;
-
-function logActivity(db: DbExecutor, ticketId: number, type: string, message: string) {
-  db.insert(ticketActivities).values({
-    ticketId,
-    type,
-    message,
-    metaJson: "{}",
-    createdAt: nowIso()
-  }).run();
 }
 
 function getTicketOrThrow(app: FastifyInstance, ticketId: number) {
@@ -37,7 +24,8 @@ function getTicketOrThrow(app: FastifyInstance, ticketId: number) {
 export async function createWorkContext(
   app: FastifyInstance,
   ticketId: number,
-  input: { type: string; label: string; value: string; meta: Record<string, unknown> }
+  input: { type: string; label: string; value: string; meta: Record<string, unknown> },
+  options: ActivityWriteOptions = {}
 ) {
   getTicketOrThrow(app, ticketId);
   const timestamp = nowIso();
@@ -56,7 +44,14 @@ export async function createWorkContext(
       .returning()
       .get();
 
-    logActivity(tx, ticketId, "work-context.created", `Work context added: ${input.label}`);
+    recordActivity(
+      tx,
+      ticketId,
+      "work-context.created",
+      `Work context added: ${input.label}`,
+      {},
+      options.actor
+    );
     return created;
   });
 }
@@ -64,7 +59,8 @@ export async function createWorkContext(
 export async function updateWorkContext(
   app: FastifyInstance,
   id: number,
-  input: Partial<{ type: string; label: string; value: string; meta: Record<string, unknown> }>
+  input: Partial<{ type: string; label: string; value: string; meta: Record<string, unknown> }>,
+  options: ActivityWriteOptions = {}
 ) {
   const existing = app.db
     .select()
@@ -90,12 +86,23 @@ export async function updateWorkContext(
       .returning()
       .get();
 
-    logActivity(tx, existing.ticketId, "work-context.updated", `Work context updated: ${updated.label}`);
+    recordActivity(
+      tx,
+      existing.ticketId,
+      "work-context.updated",
+      `Work context updated: ${updated.label}`,
+      {},
+      options.actor
+    );
     return updated;
   });
 }
 
-export async function deleteWorkContext(app: FastifyInstance, id: number) {
+export async function deleteWorkContext(
+  app: FastifyInstance,
+  id: number,
+  options: ActivityWriteOptions = {}
+) {
   const existing = app.db
     .select()
     .from(workContexts)
@@ -108,7 +115,14 @@ export async function deleteWorkContext(app: FastifyInstance, id: number) {
 
   app.db.transaction((tx) => {
     tx.delete(workContexts).where(eq(workContexts.id, id)).run();
-    logActivity(tx, existing.ticketId, "work-context.deleted", `Work context removed: ${existing.label}`);
+    recordActivity(
+      tx,
+      existing.ticketId,
+      "work-context.deleted",
+      `Work context removed: ${existing.label}`,
+      {},
+      options.actor
+    );
   });
   return { ok: true };
 }

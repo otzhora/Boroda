@@ -3,6 +3,8 @@ export type TicketStatus = string;
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type ProjectFolderKind = "APP" | "BACKEND" | "TERRAFORM" | "INFRA" | "DOCS" | "OTHER";
 export type TicketProjectRelationship = "PRIMARY" | "RELATED" | "DEPENDENCY";
+export type ActivityActorType = "agent";
+export type ActivityTransport = "http" | "mcp";
 export type WorkContextType =
   | "CODEX_SESSION"
   | "CLAUDE_SESSION"
@@ -13,6 +15,17 @@ export type WorkContextType =
   | "MANUAL_UI"
   | "LINK"
   | "NOTE";
+
+export interface ActivityActorMetadata {
+  actorType: ActivityActorType;
+  agentKind: string;
+  sessionRef?: string | null;
+  transport?: ActivityTransport | null;
+}
+
+export interface ActivityWriteOptions {
+  actor?: ActivityActorMetadata;
+}
 
 export interface PathInfo {
   path: string;

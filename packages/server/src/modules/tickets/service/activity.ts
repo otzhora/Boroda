@@ -1,18 +1,37 @@
 import { ticketActivities } from "../../../db/schema";
+import type { ActivityActorMetadata } from "../../../shared/types";
 import { nowIso, type DbExecutor } from "./shared";
+
+function buildActivityMeta(
+  meta: Record<string, unknown>,
+  actor?: ActivityActorMetadata
+) {
+  if (!actor) {
+    return meta;
+  }
+
+  return {
+    ...meta,
+    actorType: actor.actorType,
+    agentKind: actor.agentKind,
+    ...(actor.sessionRef ? { sessionRef: actor.sessionRef } : {}),
+    ...(actor.transport ? { transport: actor.transport } : {})
+  };
+}
 
 export function recordActivity(
   db: DbExecutor,
   ticketId: number,
   type: string,
   message: string,
-  meta: Record<string, unknown> = {}
+  meta: Record<string, unknown> = {},
+  actor?: ActivityActorMetadata
 ) {
   db.insert(ticketActivities).values({
     ticketId,
     type,
     message,
-    metaJson: JSON.stringify(meta),
+    metaJson: JSON.stringify(buildActivityMeta(meta, actor)),
     createdAt: nowIso()
   }).run();
 }
@@ -42,7 +61,8 @@ export function recordProjectLinkChanges(
   db: DbExecutor,
   ticketId: number,
   previousLinks: Array<{ projectId: number; relationship: string; project?: { name: string } | null }>,
-  nextLinks: Array<{ projectId: number; relationship: string; project?: { name: string } | null }>
+  nextLinks: Array<{ projectId: number; relationship: string; project?: { name: string } | null }>,
+  actor?: ActivityActorMetadata
 ) {
   const previousByKey = new Map(previousLinks.map((link) => [serializeProjectLink(link), link]));
   const nextByKey = new Map(nextLinks.map((link) => [serializeProjectLink(link), link]));
@@ -54,7 +74,9 @@ export function recordProjectLinkChanges(
         db,
         ticketId,
         "ticket.project_linked",
-        `${projectName} linked as ${link.relationship.toLowerCase()}`
+        `${projectName} linked as ${link.relationship.toLowerCase()}`,
+        {},
+        actor
       );
     }
   }
@@ -66,7 +88,9 @@ export function recordProjectLinkChanges(
         db,
         ticketId,
         "ticket.project_unlinked",
-        `${projectName} removed from ticket`
+        `${projectName} removed from ticket`,
+        {},
+        actor
       );
     }
   }
@@ -76,7 +100,8 @@ export function recordJiraIssueLinkChanges(
   db: DbExecutor,
   ticketId: number,
   previousIssues: Array<{ key: string; summary: string }>,
-  nextIssues: Array<{ key: string; summary: string }>
+  nextIssues: Array<{ key: string; summary: string }>,
+  actor?: ActivityActorMetadata
 ) {
   const previousByKey = new Map(previousIssues.map((issue) => [serializeJiraIssueLink(issue), issue]));
   const nextByKey = new Map(nextIssues.map((issue) => [serializeJiraIssueLink(issue), issue]));
@@ -87,7 +112,9 @@ export function recordJiraIssueLinkChanges(
         db,
         ticketId,
         "ticket.jira_issue_linked",
-        `${formatJiraIssueLabel(issue)} linked from Jira`
+        `${formatJiraIssueLabel(issue)} linked from Jira`,
+        {},
+        actor
       );
     }
   }
@@ -98,7 +125,9 @@ export function recordJiraIssueLinkChanges(
         db,
         ticketId,
         "ticket.jira_issue_unlinked",
-        `${formatJiraIssueLabel(issue)} removed from Jira links`
+        `${formatJiraIssueLabel(issue)} removed from Jira links`,
+        {},
+        actor
       );
     }
   }

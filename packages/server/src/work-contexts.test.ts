@@ -6,10 +6,12 @@ import { after, before, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import type { FastifyInstance } from "fastify";
+import type { createWorkContext as CreateWorkContextService } from "./modules/work-contexts/service";
 
 let app: FastifyInstance;
 let sqlite: { close: () => void };
 let schema: typeof import("./db/schema");
+let createWorkContextService: typeof CreateWorkContextService;
 let tempRoot = "";
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
@@ -22,6 +24,7 @@ before(async () => {
     import("./db/client"),
     import("./db/schema")
   ]);
+  ({ createWorkContext: createWorkContextService } = await import("./modules/work-contexts/service"));
 
   sqlite = dbClient.sqlite;
   schema = importedSchema;
@@ -66,6 +69,10 @@ async function createTicket() {
 
   assert.equal(response.statusCode, 200);
   return response.json();
+}
+
+function parseMetaJson(metaJson: string) {
+  return JSON.parse(metaJson) as Record<string, unknown>;
 }
 
 test("work context CRUD supports PR, session, note, and manual UI references", async () => {
@@ -192,4 +199,48 @@ test("creating a work context for a missing ticket returns ticket not found", as
 
   assert.equal(response.statusCode, 404);
   assert.equal(response.json().error.code, "TICKET_NOT_FOUND");
+});
+
+test("work context service records agent provenance in activity metadata", async () => {
+  const ticket = await createTicket();
+
+  const createdContext = await createWorkContextService(
+    app,
+    ticket.id,
+    {
+      type: "NOTE",
+      label: "Source",
+      value: "Added by an agent session",
+      meta: {}
+    },
+    {
+      actor: {
+        actorType: "agent",
+        agentKind: "codex",
+        sessionRef: "codex://session/context-1",
+        transport: "mcp"
+      }
+    }
+  );
+
+  assert.equal(createdContext.type, "NOTE");
+
+  const ticketResponse = await app.inject({
+    method: "GET",
+    url: `/api/tickets/${ticket.id}`
+  });
+
+  assert.equal(ticketResponse.statusCode, 200);
+  const updatedTicket = ticketResponse.json();
+  const createdActivity = updatedTicket.activities.find(
+    (activity: { type: string }) => activity.type === "work-context.created"
+  );
+
+  assert.ok(createdActivity);
+  assert.deepEqual(parseMetaJson(createdActivity.metaJson), {
+    actorType: "agent",
+    agentKind: "codex",
+    sessionRef: "codex://session/context-1",
+    transport: "mcp"
+  });
 });
