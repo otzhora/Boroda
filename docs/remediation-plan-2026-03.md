@@ -540,7 +540,7 @@ Do not work on any other step.
 Run tests and typecheck after the change and report the result.
 ```
 
-### Prompt 4
+### Prompt 4 -- Done
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 4 only.

@@ -2,10 +2,11 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { ticketIdParamSchema } from "../../tickets/schemas";
 import { openTicketInApp } from "./service";
+import { openInModes, openInTargets } from "./types";
 
 const openTicketInAppBodySchema = z.object({
-  target: z.enum(["explorer", "vscode", "cursor", "terminal"]),
-  mode: z.enum(["folder", "worktree"]).default("worktree"),
+  target: z.enum(openInTargets),
+  mode: z.enum(openInModes).default("worktree"),
   folderId: z.number().int().positive().optional(),
   workspaceId: z.number().int().positive().optional(),
   runSetup: z.boolean().default(true)
