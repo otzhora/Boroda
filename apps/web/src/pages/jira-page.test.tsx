@@ -111,14 +111,6 @@ describe("JiraPage", () => {
     mocks.useJiraLinkableTicketsQuery.mockReturnValue({
       data: [
         createTicketListItem({
-          id: 12,
-          title: "Refactor backend service",
-          status: "IN_PROGRESS",
-          priority: "HIGH",
-          createdAt: "",
-          updatedAt: "2026-03-06T10:00:00.000Z"
-        }),
-        createTicketListItem({
           id: 21,
           key: "BRD-21",
           title: "Operational cleanup ticket",
@@ -236,6 +228,7 @@ describe("JiraPage", () => {
     expect(screen.getByText("Search to find a Boroda ticket to link.")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Search Boroda tickets"), "BRD-21");
     expect(mocks.useJiraLinkableTicketsQuery).toHaveBeenLastCalledWith("OPS-42", "BRD-21");
+    expect(screen.queryByText("BRD-12")).not.toBeInTheDocument();
     const targetTicketRow = screen.getByText("BRD-21").closest("li");
     expect(targetTicketRow).not.toBeNull();
     await user.click(within(targetTicketRow as HTMLLIElement).getByRole("button", { name: "Link ticket" }));

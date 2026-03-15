@@ -4,6 +4,7 @@ import { z } from "zod";
 import { jiraSettings, ticketJiraIssueLinks, tickets } from "../../../db/schema";
 import { AppError } from "../../../shared/errors";
 import { logServerEvent, withServerSpan } from "../../../shared/observability";
+import { listTickets } from "../../tickets/service";
 import { updateJiraSettingsSchema } from "./schemas";
 
 type UpdateJiraSettingsInput = z.infer<typeof updateJiraSettingsSchema>;
@@ -288,6 +289,58 @@ export async function listAssignedJiraIssuesWithLinks(app: FastifyInstance) {
     total: assignedIssues.total,
     linked: issues.filter((issue) => issue.borodaTickets.length > 0).length,
     unlinked: issues.filter((issue) => issue.borodaTickets.length === 0).length
+  };
+}
+
+export async function listJiraLinkableTickets(
+  app: FastifyInstance,
+  input: {
+    issueKey: string;
+    q?: string;
+  }
+) {
+  const normalizedIssueKey = normalizeIssueKey(input.issueKey);
+  const normalizedSearch = input.q?.trim() ?? "";
+  const response = await listTickets(app, {
+    status: [],
+    priority: [],
+    projectId: [],
+    q: normalizedSearch || undefined,
+    jiraIssue: [],
+    scope: "active",
+    sort: "updated",
+    dir: "desc"
+  });
+
+  if (!normalizedSearch) {
+    return response;
+  }
+
+  const linkedTicketRows = await app.db
+    .select({ ticketId: ticketJiraIssueLinks.ticketId })
+    .from(ticketJiraIssueLinks)
+    .where(eq(ticketJiraIssueLinks.issueKey, normalizedIssueKey))
+    .all();
+
+  if (!linkedTicketRows.length) {
+    return response;
+  }
+
+  const linkedTicketIds = new Set(linkedTicketRows.map((row) => row.ticketId));
+  const items = response.items.filter((ticket) => !linkedTicketIds.has(ticket.id));
+  const jiraIssues = new Set<string>();
+
+  for (const ticket of items) {
+    for (const issue of ticket.jiraIssues) {
+      jiraIssues.add(issue.key);
+    }
+  }
+
+  return {
+    items,
+    meta: {
+      jiraIssues: [...jiraIssues].sort((left, right) => left.localeCompare(right))
+    }
   };
 }
 

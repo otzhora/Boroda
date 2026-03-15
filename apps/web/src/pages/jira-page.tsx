@@ -133,7 +133,7 @@ export function JiraPage() {
   });
   const projects = projectsQuery.data ?? [];
   const linkableTicketsQuery = useJiraLinkableTicketsQuery(issueToLinkToExisting?.key ?? null, ticketSearch);
-  const searchedTickets = linkableTicketsQuery.data ?? [];
+  const linkableTickets = linkableTicketsQuery.data ?? [];
   const linkedIssuesCount = issues.filter((issue) => issue.borodaTickets.length > 0).length;
 
   useEffect(() => {
@@ -195,16 +195,6 @@ export function JiraPage() {
       current.includes(issueKey) ? current.filter((key) => key !== issueKey) : [...current, issueKey]
     );
   };
-
-  const linkableTickets = issueToLinkToExisting
-    ? searchedTickets.filter((ticket) => {
-        const searchValue = ticketSearch.trim().toLowerCase();
-        const selectedIssue = issues.find((issue) => issue.key === issueToLinkToExisting.key);
-        const alreadyLinked = selectedIssue?.borodaTickets.some((linkedTicket) => linkedTicket.id === ticket.id) ?? false;
-
-        return searchValue.length > 0 && !alreadyLinked;
-      })
-    : [];
 
   return (
     <section className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-3">

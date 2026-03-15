@@ -1,11 +1,16 @@
 import type { FastifyPluginAsync } from "fastify";
 import {
+  listJiraLinkableTickets,
   listAssignedJiraIssues,
   listAssignedJiraIssuesWithLinks,
   getJiraSettings,
   upsertJiraSettings
 } from "./service";
-import { updateJiraSettingsSchema } from "./schemas";
+import {
+  jiraIssueKeyParamSchema,
+  jiraLinkableTicketsQuerySchema,
+  updateJiraSettingsSchema
+} from "./schemas";
 
 export const jiraRoutes: FastifyPluginAsync = async (app) => {
   app.get("/integrations/jira/settings", async () => {
@@ -23,5 +28,14 @@ export const jiraRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/integrations/jira/issues/assigned/links", async () => {
     return listAssignedJiraIssuesWithLinks(app);
+  });
+
+  app.get("/integrations/jira/issues/:key/linkable-tickets", async (request) => {
+    const params = jiraIssueKeyParamSchema.parse(request.params);
+    const query = jiraLinkableTicketsQuerySchema.parse(request.query);
+    return listJiraLinkableTickets(app, {
+      issueKey: params.key,
+      q: query.q
+    });
   });
 };

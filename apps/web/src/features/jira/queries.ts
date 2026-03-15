@@ -87,10 +87,15 @@ export function useJiraLinkableTicketsQuery(issueKey: string | null, search: str
   return useQuery({
     queryKey: jiraLinkableTicketsQueryKey(issueKey, normalizedSearch),
     queryFn: async () => {
-      const searchParams = new URLSearchParams({
-        q: normalizedSearch
-      });
-      const response = await apiClient<TicketListResponse>(`/api/tickets?${searchParams.toString()}`);
+      const searchParams = new URLSearchParams();
+
+      if (normalizedSearch) {
+        searchParams.set("q", normalizedSearch);
+      }
+
+      const response = await apiClient<TicketListResponse>(
+        `/api/integrations/jira/issues/${encodeURIComponent(issueKey ?? "")}/linkable-tickets?${searchParams.toString()}`
+      );
       return response.items;
     },
     enabled: issueKey !== null && normalizedSearch.length > 0,

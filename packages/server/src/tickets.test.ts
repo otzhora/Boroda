@@ -850,6 +850,61 @@ test("ticket jira-link endpoint appends a Jira issue to an existing Boroda ticke
   );
 });
 
+test("jira linkable ticket search uses the Jira-scoped endpoint and excludes already linked matches", async () => {
+  const linkedTicketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Ops cleanup linked ticket",
+      description: "Cleanup checklist",
+      jiraIssues: [{ key: "OPS-42", summary: "Ops cleanup" }],
+      status: "READY",
+      priority: "MEDIUM",
+      projectLinks: []
+    }
+  });
+
+  const firstCandidateResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Ops cleanup candidate",
+      description: "Cleanup follow-up",
+      status: "READY",
+      priority: "LOW",
+      projectLinks: []
+    }
+  });
+
+  const secondCandidateResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Ops cleanup candidate newer",
+      description: "Cleanup verification",
+      status: "IN_PROGRESS",
+      priority: "HIGH",
+      projectLinks: []
+    }
+  });
+
+  assert.equal(linkedTicketResponse.statusCode, 200);
+  assert.equal(firstCandidateResponse.statusCode, 200);
+  assert.equal(secondCandidateResponse.statusCode, 200);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/integrations/jira/issues/OPS-42/linkable-tickets?q=cleanup"
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json();
+  assert.deepEqual(
+    payload.items.map((ticket: { title: string }) => ticket.title),
+    ["Ops cleanup candidate newer", "Ops cleanup candidate"]
+  );
+});
+
 test("ticket image uploads can be pasted and rendered back from local storage", async () => {
   const ticketResponse = await app.inject({
     method: "POST",
