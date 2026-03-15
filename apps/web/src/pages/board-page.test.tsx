@@ -97,7 +97,6 @@ vi.mock("../components/ticket/ticket-drawer", () => ({
   TicketDrawer: ({
     ticketId,
     onArchive,
-    onRestore,
     onClose
   }: {
     ticketId: number | null;

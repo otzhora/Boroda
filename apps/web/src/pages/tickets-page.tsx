@@ -141,12 +141,6 @@ export function TicketsPage() {
     : (ticketsQuery.data?.items ?? []);
   const boardJiraIssues = ticketsQuery.data?.meta.jiraIssues ?? [];
   const ticketFiltersApplied = hasTicketFilters(parsedFilters);
-  const statusFilterKey = parsedFilters.status?.join(",") ?? "";
-  const priorityFilterKey = parsedFilters.priority?.join(",") ?? "";
-  const projectFilterKey = parsedFilters.projectId?.join(",") ?? "";
-  const jiraFilterKey = parsedFilters.jiraIssue?.join(",") ?? "";
-  const boardJiraIssuesKey = boardJiraIssues.join(",");
-  const projectOptionsKey = projects.map((project) => `${project.id}:${project.name}`).join("|");
 
   const updateTicketMutation = useUpdateTicketMutation({
     ticketId: selectedTicketId,

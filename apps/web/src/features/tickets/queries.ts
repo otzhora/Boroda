@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { Ticket, TicketListItem, TicketListResponse, TicketStatus } from "../../lib/types";
+import type { Ticket, TicketListResponse, TicketStatus } from "../../lib/types";
 import { TICKET_PRIORITIES } from "../../lib/constants";
 
 export type TicketScope = "active" | "archived" | "all";

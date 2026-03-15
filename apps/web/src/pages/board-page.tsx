@@ -9,7 +9,6 @@ import {
 } from "../components/board/quick-ticket-form";
 import { ArchiveWorktreeDialog, extractDirtyWorktrees, type DirtyWorktreeDescriptor } from "../components/ticket/archive-worktree-dialog";
 import { TicketDrawer } from "../components/ticket/ticket-drawer";
-import { SectionedFilterDropdown } from "../components/ui/sectioned-filter-dropdown";
 import { ModalDialog } from "../components/ui/modal-dialog";
 import { useAppHeader } from "../app/router";
 import { PageCommandBar } from "../components/ui/page-command-bar";
@@ -37,7 +36,7 @@ import {
   useUpdateTicketMutation
 } from "../features/tickets/mutations";
 import { useTicketQuery } from "../features/tickets/queries";
-import { DEFAULT_BOARD_STATUS, TICKET_PRIORITIES } from "../lib/constants";
+import { DEFAULT_BOARD_STATUS } from "../lib/constants";
 import { ApiError } from "../lib/api-client";
 import { getStoredAutoRunWorktreeSetup } from "../lib/user-preferences";
 import { parseTicketId, usePageSearchHotkeys } from "../features/tickets/url-state";
@@ -55,7 +54,7 @@ const primaryButtonClassName =
   "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-accent-500/40 bg-accent-500 px-3.5 py-2 text-sm font-medium text-canvas-975 transition-colors hover:bg-accent-300 disabled:cursor-progress disabled:opacity-70";
 
 export function BoardPage() {
-  const { hasHost } = useAppHeader();
+  useAppHeader();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(EMPTY_BOARD_FILTERS);

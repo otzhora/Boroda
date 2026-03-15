@@ -1,9 +1,8 @@
 import type { FocusEvent, KeyboardEvent as ReactKeyboardEvent, MutableRefObject, RefObject } from "react";
 import type { OpenInMode, OpenInTarget } from "../../lib/types";
-import { TicketDrawerFolderPickerDialog, TicketDrawerWorkspacePickerDialog } from "./ticket-drawer-open-dialogs";
 import { TicketDrawerOpenAction, TicketDrawerOpenMenu } from "./ticket-drawer-open-menu";
 import type { OpenInFeedbackState } from "./ticket-drawer-open-types";
-import type { TerminalFolderOption, WorkspaceOption } from "./ticket-drawer-workspaces";
+import type { TerminalFolderOption } from "./ticket-drawer-workspaces";
 
 const railSectionClassName = "grid min-w-0 gap-3 border-b border-white/8 pb-5 last:border-b-0 last:pb-0";
 

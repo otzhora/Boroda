@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
+    "lint": "npm run lint:types && npm run lint:guardrails",
+    "lint:guardrails": "node ../../scripts/quality-gate.mjs apps/web",
+    "lint:types": "tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },

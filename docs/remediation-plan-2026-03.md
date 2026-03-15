@@ -585,7 +585,7 @@ Do not work on any other step.
 Run tests and typecheck after the change and report the result.
 ```
 
-### Prompt 9
+### Prompt 9 -- Done
 
 ```text
 Read docs/remediation-plan-2026-03.md and implement Step 9 only.

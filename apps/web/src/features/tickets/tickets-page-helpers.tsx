@@ -10,13 +10,6 @@ const chipClassName = "inline-flex min-h-6 items-center rounded-[8px] border px-
 const headerButtonClassName =
   "inline-flex items-center gap-1 rounded-[8px] px-1.5 py-1 text-xs font-medium text-ink-200 transition-colors hover:bg-white/[0.04] hover:text-ink-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50";
 
-const priorityRank: Record<(typeof TICKET_PRIORITIES)[number], number> = {
-  LOW: 0,
-  MEDIUM: 1,
-  HIGH: 2,
-  CRITICAL: 3
-};
-
 export function hasTicketFilters(filters: TicketFilters) {
   return Boolean(
     filters.projectId?.length ||

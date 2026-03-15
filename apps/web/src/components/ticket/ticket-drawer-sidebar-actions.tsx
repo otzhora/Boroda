@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { TicketDrawerArchiveAction, TicketDrawerOpenSection } from "./ticket-drawer-open-section";
 import type { useTicketDrawerOpenIn } from "./use-ticket-drawer-open-in";
 

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../lib/api-client";
-import type { TicketListItem, TicketListResponse } from "../../lib/types";
+import type { TicketListResponse } from "../../lib/types";
 
 export interface JiraSettings {
   baseUrl: string;
