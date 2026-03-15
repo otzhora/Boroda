@@ -361,6 +361,25 @@ export async function refreshTicketJiraIssues(app: FastifyInstance, id: number) 
   );
 }
 
+export async function appendTicketActivity(
+  app: FastifyInstance,
+  id: number,
+  input: {
+    type: string;
+    message: string;
+    meta?: Record<string, unknown>;
+  },
+  options: ActivityWriteOptions = {}
+) {
+  await getTicketOrThrow(app, id);
+
+  app.db.transaction((tx) => {
+    recordActivity(tx, id, input.type, input.message, input.meta ?? {}, options.actor);
+  });
+
+  return getTicketOrThrow(app, id);
+}
+
 export async function addTicketProjectLink(
   app: FastifyInstance,
   ticketId: number,

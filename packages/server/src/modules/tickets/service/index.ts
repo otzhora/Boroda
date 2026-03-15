@@ -12,6 +12,7 @@ export { cleanupTicketImages, saveTicketImage, streamTicketImage } from "./image
 export {
   addTicketJiraIssueLink,
   addTicketProjectLink,
+  appendTicketActivity,
   createTicket,
   deleteTicketProjectLink,
   refreshTicketJiraIssues,

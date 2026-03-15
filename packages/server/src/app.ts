@@ -2,6 +2,7 @@ import fs from "node:fs";
 import fastifyMultipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
+import { agentRoutes } from "./modules/agents/routes";
 import { boardRoutes } from "./modules/board/routes";
 import { getConfig } from "./config";
 import { exportRoutes } from "./modules/export/routes";
@@ -84,6 +85,7 @@ export function buildApp() {
 
   app.register(async (api) => {
     api.register(healthRoutes);
+    api.register(agentRoutes);
     api.register(projectRoutes);
     api.register(ticketRoutes);
     api.register(boardRoutes);
