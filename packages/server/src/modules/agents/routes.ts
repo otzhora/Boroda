@@ -3,6 +3,7 @@ import {
   appendAgentTicketActivity,
   createAgentTicket,
   createAgentWorkContext,
+  getAgentToolMetadata,
   getAgentTicket,
   listAgentProjects,
   listAgentTickets,
@@ -12,6 +13,7 @@ import {
   agentAppendActivitySchema,
   agentCreateTicketSchema,
   agentCreateWorkContextSchema,
+  agentMetadataSchema,
   agentProjectQuerySchema,
   agentTicketIdParamSchema,
   agentTicketQuerySchema,
@@ -19,6 +21,11 @@ import {
 } from "./schemas";
 
 export const agentRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/agents/metadata", async (request) => {
+    agentMetadataSchema.parse(request.query);
+    return getAgentToolMetadata(app);
+  });
+
   app.get("/agents/projects", async (request) => {
     const query = agentProjectQuerySchema.parse(request.query);
     return listAgentProjects(app, query);

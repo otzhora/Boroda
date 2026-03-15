@@ -117,6 +117,46 @@ test("agent routes list projects and tickets through the stable surface", async 
   assert.equal(ticketDetailResponse.json().id, createdTicket.id);
 });
 
+test("agent metadata route exposes valid enums, statuses, and defaults", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/agents/metadata"
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), {
+    ticket: {
+      defaults: {
+        status: "INBOX",
+        priority: "MEDIUM"
+      },
+      priorities: ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+      statuses: [
+        { status: "INBOX", label: "Inbox", position: 0 },
+        { status: "READY", label: "Ready", position: 1 },
+        { status: "IN_PROGRESS", label: "In Progress", position: 2 },
+        { status: "BLOCKED", label: "Blocked", position: 3 },
+        { status: "IN_REVIEW", label: "In Review", position: 4 },
+        { status: "MANUAL_UI", label: "Manual UI", position: 5 },
+        { status: "DONE", label: "Done", position: 6 }
+      ]
+    },
+    workContexts: {
+      types: [
+        "CODEX_SESSION",
+        "CLAUDE_SESSION",
+        "CURSOR_SESSION",
+        "PR",
+        "AWS_CONSOLE",
+        "TERRAFORM_RUN",
+        "MANUAL_UI",
+        "LINK",
+        "NOTE"
+      ]
+    }
+  });
+});
+
 test("agent write routes delegate to shared services and record provenance", async () => {
   const project = await createProject("Boroda", "boroda");
 
@@ -126,8 +166,6 @@ test("agent write routes delegate to shared services and record provenance", asy
     payload: {
       title: "Implement agent append activity",
       description: "Need a stable HTTP contract for agent progress writes.",
-      status: "INBOX",
-      priority: "MEDIUM",
       projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }],
       workContexts: [
         {
@@ -145,6 +183,8 @@ test("agent write routes delegate to shared services and record provenance", asy
 
   assert.equal(createResponse.statusCode, 200);
   const createdTicket = createResponse.json();
+  assert.equal(createdTicket.status, "INBOX");
+  assert.equal(createdTicket.priority, "MEDIUM");
   const createdActivity = createdTicket.activities.find(
     (activity: { type: string }) => activity.type === "ticket.created"
   );
@@ -249,4 +289,31 @@ test("agent ticket update rejects web-only fields", async () => {
 
   assert.equal(updateResponse.statusCode, 400);
   assert.equal(updateResponse.json().error.code, "VALIDATION_ERROR");
+});
+
+test("agent ticket create returns actionable invalid status details", async () => {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/agents/tickets",
+    payload: {
+      title: "Bad status",
+      status: "TODO",
+      priority: "MEDIUM"
+    }
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error.code, "INVALID_STATUS");
+  assert.deepEqual(response.json().error.details, {
+    status: "TODO",
+    allowedStatuses: [
+      { status: "INBOX", label: "Inbox" },
+      { status: "READY", label: "Ready" },
+      { status: "IN_PROGRESS", label: "In Progress" },
+      { status: "BLOCKED", label: "Blocked" },
+      { status: "IN_REVIEW", label: "In Review" },
+      { status: "MANUAL_UI", label: "Manual UI" },
+      { status: "DONE", label: "Done" }
+    ]
+  });
 });

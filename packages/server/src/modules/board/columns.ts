@@ -50,10 +50,17 @@ export function createStatusKey(label: string, existingStatuses: Iterable<string
 }
 
 export async function ensureBoardStatusExists(app: FastifyInstance, status: string) {
-  const existing = app.db.select({ id: boardColumns.id }).from(boardColumns).where(eq(boardColumns.status, status)).get();
+  const columns = await ensureBoardColumnsPresent(app);
+  const existing = columns.find((column) => column.status === status);
 
   if (!existing) {
-    throw new AppError(400, "INVALID_STATUS", `Unknown board status: ${status}`, { status });
+    throw new AppError(400, "INVALID_STATUS", `Unknown board status: ${status}`, {
+      status,
+      allowedStatuses: columns.map((column) => ({
+        status: column.status,
+        label: column.label
+      }))
+    });
   }
 }
 

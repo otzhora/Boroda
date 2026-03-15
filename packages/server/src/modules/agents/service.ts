@@ -4,6 +4,11 @@ import type { ActivityTransport } from "../../shared/types";
 import { listProjects } from "../projects/service";
 import { appendTicketActivity, createTicket, getTicketOrThrow, listTickets, updateTicket } from "../tickets/service";
 import { createWorkContext } from "../work-contexts/service";
+import {
+  DEFAULT_AGENT_TICKET_PRIORITY,
+  DEFAULT_AGENT_TICKET_STATUS,
+  getAgentMetadata
+} from "./metadata";
 import type {
   AgentActorInput,
   agentAppendActivitySchema,
@@ -51,6 +56,10 @@ export async function getAgentTicket(app: FastifyInstance, ticketId: number) {
   return getTicketOrThrow(app, ticketId);
 }
 
+export async function getAgentToolMetadata(app: FastifyInstance) {
+  return getAgentMetadata(app);
+}
+
 export async function createAgentTicket(
   app: FastifyInstance,
   payload: AgentCreateTicketInput,
@@ -64,8 +73,8 @@ export async function createAgentTicket(
       workContexts: payload.workContexts,
       branch: payload.branch,
       jiraIssues: payload.jiraIssues,
-      status: payload.status,
-      priority: payload.priority,
+      status: payload.status ?? DEFAULT_AGENT_TICKET_STATUS,
+      priority: payload.priority ?? DEFAULT_AGENT_TICKET_PRIORITY,
       dueAt: payload.dueAt,
       projectLinks: payload.projectLinks
     },

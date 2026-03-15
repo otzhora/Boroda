@@ -17,6 +17,7 @@ const agentActorSchema = z.object({
 });
 
 export const agentProjectQuerySchema = projectQuerySchema;
+export const agentMetadataSchema = z.object({}).strict();
 
 export const agentTicketQuerySchema = z.object({
   q: z.string().trim().optional(),

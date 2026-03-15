@@ -98,6 +98,7 @@ test("mcp handler exposes the first-pass Boroda tools and reuses shared agent lo
 
   const toolNames = (listToolsResponse?.result?.tools as Array<{ name: string }>).map((tool) => tool.name);
   assert.deepEqual(toolNames, [
+    "boroda.get_metadata",
     "boroda.list_projects",
     "boroda.list_tickets",
     "boroda.get_ticket",
@@ -106,6 +107,55 @@ test("mcp handler exposes the first-pass Boroda tools and reuses shared agent lo
     "boroda.attach_work_context",
     "boroda.append_activity"
   ]);
+
+  const metadataResponse = await handleMcpRequest(app, {
+    jsonrpc: "2.0",
+    id: "metadata",
+    method: "tools/call",
+    params: {
+      name: "boroda.get_metadata",
+      arguments: {}
+    }
+  });
+
+  assert.deepEqual(
+    (metadataResponse?.result?.structuredContent as {
+      ticket: {
+        defaults: { status: string; priority: string };
+        priorities: string[];
+        statuses: Array<{ status: string }>;
+      };
+      workContexts: { types: string[] };
+    }),
+    {
+      ticket: {
+        defaults: { status: "INBOX", priority: "MEDIUM" },
+        priorities: ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+        statuses: [
+          { status: "INBOX", label: "Inbox", position: 0 },
+          { status: "READY", label: "Ready", position: 1 },
+          { status: "IN_PROGRESS", label: "In Progress", position: 2 },
+          { status: "BLOCKED", label: "Blocked", position: 3 },
+          { status: "IN_REVIEW", label: "In Review", position: 4 },
+          { status: "MANUAL_UI", label: "Manual UI", position: 5 },
+          { status: "DONE", label: "Done", position: 6 }
+        ]
+      },
+      workContexts: {
+        types: [
+          "CODEX_SESSION",
+          "CLAUDE_SESSION",
+          "CURSOR_SESSION",
+          "PR",
+          "AWS_CONSOLE",
+          "TERRAFORM_RUN",
+          "MANUAL_UI",
+          "LINK",
+          "NOTE"
+        ]
+      }
+    }
+  );
 
   const createTicketResponse = await handleMcpRequest(app, {
     jsonrpc: "2.0",
@@ -134,10 +184,14 @@ test("mcp handler exposes the first-pass Boroda tools and reuses shared agent lo
 
   const createdTicket = createTicketResponse?.result?.structuredContent as {
     id: number;
+    status: string;
+    priority: string;
     workContexts: Array<{ type: string }>;
     activities: Array<{ type: string; metaJson: string }>;
   };
 
+  assert.equal(createdTicket.status, "INBOX");
+  assert.equal(createdTicket.priority, "MEDIUM");
   assert.equal(createdTicket.workContexts.length, 1);
   assert.equal(createdTicket.workContexts[0].type, "NOTE");
   const createdActivity = createdTicket.activities.find((activity) => activity.type === "ticket.created");
@@ -298,4 +352,74 @@ test("mcp handler returns structured validation errors for invalid tool input", 
     (invalidUpdateResponse?.result?.structuredContent as { error: { code: string } }).error.code,
     "VALIDATION_ERROR"
   );
+
+  const invalidCreateResponse = await handleMcpRequest(app, {
+    jsonrpc: "2.0",
+    id: "invalid-create",
+    method: "tools/call",
+    params: {
+      name: "boroda.create_ticket",
+      arguments: {
+        title: "Bad status",
+        status: "TODO",
+        priority: "medium"
+      }
+    }
+  });
+
+  const invalidCreateError = invalidCreateResponse?.result?.structuredContent as {
+    error: {
+      code: string;
+      details: {
+        issues?: Array<{ path: string[]; options?: string[] }>;
+        allowedStatuses?: Array<{ status: string; label: string }>;
+        status?: string;
+      };
+    };
+  };
+
+  assert.equal(invalidCreateError.error.code, "VALIDATION_ERROR");
+  assert.deepEqual(invalidCreateError.error.details.issues?.[0]?.path, ["priority"]);
+  assert.deepEqual(invalidCreateError.error.details.issues?.[0]?.options, [
+    "LOW",
+    "MEDIUM",
+    "HIGH",
+    "CRITICAL"
+  ]);
+
+  const invalidStatusResponse = await handleMcpRequest(app, {
+    jsonrpc: "2.0",
+    id: "invalid-status",
+    method: "tools/call",
+    params: {
+      name: "boroda.create_ticket",
+      arguments: {
+        title: "Unknown status",
+        status: "TODO",
+        priority: "MEDIUM"
+      }
+    }
+  });
+
+  const invalidStatusError = invalidStatusResponse?.result?.structuredContent as {
+    error: {
+      code: string;
+      details: {
+        status: string;
+        allowedStatuses: Array<{ status: string; label: string }>;
+      };
+    };
+  };
+
+  assert.equal(invalidStatusError.error.code, "INVALID_STATUS");
+  assert.equal(invalidStatusError.error.details.status, "TODO");
+  assert.deepEqual(invalidStatusError.error.details.allowedStatuses, [
+    { status: "INBOX", label: "Inbox" },
+    { status: "READY", label: "Ready" },
+    { status: "IN_PROGRESS", label: "In Progress" },
+    { status: "BLOCKED", label: "Blocked" },
+    { status: "IN_REVIEW", label: "In Review" },
+    { status: "MANUAL_UI", label: "Manual UI" },
+    { status: "DONE", label: "Done" }
+  ]);
 });

@@ -3,11 +3,13 @@ import {
   agentAppendActivitySchema,
   agentCreateTicketSchema,
   agentCreateWorkContextSchema,
+  agentMetadataSchema,
   agentProjectQuerySchema,
   agentTicketQuerySchema,
   agentUpdateTicketSchema
 } from "../../agents/schemas";
 
+export const mcpGetMetadataSchema = agentMetadataSchema;
 export const mcpListProjectsSchema = agentProjectQuerySchema.default({
   scope: "active"
 });

@@ -4,6 +4,7 @@ import {
   appendAgentTicketActivity,
   createAgentTicket,
   createAgentWorkContext,
+  getAgentToolMetadata,
   getAgentTicket,
   listAgentProjects,
   listAgentTickets,
@@ -13,6 +14,7 @@ import {
   mcpAppendActivitySchema,
   mcpAttachWorkContextSchema,
   mcpCreateTicketSchema,
+  mcpGetMetadataSchema,
   mcpGetTicketSchema,
   mcpListProjectsSchema,
   mcpListTicketsSchema,
@@ -79,6 +81,16 @@ const workContextSchema = objectSchema(
 );
 
 export const mcpToolDefinitions: McpToolDefinition[] = [
+  {
+    name: "boroda.get_metadata",
+    title: "Get Boroda agent metadata",
+    description: "Return valid statuses, priorities, work context types, and recommended defaults for agent-driven Boroda mutations.",
+    inputSchema: objectSchema({}),
+    schema: mcpGetMetadataSchema,
+    async handler(app) {
+      return getAgentToolMetadata(app);
+    }
+  },
   {
     name: "boroda.list_projects",
     title: "List Boroda projects",
