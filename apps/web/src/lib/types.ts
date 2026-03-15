@@ -5,8 +5,25 @@ export type TicketPriority = (typeof TICKET_PRIORITIES)[number];
 export type TicketProjectRelationship = (typeof TICKET_PROJECT_RELATIONSHIPS)[number];
 export type ProjectFolderKind = (typeof PROJECT_FOLDER_KINDS)[number];
 export type WorkContextType = (typeof WORK_CONTEXT_TYPES)[number];
+export type ActivityActorType = "agent";
+export type ActivityTransport = "http" | "mcp";
 export type OpenInTarget = "explorer" | "vscode" | "cursor" | "terminal";
 export type OpenInMode = "folder" | "worktree";
+
+export interface ActivityActorMetadata {
+  actorType: ActivityActorType;
+  agentKind?: string | null;
+  sessionRef?: string | null;
+  transport?: ActivityTransport | null;
+}
+
+export interface TicketActivityMeta extends Partial<ActivityActorMetadata> {
+  status?: string;
+  steps?: unknown;
+  errorCode?: string;
+  stderr?: string;
+  [key: string]: unknown;
+}
 
 export interface PathInfo {
   path: string;

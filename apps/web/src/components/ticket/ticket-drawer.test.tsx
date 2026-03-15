@@ -5,7 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 import { toTicketForm } from "../../features/tickets/form";
 import { setStoredDefaultOpenInMode } from "../../lib/user-preferences";
 import type { Project, Ticket } from "../../lib/types";
-import { createProject, createTicket, createTicketProjectLink, createTicketWorkspace } from "../../test/fixtures/models";
+import {
+  createProject,
+  createTicket,
+  createTicketActivity,
+  createTicketProjectLink,
+  createTicketWorkspace
+} from "../../test/fixtures/models";
 
 const uploadTicketImageSpy = vi.fn(async () => ({
   alt: "Pasted image",
@@ -1481,6 +1487,68 @@ describe("TicketDrawer", () => {
     await user.click(screen.getByRole("tab", { name: "Activity" }));
 
     expect(screen.getByText("Status changed to Manual checks")).toBeInTheDocument();
+  });
+
+  it("renders agent provenance for activity entries without changing generic work-context copy", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          activities: [
+            createTicketActivity({
+              id: 1,
+              ticketId: ticket.id,
+              type: "ticket.created",
+              message: `Ticket ${ticket.key} created`,
+              metaJson: JSON.stringify({
+                actorType: "agent",
+                agentKind: "codex",
+                transport: "mcp",
+                sessionRef: "codex://session/step-6"
+              })
+            }),
+            createTicketActivity({
+              id: 2,
+              ticketId: ticket.id,
+              type: "work-context.created",
+              message: "Work context added: Scratchpad",
+              metaJson: JSON.stringify({
+                actorType: "agent",
+                agentKind: "claude"
+              })
+            })
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isArchiving={false}
+        isRestoring={false}
+        isOpeningInApp={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onArchive={vi.fn()}
+        onRestore={vi.fn()}
+        onOpenInApp={vi.fn()}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Activity" }));
+
+    expect(screen.getByText(`Ticket ${ticket.key} created`)).toBeInTheDocument();
+    expect(screen.getByText("By Codex via MCP")).toBeInTheDocument();
+    expect(screen.getByText("codex://session/step-6")).toBeInTheDocument();
+    expect(screen.getByText("Work context added: Scratchpad")).toBeInTheDocument();
+    expect(screen.getByText("By Claude")).toBeInTheDocument();
   });
 
   it("shows a Jira refresh icon button and calls refresh", async () => {
