@@ -5,7 +5,8 @@ import { getJiraIssuesByKeys } from "../../integrations/jira/service";
 import { projects, ticketJiraIssueLinks, ticketProjectLinks, tickets } from "../../../db/schema";
 import { AppError } from "../../../shared/errors";
 import { logServerEvent, withServerSpan } from "../../../shared/observability";
-import type { ActivityWriteOptions } from "../../../shared/types";
+import type { ActivityWriteOptions, WorkContextType } from "../../../shared/types";
+import { createWorkContextsInDb } from "../../work-contexts/service";
 import { cleanupTicketImages } from "./images";
 import { getTicketOrThrow } from "./queries";
 import { nowIso, nextTicketKey, rethrowTicketConflict } from "./shared";
@@ -34,6 +35,12 @@ export async function createTicket(
   input: {
     title: string;
     description: string;
+    workContexts?: Array<{
+      type: WorkContextType;
+      label: string;
+      value: string;
+      meta: Record<string, unknown>;
+    }>;
     branch?: string | null;
     workspaces?: Array<{
       projectFolderId: number;
@@ -58,7 +65,8 @@ export async function createTicket(
       priority: input.priority,
       projectLinkCount: input.projectLinks.length,
       jiraIssueCount: input.jiraIssues.length,
-      workspaceCount: input.workspaces?.length ?? 0
+      workspaceCount: input.workspaces?.length ?? 0,
+      workContextCount: input.workContexts?.length ?? 0
     },
     async () => {
       const now = nowIso();
@@ -120,6 +128,7 @@ export async function createTicket(
             options.actor
           );
           recordJiraIssueLinkChanges(tx, createdTicket.id, [], input.jiraIssues, options.actor);
+          createWorkContextsInDb(tx, createdTicket.id, input.workContexts ?? [], options);
 
           return createdTicket;
         });

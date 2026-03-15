@@ -339,7 +339,17 @@ test("ticket service records agent provenance in activity metadata", async () =>
       priority: "HIGH",
       projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }],
       jiraIssues: [{ key: "AGENT-1", summary: "Agent provenance" }],
-      workspaces: []
+      workspaces: [],
+      workContexts: [
+        {
+          type: "NOTE",
+          label: "Agent note",
+          value: "Initial context from the agent",
+          meta: {
+            source: "service-test"
+          }
+        }
+      ]
     },
     {
       actor: {
@@ -383,6 +393,69 @@ test("ticket service records agent provenance in activity metadata", async () =>
     sessionRef: "codex://session/test-123",
     transport: "mcp"
   });
+
+  const workContextActivity = createdTicket.activities.find(
+    (activity: { type: string }) => activity.type === "work-context.created"
+  );
+  assert.ok(workContextActivity);
+  assert.deepEqual(parseMetaJson(workContextActivity.metaJson), {
+    actorType: "agent",
+    agentKind: "codex",
+    sessionRef: "codex://session/test-123",
+    transport: "mcp"
+  });
+});
+
+test("ticket creation accepts initial work contexts alongside linked project and Jira context", async () => {
+  const project = await createProject("Generic Agent Project", "generic-agent-project");
+
+  const createResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Create ticket with initial context",
+      projectLinks: [{ projectId: project.id, relationship: "PRIMARY" }],
+      jiraIssues: [{ key: "GEN-42", summary: "Generic agent flow" }],
+      workContexts: [
+        {
+          type: "CODEX_SESSION",
+          label: "Codex session",
+          value: "codex://session/generic-42",
+          meta: {
+            source: "codex"
+          }
+        },
+        {
+          type: "NOTE",
+          label: "",
+          value: "Initial implementation context",
+          meta: {}
+        }
+      ]
+    }
+  });
+
+  assert.equal(createResponse.statusCode, 200);
+  const createdTicket = createResponse.json();
+  assert.equal(createdTicket.title, "Create ticket with initial context");
+  assert.equal(createdTicket.description, "");
+  assert.equal(createdTicket.status, "INBOX");
+  assert.equal(createdTicket.priority, "MEDIUM");
+  assert.equal(createdTicket.projectLinks.length, 1);
+  assert.equal(createdTicket.jiraIssues.length, 1);
+  assert.equal(createdTicket.workContexts.length, 2);
+  assert.equal(createdTicket.workContexts[0].type, "NOTE");
+  assert.equal(createdTicket.workContexts[0].label, "");
+  assert.equal(createdTicket.workContexts[0].value, "Initial implementation context");
+  assert.equal(createdTicket.workContexts[1].type, "CODEX_SESSION");
+  assert.deepEqual(parseMetaJson(createdTicket.workContexts[1].metaJson), {
+    source: "codex"
+  });
+  assert.ok(createdTicket.activities.some((activity: { type: string }) => activity.type === "ticket.created"));
+  assert.equal(
+    createdTicket.activities.filter((activity: { type: string }) => activity.type === "work-context.created").length,
+    2
+  );
 });
 
 test("ticket list returns Jira facets for the current slice and sorts on the server", async () => {

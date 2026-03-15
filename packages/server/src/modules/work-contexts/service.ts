@@ -2,11 +2,23 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { tickets, workContexts } from "../../db/schema";
 import { AppError } from "../../shared/errors";
-import type { ActivityWriteOptions } from "../../shared/types";
+import type { ActivityWriteOptions, WorkContextType } from "../../shared/types";
 import { recordActivity } from "../tickets/service/activity";
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+type AppDb = FastifyInstance["db"];
+type TransactionCallback = Parameters<AppDb["transaction"]>[0];
+type DbTransaction = TransactionCallback extends (tx: infer Tx, ...args: never[]) => unknown ? Tx : never;
+type DbExecutor = AppDb | DbTransaction;
+
+export interface CreateWorkContextInput {
+  type: WorkContextType;
+  label: string;
+  value: string;
+  meta: Record<string, unknown>;
 }
 
 function getTicketOrThrow(app: FastifyInstance, ticketId: number) {
@@ -24,13 +36,27 @@ function getTicketOrThrow(app: FastifyInstance, ticketId: number) {
 export async function createWorkContext(
   app: FastifyInstance,
   ticketId: number,
-  input: { type: string; label: string; value: string; meta: Record<string, unknown> },
+  input: CreateWorkContextInput,
   options: ActivityWriteOptions = {}
 ) {
   getTicketOrThrow(app, ticketId);
+  return app.db.transaction((tx) => createWorkContextsInDb(tx, ticketId, [input], options)[0]);
+}
+
+export function createWorkContextsInDb(
+  db: DbExecutor,
+  ticketId: number,
+  inputs: CreateWorkContextInput[],
+  options: ActivityWriteOptions = {}
+) {
+  if (!inputs.length) {
+    return [];
+  }
+
   const timestamp = nowIso();
-  return app.db.transaction((tx) => {
-    const created = tx
+
+  return inputs.map((input) => {
+    const created = db
       .insert(workContexts)
       .values({
         ticketId,
@@ -45,13 +71,14 @@ export async function createWorkContext(
       .get();
 
     recordActivity(
-      tx,
+      db,
       ticketId,
       "work-context.created",
       `Work context added: ${input.label}`,
       {},
       options.actor
     );
+
     return created;
   });
 }

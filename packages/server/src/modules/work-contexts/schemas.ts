@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const workContextTypeSchema = z.enum([
+export const workContextTypeSchema = z.enum([
   "CODEX_SESSION",
   "CLAUDE_SESSION",
   "CURSOR_SESSION",

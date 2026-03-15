@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createWorkContextSchema } from "../work-contexts/schemas";
 
 const statusField = z.string().trim().min(1).max(64);
 
@@ -63,6 +64,7 @@ export const ticketQuerySchema = z.object({
 export const createTicketSchema = z.object({
   title: z.string().min(1),
   description: z.string().default(""),
+  workContexts: z.array(createWorkContextSchema).default([]),
   branch: optionalTicketTextField,
   workspaces: z.array(workspaceSchema).default([]),
   jiraIssues: z
