@@ -186,7 +186,27 @@ These capabilities are enough for real-world use without building a full autonom
 
 ## Tool Surface
 
-The MCP tool names below are recommendations. Exact naming can change, but the scope should remain narrow.
+The first-pass MCP tool names are now fixed:
+
+- `boroda.list_projects`
+- `boroda.list_tickets`
+- `boroda.get_ticket`
+- `boroda.create_ticket`
+- `boroda.update_ticket`
+- `boroda.attach_work_context`
+- `boroda.append_activity`
+
+The matching HTTP routes are:
+
+- `GET /api/agents/projects`
+- `GET /api/agents/tickets`
+- `GET /api/agents/tickets/:id`
+- `POST /api/agents/tickets`
+- `PATCH /api/agents/tickets/:id`
+- `POST /api/agents/tickets/:id/contexts`
+- `POST /api/agents/tickets/:id/activity`
+
+For concise operator guidance and concrete examples, see [docs/agent-usage-guide.md](/home/otzhora/projects/codex_projects/boroda/docs/agent-usage-guide.md).
 
 ### `boroda.list_projects`
 
