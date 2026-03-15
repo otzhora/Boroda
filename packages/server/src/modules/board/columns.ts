@@ -8,6 +8,7 @@ type TransactionCallback = Parameters<AppDb["transaction"]>[0];
 type DbTransaction = TransactionCallback extends (tx: infer Tx, ...args: never[]) => unknown ? Tx : never;
 type DbExecutor = AppDb | DbTransaction;
 type BoardColumnRecord = typeof boardColumns.$inferSelect;
+type BoardColumnOrderItem = Pick<BoardColumnRecord, "id" | "position">;
 
 export const DEFAULT_BOARD_COLUMNS = [
   { status: "INBOX", label: "Inbox", position: 0 },
@@ -103,6 +104,38 @@ export function formatStatusLabel(status: string) {
     .join(" ");
 }
 
+function getBoardColumnTempBase(columnCount: number) {
+  return columnCount + 8;
+}
+
+function persistBoardColumnOrder(
+  db: DbTransaction,
+  orderedColumns: BoardColumnOrderItem[],
+  now: string
+) {
+  const tempBase = getBoardColumnTempBase(orderedColumns.length);
+
+  orderedColumns.forEach((column, index) => {
+    db.update(boardColumns)
+      .set({
+        position: tempBase + index,
+        updatedAt: now
+      })
+      .where(eq(boardColumns.id, column.id))
+      .run();
+  });
+
+  orderedColumns.forEach((column, index) => {
+    db.update(boardColumns)
+      .set({
+        position: index,
+        updatedAt: now
+      })
+      .where(eq(boardColumns.id, column.id))
+      .run();
+  });
+}
+
 export async function deleteBoardColumn(app: FastifyInstance, status: string) {
   return app.db.transaction((tx) => {
     const columns = listBoardColumnsFromDb(tx);
@@ -127,29 +160,9 @@ export async function deleteBoardColumn(app: FastifyInstance, status: string) {
     }
 
     tx.delete(boardColumns).where(eq(boardColumns.id, target.id)).run();
-    const remainingColumns = listBoardColumnsFromDb(tx);
     const now = new Date().toISOString();
-    const offset = remainingColumns.length + 8;
-
-    remainingColumns.forEach((column) => {
-      tx.update(boardColumns)
-        .set({
-          position: column.position + offset,
-          updatedAt: now
-        })
-        .where(eq(boardColumns.id, column.id))
-        .run();
-    });
-
-    remainingColumns.forEach((column, index) => {
-      tx.update(boardColumns)
-        .set({
-          position: index,
-          updatedAt: now
-        })
-        .where(eq(boardColumns.id, column.id))
-        .run();
-    });
+    const remainingColumns = columns.filter((column) => column.id !== target.id);
+    persistBoardColumnOrder(tx, remainingColumns, now);
 
     return listBoardColumnsFromDb(tx);
   });
@@ -202,43 +215,33 @@ export async function insertBoardColumn(
       columns.map((column) => column.status)
     );
     const now = new Date().toISOString();
-    const offset = columns.length + 8;
-
-    columns.forEach((column, index) => {
-      if (index >= insertIndex) {
-        tx.update(boardColumns)
-          .set({
-            position: column.position + offset,
-            updatedAt: now
-          })
-          .where(eq(boardColumns.id, column.id))
-          .run();
-      }
-    });
-
-    columns.forEach((column, index) => {
-      const nextPosition = index >= insertIndex ? index + 1 : index;
-
-      if (column.position !== nextPosition) {
-        tx.update(boardColumns)
-          .set({
-            position: nextPosition,
-            updatedAt: now
-          })
-          .where(eq(boardColumns.id, column.id))
-          .run();
-      }
-    });
-
     tx.insert(boardColumns)
       .values({
         status,
         label: input.label.trim(),
-        position: insertIndex,
+        position: getBoardColumnTempBase(columns.length + 1) * 2,
         createdAt: now,
         updatedAt: now
       })
       .run();
+
+    const insertedColumnId = tx
+      .select({ id: boardColumns.id })
+      .from(boardColumns)
+      .where(eq(boardColumns.status, status))
+      .get()?.id;
+
+    if (!insertedColumnId) {
+      throw new AppError(500, "BOARD_COLUMN_INSERT_FAILED", "Failed to create board column");
+    }
+
+    const reorderedColumns = [
+      ...columns.slice(0, insertIndex),
+      { id: insertedColumnId, position: insertIndex },
+      ...columns.slice(insertIndex)
+    ];
+
+    persistBoardColumnOrder(tx, reorderedColumns, now);
 
     return listBoardColumnsFromDb(tx);
   });

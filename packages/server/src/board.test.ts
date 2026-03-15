@@ -233,6 +233,10 @@ test("board columns can be inserted and deleted when only archived tickets use t
   const addedColumns = addColumnResponse.json().columns;
   const qaColumn = addedColumns.find((column: { status: string; label: string }) => column.label === "Needs QA");
   assert.ok(qaColumn);
+  assert.deepEqual(
+    addedColumns.slice(0, 4).map((column: { status: string }) => column.status),
+    ["INBOX", "READY", qaColumn.status, "IN_PROGRESS"]
+  );
 
   const archivedTicket = await createTicket({
     title: "Archived only",
@@ -257,6 +261,10 @@ test("board columns can be inserted and deleted when only archived tickets use t
   const remainingColumns = deleteColumnResponse.json().columns;
   assert.equal(remainingColumns.some((column: { status: string }) => column.status === qaColumn.status), false);
   assert.equal(remainingColumns.some((column: { status: string }) => column.status === "READY"), true);
+  assert.deepEqual(
+    remainingColumns.slice(0, 3).map((column: { status: string }) => column.status),
+    ["INBOX", "READY", "IN_PROGRESS"]
+  );
 });
 
 test("board columns can be renamed without changing their status key", async () => {
