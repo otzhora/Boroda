@@ -13,6 +13,8 @@
     "dev": "sh -c 'npm run dev:server & npm run dev:web & wait'",
     "dev:web": "npm run dev -w @boroda/web",
     "dev:server": "npm run dev -w @boroda/server",
+    "mcp": "npm run mcp -w @boroda/server",
+    "mcp:smoke": "npm run mcp:smoke -w @boroda/server",
     "lint": "npm run lint:guardrails && npm run lint:types",
     "lint:guardrails": "node scripts/quality-gate.mjs apps/web packages/server",
     "lint:types": "npm run lint:types -w @boroda/web && npm run lint:types -w @boroda/server",

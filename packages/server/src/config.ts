@@ -32,6 +32,22 @@ function getRequestLoggingEnabled() {
   return !isTestRuntime();
 }
 
+function getMcpEnabled() {
+  const configuredValue = process.env.BORODA_MCP_ENABLED;
+
+  if (configuredValue) {
+    if (isTruthyEnvValue(configuredValue)) {
+      return true;
+    }
+
+    if (isFalsyEnvValue(configuredValue)) {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 function getDefaultDataRoot() {
   const appDirName = "Boroda";
 
@@ -64,6 +80,7 @@ export function getConfig() {
     cursorBinary: process.env.BORODA_CURSOR_BIN ?? "cursor",
     terminalBinary: process.env.BORODA_TERMINAL_BIN ?? defaultTerminalBinary,
     windowsTerminalSettingsPath: process.env.BORODA_WINDOWS_TERMINAL_SETTINGS_PATH ?? "",
-    requestLoggingEnabled: getRequestLoggingEnabled()
+    requestLoggingEnabled: getRequestLoggingEnabled(),
+    mcpEnabled: getMcpEnabled()
   };
 }
