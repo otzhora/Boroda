@@ -57,12 +57,23 @@ function rethrowProjectConflict(error: unknown): never {
   throw error;
 }
 
-function listTicketsToArchiveAfterProjectArchive(app: FastifyInstance, projectId: number) {
+function listTicketIdsWithoutOtherActiveProjects(
+  app: FastifyInstance,
+  projectId: number,
+  linkedTicketArchiveState: "active" | "archived"
+) {
   const linkedTicketIds = app.db
     .select({ ticketId: ticketProjectLinks.ticketId })
     .from(ticketProjectLinks)
     .innerJoin(tickets, eq(ticketProjectLinks.ticketId, tickets.id))
-    .where(and(eq(ticketProjectLinks.projectId, projectId), isNull(tickets.archivedAt)))
+    .where(
+      and(
+        eq(ticketProjectLinks.projectId, projectId),
+        linkedTicketArchiveState === "active"
+          ? isNull(tickets.archivedAt)
+          : isNotNull(tickets.archivedAt)
+      )
+    )
     .all()
     .map((row) => row.ticketId);
 
@@ -92,39 +103,12 @@ function listTicketsToArchiveAfterProjectArchive(app: FastifyInstance, projectId
   return linkedTicketIds.filter((ticketId) => !ticketsWithOtherActiveProjects.has(ticketId));
 }
 
-function listTicketsToUnarchiveAfterProjectRestore(app: FastifyInstance, projectId: number) {
-  const linkedTicketIds = app.db
-    .select({ ticketId: ticketProjectLinks.ticketId })
-    .from(ticketProjectLinks)
-    .innerJoin(tickets, eq(ticketProjectLinks.ticketId, tickets.id))
-    .where(and(eq(ticketProjectLinks.projectId, projectId), isNotNull(tickets.archivedAt)))
-    .all()
-    .map((row) => row.ticketId);
+function listTicketIdsToArchiveAfterProjectArchive(app: FastifyInstance, projectId: number) {
+  return listTicketIdsWithoutOtherActiveProjects(app, projectId, "active");
+}
 
-  if (!linkedTicketIds.length) {
-    return [];
-  }
-
-  const activeSiblingLinks = app.db
-    .select({ ticketId: ticketProjectLinks.ticketId })
-    .from(ticketProjectLinks)
-    .innerJoin(projects, eq(ticketProjectLinks.projectId, projects.id))
-    .where(
-      and(
-        inArray(ticketProjectLinks.ticketId, linkedTicketIds),
-        sql`${ticketProjectLinks.projectId} <> ${projectId}`,
-        isNull(projects.archivedAt)
-      )
-    )
-    .all();
-
-  const ticketsWithOtherActiveProjects = new Set(
-    activeSiblingLinks
-      .filter((row) => row.ticketId !== undefined)
-      .map((row) => row.ticketId)
-  );
-
-  return linkedTicketIds.filter((ticketId) => !ticketsWithOtherActiveProjects.has(ticketId));
+function listTicketIdsToRestoreAfterProjectRestore(app: FastifyInstance, projectId: number) {
+  return listTicketIdsWithoutOtherActiveProjects(app, projectId, "archived");
 }
 
 export async function listProjects(
@@ -211,7 +195,7 @@ export async function deleteProject(app: FastifyInstance, id: number) {
     return { ok: true };
   }
 
-  const ticketIdsToArchive = await listTicketsToArchiveAfterProjectArchive(app, id);
+  const ticketIdsToArchive = await listTicketIdsToArchiveAfterProjectArchive(app, id);
   const preparedTickets = await Promise.all(ticketIdsToArchive.map((ticketId) => prepareTicketArchive(app, ticketId)));
   archivePreparedTicketsForCommit(preparedTickets);
   const archivedAt = nowIso();
@@ -236,7 +220,7 @@ export async function unarchiveProject(app: FastifyInstance, id: number) {
     return { ok: true };
   }
 
-  const ticketIdsToRestore = await listTicketsToUnarchiveAfterProjectRestore(app, id);
+  const ticketIdsToRestore = await listTicketIdsToRestoreAfterProjectRestore(app, id);
   const restoredAt = nowIso();
   const restoredTickets = ticketIdsToRestore.length
     ? app.db
