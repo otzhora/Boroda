@@ -2,7 +2,7 @@
 
 Boroda's first-pass agent integration is intentionally narrow. Prefer MCP when the client supports it. Use the HTTP agent routes only when MCP is not available.
 
-For local MCP setup, see [docs/agent-mcp-local.md](/home/otzhora/projects/codex_projects/boroda/docs/agent-mcp-local.md).
+For local MCP setup on a new machine, see [docs/agent-mcp-local.md](/home/otzhora/projects/codex_projects/boroda/docs/agent-mcp-local.md).
 
 ## MCP Tool Surface
 

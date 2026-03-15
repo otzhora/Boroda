@@ -1,38 +1,71 @@
-# Boroda MCP Local Run Path
+# Boroda MCP Local Setup
 
-Boroda's MCP server is local-only and uses stdio. It is off by default in config and only enabled by the dedicated start script.
+Boroda's MCP server is local-only and uses stdio. It is disabled by default and is meant to be started by the MCP client when needed.
 
-## Start Boroda normally
+Important: MCP stdio must stay clean. Plain `npm run mcp` can write npm lifecycle text to stdout before the MCP protocol begins, which can break the handshake for some clients.
 
-The existing developer workflow does not change:
+## Preconditions
+
+Before configuring an MCP client on a new machine:
+
+1. Clone the Boroda repo.
+2. Install dependencies from the repo root:
+
+```bash
+npm install
+```
+
+3. Confirm Node is available:
+
+```bash
+node --version
+```
+
+The launcher script uses `node` from `PATH` when available and falls back to `~/.nvm/versions/node/*/bin/node` when possible.
+
+## Normal Boroda Dev Run
+
+The regular local development workflow is unchanged:
 
 ```bash
 npm run dev
 ```
 
-That starts the web app and HTTP server only.
+That starts the web app and HTTP server. It does not start MCP.
 
-## Start Boroda MCP
+## MCP Launch Command
 
-From the repo root:
+For MCP clients, use the silent launcher from the repo root:
 
 ```bash
-npm run mcp
+./scripts/run-mcp.sh
 ```
 
-This runs `@boroda/server`'s MCP stdio entry point and sets `BORODA_MCP_ENABLED=true` for that process only.
+This is the recommended command because it avoids npm stdout noise and starts the correct stdio entrypoint directly.
+
+You do not need to run it manually before launching Codex, Claude Code, or another MCP client. In normal use, the MCP client starts Boroda itself.
+
+Run it manually only when debugging startup behavior:
+
+```bash
+./scripts/run-mcp.sh
+```
+
+When started manually, it should stay quiet and wait for MCP messages on stdin.
+
+## Optional Environment Overrides
 
 Useful defaults:
 
 - MCP shares the normal Boroda database and storage paths unless you override them.
 - `BORODA_MCP_ENABLED` defaults to `false`, so MCP does not start accidentally from the raw stdio entry point.
-- `BORODA_REQUEST_LOGGING=false` is reasonable for local client integration if you want quieter output.
+- `BORODA_REQUEST_LOGGING=false` is useful if you want quieter local runs.
 
-Common local overrides:
+Examples:
 
 ```bash
-BORODA_DB_PATH=/tmp/boroda-agent.sqlite npm run mcp
-BORODA_REQUEST_LOGGING=false npm run mcp
+BORODA_DB_PATH=/tmp/boroda-agent.sqlite ./scripts/run-mcp.sh
+BORODA_REQUEST_LOGGING=false ./scripts/run-mcp.sh
 ```
 
 ## Smoke Check
@@ -43,55 +76,81 @@ To verify the local MCP handshake and tool registration:
 npm run mcp:smoke
 ```
 
-This runs an isolated temp-database startup check with `BORODA_MCP_ENABLED=true`, calls MCP `initialize` and `tools/list` in-process, and verifies the expected Boroda tool surface.
+This runs an isolated startup check, calls MCP `initialize` and `tools/list`, and verifies the expected Boroda tool surface.
 
-## MCP Client Config
+## Codex Setup
 
-Any MCP client that supports stdio can point at the root script.
-
-### Codex CLI
-
-Add Boroda to Codex with:
+From the repo root:
 
 ```bash
-codex mcp add boroda -- npm --prefix /home/otzhora/projects/codex_projects/boroda run mcp
+codex mcp add boroda -- "$(pwd)/scripts/run-mcp.sh"
 ```
 
-### Claude Code
-
-Add Boroda to Claude Code with:
+After that, verify the registered command:
 
 ```bash
-claude mcp add boroda -- npm --prefix /home/otzhora/projects/codex_projects/boroda run mcp
+codex mcp get boroda
 ```
 
-Both commands use the same repo-root `npm run mcp` entrypoint and avoid depending on per-client working-directory support.
+If you prefer to edit `~/.codex/config.toml` manually:
 
-If the client supports a working directory:
+```toml
+[mcp_servers.boroda]
+command = "/absolute/path/to/boroda/scripts/run-mcp.sh"
+startup_timeout_sec = 30
+```
+
+## Claude Code Setup
+
+From the repo root:
+
+```bash
+claude mcp add boroda -- "$(pwd)/scripts/run-mcp.sh"
+```
+
+If the client supports JSON config instead of a CLI helper, use the same absolute script path.
+
+## Generic MCP Client Config
+
+If your client supports a working directory:
 
 ```json
 {
   "mcpServers": {
     "boroda": {
-      "command": "npm",
-      "args": ["run", "mcp"],
-      "cwd": "/home/otzhora/projects/codex_projects/boroda"
+      "command": "/absolute/path/to/boroda/scripts/run-mcp.sh",
+      "cwd": "/absolute/path/to/boroda"
     }
   }
 }
 ```
 
-If the client does not support `cwd`, use npm's prefix flag:
+If you prefer not to use the wrapper script, use a direct Node command with absolute paths:
 
 ```json
 {
   "mcpServers": {
     "boroda": {
-      "command": "npm",
-      "args": ["--prefix", "/home/otzhora/projects/codex_projects/boroda", "run", "mcp"]
+      "command": "/absolute/path/to/node",
+      "args": [
+        "--import",
+        "/absolute/path/to/boroda/node_modules/tsx/dist/loader.mjs",
+        "/absolute/path/to/boroda/packages/server/src/modules/integrations/mcp/run.ts"
+      ],
+      "cwd": "/absolute/path/to/boroda"
     }
   }
 }
 ```
 
-That is the intended local connection path for Codex, Claude, or any similar MCP client.
+This direct form is useful on machines where shell startup, `PATH`, or wrapper execution is unreliable.
+
+## Troubleshooting
+
+If the MCP client fails to start Boroda:
+
+1. Run `codex mcp get boroda` or the equivalent client inspection command and confirm it points at the expected command.
+2. Run `./scripts/run-mcp.sh` manually from the repo root and confirm it stays quiet.
+3. Run `npm run mcp:smoke` and confirm it passes.
+4. If using the direct Node form, make sure the Node binary and `tsx` loader paths are absolute and still valid on that machine.
+5. Avoid `npm run mcp` as the MCP client command unless you have verified it produces no stdout noise in that environment.

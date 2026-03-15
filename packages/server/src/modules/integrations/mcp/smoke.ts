@@ -40,7 +40,7 @@ async function main() {
         id: "initialize",
         method: "initialize",
         params: {
-          protocolVersion: "2024-11-05",
+          protocolVersion: "2025-06-18",
           capabilities: {},
           clientInfo: {
             name: "boroda-mcp-smoke",
@@ -49,7 +49,7 @@ async function main() {
         }
       });
 
-      assert.equal(initializeResponse?.result?.protocolVersion, "2024-11-05");
+      assert.equal(initializeResponse?.result?.protocolVersion, "2025-06-18");
 
       const toolsResponse = await handleMcpRequest(app, {
         jsonrpc: "2.0",

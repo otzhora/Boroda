@@ -88,7 +88,7 @@ test("mcp handler exposes the first-pass Boroda tools and reuses shared agent lo
     }
   });
 
-  assert.equal(initializeResponse?.result?.protocolVersion, "2024-11-05");
+  assert.equal(initializeResponse?.result?.protocolVersion, "2025-06-18");
 
   const listToolsResponse = await handleMcpRequest(app, {
     jsonrpc: "2.0",

@@ -3,7 +3,7 @@ import { toErrorPayload } from "../../../shared/errors";
 import { mcpToolDefinitions } from "./tools";
 
 const JSON_RPC_VERSION = "2.0";
-const MCP_PROTOCOL_VERSION = "2024-11-05";
+const MCP_PROTOCOL_VERSION = "2025-06-18";
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
