@@ -3,13 +3,7 @@ import { AppHeaderRightActions } from "../app/router";
 import { ProjectCreateDialog } from "../components/project/project-create-dialog";
 import { ProjectListItem } from "../components/project/project-list-item";
 import { ProjectsPageToolbar } from "../components/project/projects-page-toolbar";
-import {
-  createProjectFormState,
-  headerActionButtonClassName,
-  panelClassName,
-  projectListClassName,
-  createFolderFormState
-} from "../features/projects/page-helpers";
+import { headerActionButtonClassName, panelClassName, projectListClassName } from "../features/projects/page-helpers";
 import { useProjectsPageController } from "../features/projects/use-projects-page-controller";
 
 export function ProjectsPage() {
@@ -23,43 +17,15 @@ export function ProjectsPage() {
     projectScope,
     setScope,
     projectsQuery,
-    sortedProjects,
+    projectItems,
     projectError,
     folderError,
     validateError,
     deleteError,
-    expandedProjectId,
-    editingProjectId,
-    projectEditForms,
-    folderCreateForms,
-    editingFolderIds,
-    folderEditForms,
-    pathValidation,
     createProjectMutation,
-    updateProjectMutation,
-    archiveProjectMutation,
-    unarchiveProjectMutation,
-    createFolderMutation,
-    updateFolderMutation,
-    deleteFolderMutation,
-    validatePathMutation,
-    scaffoldWorktreeSetupMutation,
     handleCreateProject,
-    handleUpdateProject,
-    handleCreateFolder,
-    handleUpdateFolder,
-    handleValidatePath,
-    handleDeleteProject,
-    handleRestoreProject,
-    toggleProjectExpansion,
-    beginProjectEdit,
-    cancelProjectEdit,
-    updateProjectEditForm,
-    beginFolderEdit,
-    cancelFolderEdit,
-    updateFolderEditForm,
-    handleDeleteFolder,
-    updateFolderCreateForm
+    mutationState,
+    projectItemActions
   } = useProjectsPageController();
 
   return (
@@ -87,8 +53,8 @@ export function ProjectsPage() {
 
       <section className="mx-auto flex h-full w-full min-h-0 min-w-0 max-w-6xl flex-col gap-3 pb-2">
         <ProjectsPageToolbar
-          projectCount={sortedProjects.length}
-          folderCount={sortedProjects.reduce((count, project) => count + project.folders.length, 0)}
+          projectCount={projectItems.length}
+          folderCount={projectItems.reduce((count, item) => count + item.project.folders.length, 0)}
           projectScope={projectScope}
           isRefreshing={projectsQuery.isFetching}
           onRefresh={() => {
@@ -109,52 +75,12 @@ export function ProjectsPage() {
           ) : null}
 
           <div className={projectListClassName}>
-            {sortedProjects.map((project) => (
+            {projectItems.map((item) => (
               <ProjectListItem
-                key={project.id}
-                project={project}
-                isExpandedProject={expandedProjectId === project.id}
-                isEditingProject={editingProjectId === project.id}
-                projectEditForm={projectEditForms[project.id] ?? createProjectFormState(project)}
-                folderCreateForm={folderCreateForms[project.id] ?? createFolderFormState()}
-                projectValidation={pathValidation[`project-${project.id}`] ?? null}
-                editingFolderIds={editingFolderIds}
-                folderEditForms={folderEditForms}
-                pathValidation={pathValidation}
-                updateProjectMutationPending={updateProjectMutation.isPending}
-                archiveProjectMutationPending={archiveProjectMutation.isPending}
-                unarchiveProjectMutationPending={unarchiveProjectMutation.isPending}
-                createFolderMutationPending={createFolderMutation.isPending}
-                updateFolderMutationPending={updateFolderMutation.isPending}
-                deleteFolderMutationPending={deleteFolderMutation.isPending}
-                validatePathMutationPending={validatePathMutation.isPending}
-                scaffoldWorktreeSetupMutationPending={scaffoldWorktreeSetupMutation.isPending}
-                onToggleProjectExpansion={toggleProjectExpansion}
-                onBeginProjectEdit={beginProjectEdit}
-                onCancelProjectEdit={cancelProjectEdit}
-                onUpdateProject={(event, projectId) => {
-                  void handleUpdateProject(event, projectId);
-                }}
-                onUpdateProjectEditForm={updateProjectEditForm}
-                onHandleDeleteProject={handleDeleteProject}
-                onHandleRestoreProject={handleRestoreProject}
-                onBeginFolderEdit={beginFolderEdit}
-                onCancelFolderEdit={cancelFolderEdit}
-                onUpdateFolder={(event, projectId, folderId) => {
-                  void handleUpdateFolder(event, projectId, folderId);
-                }}
-                onUpdateFolderEditForm={updateFolderEditForm}
-                onHandleDeleteFolder={handleDeleteFolder}
-                onValidatePath={(targetKey, path, existingFolderId) => {
-                  void handleValidatePath(targetKey, path, existingFolderId);
-                }}
-                onScaffoldWorktreeSetup={(projectId, folderId) => {
-                  scaffoldWorktreeSetupMutation.mutate({ projectId, folderId });
-                }}
-                onCreateFolder={(event, projectId) => {
-                  void handleCreateFolder(event, projectId);
-                }}
-                onUpdateFolderCreateForm={updateFolderCreateForm}
+                key={item.project.id}
+                item={item}
+                actions={projectItemActions}
+                mutationState={mutationState}
               />
             ))}
           </div>
@@ -165,7 +91,7 @@ export function ProjectsPage() {
             </p>
           ) : null}
 
-          {!sortedProjects.length && !projectsQuery.isLoading ? (
+          {!projectItems.length && !projectsQuery.isLoading ? (
             <p className={`${panelClassName} m-0 text-sm text-ink-50`}>No projects.</p>
           ) : null}
         </div>

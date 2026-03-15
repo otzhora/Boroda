@@ -1,48 +1,57 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useProjectsPageMutations } from "./mutations";
 import {
   createFolderFormState,
   createProjectFormState,
-  formatFolderCount,
-  slugifyProjectName,
-  sortProjects,
   type FolderFormState,
-  type ProjectFormState,
-  type ProjectScope
+  type ProjectFormState
 } from "./page-helpers";
-import { useProjectsQuery } from "./queries";
+import { useProjectsPageEditorState } from "./use-projects-page-editor-state";
+import { useProjectsPageScope } from "./use-projects-page-scope";
 import type { PathInfo, Project, ProjectFolder } from "../../lib/types";
 
-function getProjectScope(searchParams: URLSearchParams): ProjectScope {
-  const scopeParam = searchParams.get("scope");
-  return scopeParam === "archived" || scopeParam === "all" ? scopeParam : "active";
+export interface ProjectListItemModel {
+  project: Project;
+  isExpanded: boolean;
+  details: {
+    isEditing: boolean;
+    editForm: ProjectFormState;
+  };
+  folders: {
+    createForm: FolderFormState;
+    createValidation: PathInfo | null;
+    editingIds: Record<number, boolean>;
+    editForms: Record<number, FolderFormState>;
+    pathValidation: Record<string, PathInfo | null>;
+  };
+}
+
+export interface ProjectListItemActions {
+  toggleExpansion: (projectId: number) => void;
+  beginProjectEdit: (project: Project) => void;
+  cancelProjectEdit: (projectId: number) => void;
+  updateProject: (event: React.FormEvent<HTMLFormElement>, projectId: number) => void;
+  updateProjectEditForm: (projectId: number, update: Partial<ProjectFormState>) => void;
+  deleteProject: (project: Project) => void;
+  restoreProject: (project: Project) => void;
+  beginFolderEdit: (folder: ProjectFolder) => void;
+  cancelFolderEdit: (folderId: number) => void;
+  updateFolder: (
+    event: React.FormEvent<HTMLFormElement>,
+    projectId: number,
+    folderId: number
+  ) => void;
+  updateFolderEditForm: (folder: ProjectFolder, update: Partial<FolderFormState>) => void;
+  deleteFolder: (projectId: number, folder: ProjectFolder) => void;
+  validatePath: (targetKey: string, path: string, existingFolderId?: number) => void;
+  scaffoldWorktreeSetup: (projectId: number, folderId: number) => void;
+  createFolder: (event: React.FormEvent<HTMLFormElement>, projectId: number) => void;
+  updateFolderCreateForm: (projectId: number, update: Partial<FolderFormState>) => void;
 }
 
 export function useProjectsPageController() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [projectForm, setProjectForm] = useState<ProjectFormState>(createProjectFormState());
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
-  const [expandedProjectId, setExpandedProjectId] = useState<number | null>(null);
-  const [editingProjectId, setEditingProjectId] = useState<number | null>(null);
-  const [projectEditForms, setProjectEditForms] = useState<Record<number, ProjectFormState>>({});
-  const [folderCreateForms, setFolderCreateForms] = useState<Record<number, FolderFormState>>({});
-  const [editingFolderIds, setEditingFolderIds] = useState<Record<number, boolean>>({});
-  const [folderEditForms, setFolderEditForms] = useState<Record<number, FolderFormState>>({});
-  const [pathValidation, setPathValidation] = useState<Record<string, PathInfo | null>>({});
-  const createProjectNameRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    document.title = "Projects · Boroda";
-  }, []);
-
-  const projectScope = getProjectScope(searchParams);
-  const projectsQuery = useProjectsQuery(projectScope);
-  const sortedProjects = useMemo(
-    () => sortProjects(projectsQuery.data ?? []),
-    [projectsQuery.data]
-  );
+  const { projectScope, setScope, projectsQuery, sortedProjects } = useProjectsPageScope();
+  const editorState = useProjectsPageEditorState();
+  const projects = projectsQuery.data ?? [];
 
   const {
     createProjectMutation,
@@ -56,35 +65,10 @@ export function useProjectsPageController() {
     scaffoldWorktreeSetupMutation
   } = useProjectsPageMutations({
     projectScope,
-    onProjectCreated: (project) => {
-      setProjectForm(createProjectFormState());
-      setSlugTouched(false);
-      setIsCreateProjectOpen(false);
-      setExpandedProjectId(project.id);
-    },
-    onProjectUpdated: (projectId) => {
-      setEditingProjectId((current) => (current === projectId ? null : current));
-    },
-    onFolderCreated: (projectId) => {
-      setFolderCreateForms((current) => ({
-        ...current,
-        [projectId]: createFolderFormState()
-      }));
-      setPathValidation((current) => ({
-        ...current,
-        [`project-${projectId}`]: null
-      }));
-    },
-    onFolderUpdated: (folderId, pathInfo) => {
-      setEditingFolderIds((current) => ({
-        ...current,
-        [folderId]: false
-      }));
-      setPathValidation((current) => ({
-        ...current,
-        [`folder-${folderId}`]: pathInfo
-      }));
-    }
+    onProjectCreated: editorState.handleProjectCreated,
+    onProjectUpdated: editorState.handleProjectUpdated,
+    onFolderCreated: editorState.handleFolderCreated,
+    onFolderUpdated: editorState.handleFolderUpdated
   });
 
   const projectError =
@@ -97,138 +81,9 @@ export function useProjectsPageController() {
   const validateError = validatePathMutation.error?.message;
   const deleteError = archiveProjectMutation.error?.message;
 
-  function updateProjectField<Key extends keyof ProjectFormState>(
-    key: Key,
-    value: ProjectFormState[Key]
-  ) {
-    setProjectForm((current) => {
-      const next = {
-        ...current,
-        [key]: value
-      };
-
-      if (key === "name" && !slugTouched) {
-        next.slug = slugifyProjectName(String(value));
-      }
-
-      return next;
-    });
-  }
-
-  function updateProjectEditForm(projectId: number, update: Partial<ProjectFormState>) {
-    setProjectEditForms((current) => ({
-      ...current,
-      [projectId]: {
-        ...(current[projectId] ??
-          createProjectFormState(
-            (projectsQuery.data ?? []).find((project) => project.id === projectId)
-          )),
-        ...update
-      }
-    }));
-  }
-
-  function updateFolderCreateForm(projectId: number, update: Partial<FolderFormState>) {
-    setFolderCreateForms((current) => ({
-      ...current,
-      [projectId]: {
-        ...(current[projectId] ?? createFolderFormState()),
-        ...update
-      }
-    }));
-  }
-
-  function updateFolderEditForm(folder: ProjectFolder, update: Partial<FolderFormState>) {
-    setFolderEditForms((current) => ({
-      ...current,
-      [folder.id]: {
-        ...(current[folder.id] ?? createFolderFormState(folder)),
-        ...update
-      }
-    }));
-  }
-
-  function beginProjectEdit(project: Project) {
-    setExpandedProjectId(project.id);
-    setEditingProjectId(project.id);
-    setProjectEditForms((current) => ({
-      ...current,
-      [project.id]: createProjectFormState(project)
-    }));
-  }
-
-  function collapseProject(projectId: number) {
-    setExpandedProjectId((current) => (current === projectId ? null : current));
-    setEditingProjectId((current) => (current === projectId ? null : current));
-
-    const project = (projectsQuery.data ?? []).find((item) => item.id === projectId);
-    if (!project) {
-      return;
-    }
-
-    const folderIds = new Set(project.folders.map((folder) => folder.id));
-
-    setEditingFolderIds((current) => {
-      const next = { ...current };
-
-      for (const folderId of folderIds) {
-        delete next[folderId];
-      }
-
-      return next;
-    });
-
-    setFolderEditForms((current) => {
-      const next = { ...current };
-
-      for (const folderId of folderIds) {
-        delete next[folderId];
-      }
-
-      return next;
-    });
-  }
-
-  function cancelProjectEdit(projectId: number) {
-    collapseProject(projectId);
-    setProjectEditForms((current) => {
-      const next = { ...current };
-      delete next[projectId];
-      return next;
-    });
-  }
-
-  function beginFolderEdit(folder: ProjectFolder) {
-    setExpandedProjectId(folder.projectId);
-    setEditingFolderIds((current) => ({
-      ...current,
-      [folder.id]: true
-    }));
-    setFolderEditForms((current) => ({
-      ...current,
-      [folder.id]: createFolderFormState(folder)
-    }));
-  }
-
-  function cancelFolderEdit(folderId: number) {
-    setEditingFolderIds((current) => ({
-      ...current,
-      [folderId]: false
-    }));
-    setFolderEditForms((current) => {
-      const next = { ...current };
-      delete next[folderId];
-      return next;
-    });
-    setPathValidation((current) => ({
-      ...current,
-      [`folder-${folderId}`]: null
-    }));
-  }
-
   async function handleCreateProject(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await createProjectMutation.mutateAsync(projectForm);
+    await createProjectMutation.mutateAsync(editorState.projectForm);
   }
 
   async function handleUpdateProject(
@@ -236,7 +91,7 @@ export function useProjectsPageController() {
     projectId: number
   ) {
     event.preventDefault();
-    const payload = projectEditForms[projectId];
+    const payload = editorState.projectEditForms[projectId];
 
     if (!payload) {
       return;
@@ -252,7 +107,7 @@ export function useProjectsPageController() {
     event.preventDefault();
     await createFolderMutation.mutateAsync({
       projectId,
-      payload: folderCreateForms[projectId] ?? createFolderFormState()
+      payload: editorState.folderCreateForms[projectId] ?? createFolderFormState()
     });
   }
 
@@ -262,7 +117,7 @@ export function useProjectsPageController() {
     folderId: number
   ) {
     event.preventDefault();
-    const payload = folderEditForms[folderId];
+    const payload = editorState.folderEditForms[folderId];
 
     if (!payload) {
       return;
@@ -282,38 +137,21 @@ export function useProjectsPageController() {
       existingFolderId
     });
 
-    setPathValidation((current) => ({
-      ...current,
-      [targetKey]: pathInfo
-    }));
+    editorState.setValidatedPath(targetKey, pathInfo);
   }
 
   function handleDeleteProject(project: Project) {
-    const scope =
-      project.folders.length > 0
-        ? `Archive ${project.name} and keep ${formatFolderCount(project.folders.length)} in history?`
-        : `Archive ${project.name}?`;
-
-    if (!window.confirm(scope)) {
+    if (!window.confirm(editorState.getProjectDeletePrompt(project))) {
       return;
     }
 
     archiveProjectMutation.mutate(project.id);
-    collapseProject(project.id);
+    editorState.collapseProject(project.id, projects);
   }
 
   function handleRestoreProject(project: Project) {
     unarchiveProjectMutation.mutate(project.id);
-    collapseProject(project.id);
-  }
-
-  function toggleProjectExpansion(projectId: number) {
-    if (expandedProjectId === projectId) {
-      collapseProject(projectId);
-      return;
-    }
-
-    setExpandedProjectId(projectId);
+    editorState.collapseProject(project.id, projects);
   }
 
   function handleDeleteFolder(projectId: number, folder: ProjectFolder) {
@@ -327,64 +165,79 @@ export function useProjectsPageController() {
     });
   }
 
-  function setScope(scope: ProjectScope) {
-    const nextSearchParams = new URLSearchParams(searchParams);
+  const projectItemActions: ProjectListItemActions = {
+    toggleExpansion: (projectId) => editorState.toggleProjectExpansion(projectId, projects),
+    beginProjectEdit: editorState.beginProjectEdit,
+    cancelProjectEdit: (projectId) => editorState.cancelProjectEdit(projectId, projects),
+    updateProject: (event, projectId) => {
+      void handleUpdateProject(event, projectId);
+    },
+    updateProjectEditForm: (projectId, update) =>
+      editorState.updateProjectEditForm(projectId, update, projects),
+    deleteProject: handleDeleteProject,
+    restoreProject: handleRestoreProject,
+    beginFolderEdit: editorState.beginFolderEdit,
+    cancelFolderEdit: editorState.cancelFolderEdit,
+    updateFolder: (event, projectId, folderId) => {
+      void handleUpdateFolder(event, projectId, folderId);
+    },
+    updateFolderEditForm: editorState.updateFolderEditForm,
+    deleteFolder: handleDeleteFolder,
+    validatePath: (targetKey, path, existingFolderId) => {
+      void handleValidatePath(targetKey, path, existingFolderId);
+    },
+    scaffoldWorktreeSetup: (projectId, folderId) => {
+      scaffoldWorktreeSetupMutation.mutate({ projectId, folderId });
+    },
+    createFolder: (event, projectId) => {
+      void handleCreateFolder(event, projectId);
+    },
+    updateFolderCreateForm: editorState.updateFolderCreateForm
+  };
 
-    if (scope === "active") {
-      nextSearchParams.delete("scope");
-    } else {
-      nextSearchParams.set("scope", scope);
+  const projectItems: ProjectListItemModel[] = sortedProjects.map((project) => ({
+    project,
+    isExpanded: editorState.expandedProjectId === project.id,
+    details: {
+      isEditing: editorState.editingProjectId === project.id,
+      editForm: editorState.projectEditForms[project.id] ?? createProjectFormState(project)
+    },
+    folders: {
+      createForm: editorState.folderCreateForms[project.id] ?? createFolderFormState(),
+      createValidation: editorState.pathValidation[`project-${project.id}`] ?? null,
+      editingIds: editorState.editingFolderIds,
+      editForms: editorState.folderEditForms,
+      pathValidation: editorState.pathValidation
     }
-
-    setSearchParams(nextSearchParams, { replace: true });
-  }
+  }));
 
   return {
-    createProjectNameRef,
-    isCreateProjectOpen,
-    setIsCreateProjectOpen,
-    projectForm,
-    updateProjectField,
-    setSlugTouched,
+    createProjectNameRef: editorState.createProjectNameRef,
+    isCreateProjectOpen: editorState.isCreateProjectOpen,
+    setIsCreateProjectOpen: editorState.setIsCreateProjectOpen,
+    projectForm: editorState.projectForm,
+    updateProjectField: editorState.updateProjectField,
+    setSlugTouched: editorState.setSlugTouched,
     projectScope,
     setScope,
     projectsQuery,
-    sortedProjects,
+    projectItems,
     projectError,
     folderError,
     validateError,
     deleteError,
-    expandedProjectId,
-    editingProjectId,
-    projectEditForms,
-    folderCreateForms,
-    editingFolderIds,
-    folderEditForms,
-    pathValidation,
     createProjectMutation,
-    updateProjectMutation,
-    archiveProjectMutation,
-    unarchiveProjectMutation,
-    createFolderMutation,
-    updateFolderMutation,
-    deleteFolderMutation,
-    validatePathMutation,
-    scaffoldWorktreeSetupMutation,
     handleCreateProject,
-    handleUpdateProject,
-    handleCreateFolder,
-    handleUpdateFolder,
-    handleValidatePath,
-    handleDeleteProject,
-    handleRestoreProject,
-    toggleProjectExpansion,
-    beginProjectEdit,
-    cancelProjectEdit,
-    updateProjectEditForm,
-    beginFolderEdit,
-    cancelFolderEdit,
-    updateFolderEditForm,
-    handleDeleteFolder,
-    updateFolderCreateForm
+    mutationState: {
+      updateProjectPending: updateProjectMutation.isPending,
+      archiveProjectPending: archiveProjectMutation.isPending,
+      unarchiveProjectPending: unarchiveProjectMutation.isPending,
+      createFolderPending: createFolderMutation.isPending,
+      updateFolderPending: updateFolderMutation.isPending,
+      deleteFolderPending: deleteFolderMutation.isPending,
+      validatePathPending: validatePathMutation.isPending,
+      scaffoldWorktreeSetupPending: scaffoldWorktreeSetupMutation.isPending
+    },
+    projectItemActions
   };
 }
