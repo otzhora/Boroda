@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
+import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import type { FastifyInstance } from "fastify";
 
@@ -20,6 +21,7 @@ let ticketWorkspacesTable: (typeof import("./db/schema"))["ticketWorkspaces"];
 let tempRoot = "";
 let existingFolderPath = "";
 let gitRepoFolderPath = "";
+let gitRemoteRepoPath = "";
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const previousWslDistroName = process.env.WSL_DISTRO_NAME;
 const previousExplorerBin = process.env.BORODA_EXPLORER_BIN;
@@ -32,6 +34,7 @@ before(async () => {
   tempRoot = await mkdtemp(path.join(os.tmpdir(), "boroda-open-in-tests-"));
   existingFolderPath = path.join(tempRoot, "workspace-folder");
   gitRepoFolderPath = path.join(tempRoot, "git-workspace-folder");
+  gitRemoteRepoPath = path.join(tempRoot, "git-remote.git");
   await mkdir(existingFolderPath, { recursive: true });
   await mkdir(gitRepoFolderPath, { recursive: true });
 
@@ -167,7 +170,7 @@ async function createTicketWithFolder(projectName: string) {
 }
 
 function git(cwd: string, ...args: string[]) {
-  execFileSync("git", args, {
+  return execFileSync("git", args, {
     cwd,
     stdio: "pipe"
   });
@@ -182,6 +185,31 @@ async function createGitWorkspaceRepo() {
   await writeFile(path.join(gitRepoFolderPath, "README.md"), "main\n");
   git(gitRepoFolderPath, "add", "README.md");
   git(gitRepoFolderPath, "commit", "-m", "init");
+}
+
+async function createGitWorkspaceRepoWithRemote() {
+  const seedRepoPath = path.join(tempRoot, "git-remote-seed");
+  await rm(gitRemoteRepoPath, { recursive: true, force: true });
+  await rm(seedRepoPath, { recursive: true, force: true });
+  await rm(gitRepoFolderPath, { recursive: true, force: true });
+
+  await mkdir(seedRepoPath, { recursive: true });
+  git(seedRepoPath, "init", "--initial-branch=main");
+  git(seedRepoPath, "config", "user.email", "boroda@example.test");
+  git(seedRepoPath, "config", "user.name", "Boroda Tests");
+  await writeFile(path.join(seedRepoPath, "README.md"), "main\n");
+  git(seedRepoPath, "add", "README.md");
+  git(seedRepoPath, "commit", "-m", "init main");
+
+  git(tempRoot, "init", "--bare", gitRemoteRepoPath);
+  git(seedRepoPath, "remote", "add", "origin", gitRemoteRepoPath);
+  git(seedRepoPath, "push", "-u", "origin", "main");
+
+  git(tempRoot, "clone", gitRemoteRepoPath, gitRepoFolderPath);
+  git(gitRepoFolderPath, "config", "user.email", "boroda@example.test");
+  git(gitRepoFolderPath, "config", "user.name", "Boroda Tests");
+
+  return { seedRepoPath };
 }
 
 async function writeWorktreeSetupConfig(
@@ -469,6 +497,90 @@ serialTest("opens a Boroda-managed worktree when the ticket has one workspace fo
   );
 });
 
+serialTest("refreshes the remote default branch and syncs the folder before opening a new worktree", async () => {
+  resetOpenInState();
+  const { seedRepoPath } = await createGitWorkspaceRepoWithRemote();
+  await writeFile(path.join(seedRepoPath, "README.md"), "trunk\n");
+  git(seedRepoPath, "checkout", "-b", "trunk");
+  git(seedRepoPath, "add", "README.md");
+  git(seedRepoPath, "commit", "-m", "create trunk");
+  git(seedRepoPath, "push", "-u", "origin", "trunk");
+  git(gitRemoteRepoPath, "symbolic-ref", "HEAD", "refs/heads/trunk");
+
+  const projectResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Remote Default Repo",
+      slug: "remote-default-repo",
+      description: "",
+      color: "#355c7d"
+    }
+  });
+  const project = projectResponse.json();
+
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: gitRepoFolderPath,
+      defaultBranch: "main",
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+  const folder = folderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Open synced default branch workspace",
+      description: "",
+      branch: "feature/from-new-default",
+      workspaces: [
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/from-new-default",
+          role: "primary"
+        }
+      ],
+      status: "READY",
+      priority: "HIGH",
+      projectLinks: [
+        {
+          projectId: project.id,
+          relationship: "PRIMARY"
+        }
+      ]
+    }
+  });
+  const ticket = ticketResponse.json();
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "vscode",
+      mode: "worktree"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json();
+  assert.equal(await readFile(path.join(payload.directory, "README.md"), "utf8"), "trunk\n");
+
+  const updatedFolder = app.db
+    .select()
+    .from(projectFoldersTable)
+    .where(eq(projectFoldersTable.id, folder.id))
+    .get();
+
+  assert.equal(updatedFolder?.defaultBranch, "trunk");
+  assert.equal(git(gitRepoFolderPath, "symbolic-ref", "refs/remotes/origin/HEAD").toString().trim(), "refs/remotes/origin/trunk");
+});
+
 serialTest("runs repo-local worktree setup on first managed worktree open", async () => {
   resetOpenInState();
   await createGitWorkspaceRepo();
@@ -557,6 +669,88 @@ serialTest("runs repo-local worktree setup on first managed worktree open", asyn
   const worktreePath = response.json().directory;
   assert.equal(await readFile(path.join(worktreePath, ".env"), "utf8"), "HELLO=world\n");
   assert.equal(await readFile(path.join(worktreePath, ".ticket-key"), "utf8"), ticket.key);
+});
+
+serialTest("copies repo-local files into a fresh worktree with copy-file(...) commands", async () => {
+  resetOpenInState();
+  await createGitWorkspaceRepo();
+  await mkdir(path.join(gitRepoFolderPath, "src", "backend"), { recursive: true });
+  await writeFile(path.join(gitRepoFolderPath, "src", "backend", "appsettings.Development.json"), "{\n  \"env\": \"local\"\n}\n");
+  await writeWorktreeSetupConfig(
+    {
+      version: 1,
+      onCreate: ['copy-file("/src/backend/appsettings.Development.json")'],
+      steps: {}
+    },
+    []
+  );
+
+  const projectResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Builtin Copy Repo",
+      slug: "builtin-copy-repo",
+      description: "",
+      color: "#355c7d"
+    }
+  });
+  const project = projectResponse.json();
+
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: gitRepoFolderPath,
+      defaultBranch: "main",
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+  const folder = folderResponse.json();
+
+  const ticketResponse = await app.inject({
+    method: "POST",
+    url: "/api/tickets",
+    payload: {
+      title: "Open copy-file workspace",
+      description: "",
+      branch: "feature/copy-file",
+      workspaces: [
+        {
+          projectFolderId: folder.id,
+          branchName: "feature/copy-file",
+          role: "primary"
+        }
+      ],
+      status: "READY",
+      priority: "HIGH",
+      projectLinks: [
+        {
+          projectId: project.id,
+          relationship: "PRIMARY"
+        }
+      ]
+    }
+  });
+  const ticket = ticketResponse.json();
+
+  const response = await app.inject({
+    method: "POST",
+    url: `/api/integrations/open-in/tickets/${ticket.id}/open`,
+    payload: {
+      target: "vscode",
+      mode: "worktree"
+    }
+  });
+
+  assert.equal(response.statusCode, 200);
+  const worktreePath = response.json().directory;
+  assert.equal(
+    await readFile(path.join(worktreePath, "src", "backend", "appsettings.Development.json"), "utf8"),
+    "{\n  \"env\": \"local\"\n}\n"
+  );
 });
 
 serialTest("returns 409 when worktree setup config is invalid", async () => {

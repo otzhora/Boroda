@@ -17,6 +17,7 @@
   "scripts": {
     "dev": "sh -c 'npm run dev:server & npm run dev:web & wait'",
     "dev:ensure": "sh ./scripts/ensure-dev.sh",
+    "dev:stop": "sh ./scripts/stop-dev.sh",
     "dev:web": "npm run dev -w @boroda/web",
     "dev:server": "npm run dev -w @boroda/server",
     "mcp": "npm run mcp -w @boroda/server",

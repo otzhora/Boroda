@@ -62,7 +62,11 @@ export function ensureGitRepo(repoPath: string) {
   return topLevel.stdout;
 }
 
-export function detectRemoteDefaultBranch(repoPath: string) {
+export function detectRemoteDefaultBranch(repoPath: string, options?: { refresh?: boolean }) {
+  if (options?.refresh) {
+    tryGit(repoPath, ["remote", "set-head", "origin", "-a"]);
+  }
+
   const result = tryGit(repoPath, ["symbolic-ref", "refs/remotes/origin/HEAD"]);
 
   if (!result.ok || !result.stdout.startsWith("refs/remotes/origin/")) {

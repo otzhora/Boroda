@@ -85,6 +85,7 @@ If you want Boroda available throughout the workday without interfering with oth
 
 ```bash
 BORODA_DEV_PORT=2222 npm run dev:ensure
+npm run dev:stop
 ```
 
 The launcher:
@@ -93,6 +94,7 @@ The launcher:
 - checks the Vite web server on `http://127.0.0.1:5173` by default
 - backs off if Boroda is already running
 - starts `npm run dev` with `nohup` if it is not running
+- stops the detached stack with `npm run dev:stop`
 - writes logs to `.boroda/run/boroda-dev.log`
 
 If you want a shell hook, call the launcher from `.zprofile` or `.zshrc` instead of inlining the startup logic there:

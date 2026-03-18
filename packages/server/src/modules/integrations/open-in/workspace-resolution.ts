@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import { getConfig } from "../../../config";
-import { ticketWorkspaces } from "../../../db/schema";
+import { projectFolders, ticketWorkspaces } from "../../../db/schema";
 import { AppError } from "../../../shared/errors";
 import { getTicketOrThrow } from "../../tickets/service";
 import {
@@ -98,17 +98,23 @@ async function resolveWorkspaceDirectory(
   input: OpenTicketInAppInput
 ) {
   const repoRoot = ensureGitRepo(workspace.projectFolder.path);
-  const folderDefaultBranch = workspace.projectFolder.defaultBranch?.trim() || null;
-  const detectedDefaultBranch = detectRemoteDefaultBranch(repoRoot);
+  const configuredDefaultBranch = workspace.projectFolder.defaultBranch?.trim() || null;
+  const detectedDefaultBranch = detectRemoteDefaultBranch(repoRoot, { refresh: true });
+  const folderDefaultBranch = detectedDefaultBranch || configuredDefaultBranch;
   const baseBranch = workspace.baseBranch?.trim() || folderDefaultBranch;
   const shouldRunSetup = workspace.worktreePath === null && input.runSetup;
 
-  if (folderDefaultBranch && detectedDefaultBranch && folderDefaultBranch !== detectedDefaultBranch) {
-    throw new AppError(409, "WORKSPACE_DEFAULT_BRANCH_INVALID", "The configured default branch does not match the repository default branch", {
-      projectFolderId: folderId,
-      configuredDefaultBranch: folderDefaultBranch,
-      detectedDefaultBranch
-    });
+  if (detectedDefaultBranch && detectedDefaultBranch !== configuredDefaultBranch) {
+    app.db
+      .update(projectFolders)
+      .set({
+        defaultBranch: detectedDefaultBranch,
+        updatedAt: new Date().toISOString()
+      })
+      .where(eq(projectFolders.id, folderId))
+      .run();
+
+    workspace.projectFolder.defaultBranch = detectedDefaultBranch;
   }
 
   const worktreePath =

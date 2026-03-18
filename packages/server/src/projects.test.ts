@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -601,6 +601,56 @@ test("duplicate project slugs and folder paths return 409 conflicts", async () =
       }
     }
   });
+});
+
+test("scaffolded worktree setup uses built-in copy-file commands", async () => {
+  const repoPath = path.join(tempRoot, `scaffold-repo-${Date.now()}`);
+  await createGitRepo(repoPath);
+
+  const projectResponse = await app.inject({
+    method: "POST",
+    url: "/api/projects",
+    payload: {
+      name: "Scaffold Repo",
+      slug: `scaffold-repo-${Math.random().toString(36).slice(2, 8)}`,
+      description: "",
+      color: "#355c7d"
+    }
+  });
+
+  assert.equal(projectResponse.statusCode, 200);
+  const project = projectResponse.json();
+
+  const folderResponse = await app.inject({
+    method: "POST",
+    url: `/api/projects/${project.id}/folders`,
+    payload: {
+      label: "workspace",
+      path: repoPath,
+      defaultBranch: "main",
+      kind: "APP",
+      isPrimary: true
+    }
+  });
+
+  assert.equal(folderResponse.statusCode, 200);
+  const folder = folderResponse.json();
+
+  const scaffoldResponse = await app.inject({
+    method: "POST",
+    url: `/api/project-folders/${folder.id}/worktree-setup/scaffold`
+  });
+
+  assert.equal(scaffoldResponse.statusCode, 200);
+  const configPath = path.join(repoPath, ".boroda", "worktree.setup.json");
+  const config = JSON.parse(await readFile(configPath, "utf8")) as {
+    onCreate: string[];
+    steps: Record<string, unknown>;
+  };
+
+  assert.deepEqual(config.steps, {});
+  assert.ok(config.onCreate.includes('copy-file("/.env")'));
+  assert.ok(config.onCreate.includes('copy-file("/src/backend/appsettings.Development.json")'));
 });
 
 test("path validation route returns normalized metadata and validation errors", async () => {
