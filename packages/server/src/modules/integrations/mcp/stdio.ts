@@ -11,6 +11,7 @@ const MCP_DISABLED_MESSAGE =
   "Boroda MCP is disabled. Run `./scripts/run-mcp.sh` or set BORODA_MCP_ENABLED=true before starting the MCP server.";
 
 type StdioMessageMode = "content-length" | "line-delimited";
+type StdioBuffer = Buffer<ArrayBufferLike>;
 
 function encodeMessage(message: unknown, mode: StdioMessageMode) {
   const body = Buffer.from(JSON.stringify(message), "utf8");
@@ -22,7 +23,7 @@ function encodeMessage(message: unknown, mode: StdioMessageMode) {
   return Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, "utf8"), body]);
 }
 
-function tryReadContentLengthMessage(buffer: Buffer) {
+function tryReadContentLengthMessage(buffer: StdioBuffer) {
   const headerEnd = buffer.indexOf(HEADER_SEPARATOR);
 
   if (headerEnd === -1) {
@@ -56,7 +57,7 @@ function tryReadContentLengthMessage(buffer: Buffer) {
   };
 }
 
-function tryReadLineDelimitedMessage(buffer: Buffer) {
+function tryReadLineDelimitedMessage(buffer: StdioBuffer) {
   const newlineIndex = buffer.indexOf("\n");
 
   if (newlineIndex === -1) {
@@ -95,7 +96,7 @@ export async function runMcpServer() {
   const app = buildConfiguredApp(false, false);
   await app.ready();
 
-  let buffer = Buffer.alloc(0);
+  let buffer: StdioBuffer = Buffer.alloc(0);
 
   const processChunk = async () => {
     while (true) {

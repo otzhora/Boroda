@@ -5,13 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { toTicketForm } from "../../features/tickets/form";
 import { setStoredDefaultOpenInMode } from "../../lib/user-preferences";
 import type { Project, Ticket } from "../../lib/types";
-import {
-  createProject,
-  createTicket,
-  createTicketActivity,
-  createTicketProjectLink,
-  createTicketWorkspace
-} from "../../test/fixtures/models";
+import { createProject, createTicket, createTicketActivity, createTicketProjectLink, createTicketWorkspace } from "../../test/fixtures/models";
 
 const uploadTicketImageSpy = vi.fn(async () => ({
   alt: "Pasted image",
@@ -21,10 +15,8 @@ const uploadTicketImageSpy = vi.fn(async () => ({
 }));
 
 vi.mock("../../features/tickets/mutations", async () => {
-  const actual = await vi.importActual<typeof import("../../features/tickets/mutations")>(
-    "../../features/tickets/mutations"
-  );
-
+  const actual =
+    await vi.importActual<typeof import("../../features/tickets/mutations")>("../../features/tickets/mutations");
   return {
     ...actual,
     useUploadTicketImageMutation: () => ({
@@ -107,12 +99,10 @@ function renderTicketDrawer(overrides: Partial<React.ComponentProps<typeof Ticke
 function createDeferred() {
   let resolve!: () => void;
   let reject!: (reason?: unknown) => void;
-
   const promise = new Promise<void>((nextResolve, nextReject) => {
     resolve = nextResolve;
     reject = nextReject;
   });
-
   return { promise, resolve, reject };
 }
 

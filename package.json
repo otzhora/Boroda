@@ -3,7 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "devDependencies": {
-    "drizzle-kit": "^0.30.4"
+    "drizzle-kit": "^0.31.10"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.12"
+    }
   },
   "workspaces": [
     "apps/*",
