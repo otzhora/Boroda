@@ -3,6 +3,7 @@ dist
 .turbo
 .DS_Store
 *.log
+.boroda/run/
 data/*.sqlite
 data/*.sqlite-*
 packages/server/data/

@@ -44,11 +44,13 @@ This starts:
 - the API server in `packages/server`
 
 The server listens on `http://localhost:3000` by default.
+When running the monorepo dev command, the Vite frontend proxy follows `BORODA_SERVER_PORT` or `PORT`, then falls back to `3000`.
 
 ## Common Commands
 
 ```bash
 npm run dev
+npm run dev:ensure
 npm run build
 npm run test
 npm run lint
@@ -68,11 +70,42 @@ npm run mcp
 Useful environment variables:
 
 - `PORT`: HTTP port for the server, default `3000`
+- `BORODA_SERVER_PORT`: optional frontend-proxy override for dev; use this if you want the web app to target a different backend port without changing any other process
+- `BORODA_DEV_PORT`: optional detached dev launcher backend port override; useful if you want Boroda to stay off common project ports like `3000`
+- `BORODA_WEB_PORT`: optional detached dev launcher web port override, default `5173`
 - `HOST`: bind host, default `0.0.0.0`
 - `BORODA_DB_PATH`: override the SQLite database path
 - `BORODA_UPLOADS_PATH`: override uploads storage
 - `BORODA_WORKTREES_PATH`: override managed worktree storage
 - `BORODA_MCP_ENABLED`: enable MCP-related behavior
+
+## Detached Dev Launcher
+
+If you want Boroda available throughout the workday without interfering with other projects, prefer the detached launcher over embedding process control directly in `.zshrc`:
+
+```bash
+BORODA_DEV_PORT=2222 npm run dev:ensure
+```
+
+The launcher:
+
+- checks `http://127.0.0.1:<port>/api/health`
+- checks the Vite web server on `http://127.0.0.1:5173` by default
+- backs off if Boroda is already running
+- starts `npm run dev` with `nohup` if it is not running
+- writes logs to `.boroda/run/boroda-dev.log`
+
+If you want a shell hook, call the launcher from `.zprofile` or `.zshrc` instead of inlining the startup logic there:
+
+```bash
+boroda_ensure_running() {
+  BORODA_DEV_PORT=2222 /home/otzhora/projects/codex_projects/boroda/scripts/ensure-dev.sh >/dev/null 2>&1
+}
+
+boroda_ensure_running &
+```
+
+`.zprofile` is usually the cleaner place if you want this to happen once per login shell. `.zshrc` also works because the launcher backs off cleanly when Boroda is already up.
 
 ## Repo Structure
 
