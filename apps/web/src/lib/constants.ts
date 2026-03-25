@@ -15,6 +15,7 @@ export const PROJECT_FOLDER_KINDS = [
 export const WORK_CONTEXT_TYPES = [
   "CODEX_SESSION",
   "CLAUDE_SESSION",
+  "COPILOT_SESSION",
   "CURSOR_SESSION",
   "PR",
   "AWS_CONSOLE",
@@ -29,6 +30,7 @@ export const VISIBLE_WORK_CONTEXT_TYPES = ["PR", "AWS_CONSOLE", "TERRAFORM_RUN",
 export const workContextTypeLabelMap: Record<(typeof WORK_CONTEXT_TYPES)[number], string> = {
   CODEX_SESSION: "Codex session",
   CLAUDE_SESSION: "Claude session",
+  COPILOT_SESSION: "Copilot session",
   CURSOR_SESSION: "Cursor session",
   PR: "Pull request",
   AWS_CONSOLE: "AWS console",

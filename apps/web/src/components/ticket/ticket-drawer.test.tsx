@@ -1541,6 +1541,53 @@ describe("TicketDrawer", () => {
     expect(screen.getByText("By Claude")).toBeInTheDocument();
   });
 
+  it("formats Copilot provenance labels with the expected product name", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TicketDrawer
+        ticketId={ticket.id}
+        ticket={{
+          ...ticket,
+          activities: [
+            createTicketActivity({
+              id: 3,
+              ticketId: ticket.id,
+              type: "agent.note",
+              message: "Copilot recorded progress.",
+              metaJson: JSON.stringify({
+                actorType: "agent",
+                agentKind: "copilot",
+                transport: "mcp"
+              })
+            })
+          ]
+        }}
+        isLoading={false}
+        isError={false}
+        form={toTicketForm(ticket)}
+        projects={[project]}
+        isSaving={false}
+        saveSuccessCount={0}
+        isArchiving={false}
+        isRestoring={false}
+        isOpeningInApp={false}
+        isRefreshingJira={false}
+        onChange={vi.fn()}
+        onSave={vi.fn()}
+        onArchive={vi.fn()}
+        onRestore={vi.fn()}
+        onOpenInApp={vi.fn()}
+        onRefreshJira={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Activity" }));
+
+    expect(screen.getByText("By Copilot via MCP")).toBeInTheDocument();
+  });
+
   it("shows a Jira refresh icon button and calls refresh", async () => {
     const user = userEvent.setup();
     const handleRefreshJira = vi.fn();

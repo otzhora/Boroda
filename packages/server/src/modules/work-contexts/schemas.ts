@@ -3,6 +3,7 @@ import { z } from "zod";
 export const workContextTypeSchema = z.enum([
   "CODEX_SESSION",
   "CLAUDE_SESSION",
+  "COPILOT_SESSION",
   "CURSOR_SESSION",
   "PR",
   "AWS_CONSOLE",

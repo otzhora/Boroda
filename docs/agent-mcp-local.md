@@ -43,7 +43,7 @@ For MCP clients, use the silent launcher from the repo root:
 
 This is the recommended command because it avoids npm stdout noise and starts the correct stdio entrypoint directly.
 
-You do not need to run it manually before launching Codex, Claude Code, or another MCP client. In normal use, the MCP client starts Boroda itself.
+You do not need to run it manually before launching Codex, Claude Code, GitHub Copilot, or another MCP client. In normal use, the MCP client starts Boroda itself.
 
 Run it manually only when debugging startup behavior:
 
@@ -109,6 +109,41 @@ claude mcp add boroda -- "$(pwd)/scripts/run-mcp.sh"
 ```
 
 If the client supports JSON config instead of a CLI helper, use the same absolute script path.
+
+## GitHub Copilot Setup
+
+GitHub Copilot uses its own MCP config shape rather than the Codex or Claude CLI helpers. Boroda does not need a different server implementation for Copilot, but it does need a Copilot-specific client entry.
+
+For Copilot CLI, add Boroda to your MCP config JSON using a local server entry:
+
+```json
+{
+  "mcpServers": {
+    "boroda": {
+      "type": "local",
+      "command": "/absolute/path/to/boroda/scripts/run-mcp.sh",
+      "tools": ["*"]
+    }
+  }
+}
+```
+
+If your Copilot environment supports a working directory on local servers, set it to the Boroda repo root:
+
+```json
+{
+  "mcpServers": {
+    "boroda": {
+      "type": "local",
+      "command": "/absolute/path/to/boroda/scripts/run-mcp.sh",
+      "cwd": "/absolute/path/to/boroda",
+      "tools": ["*"]
+    }
+  }
+}
+```
+
+Copilot’s MCP docs and examples use local servers with an explicit `"type": "local"` field and optional tool allowlists, so Boroda’s generic Codex or Claude snippets are not enough on their own for Copilot.
 
 ## Generic MCP Client Config
 

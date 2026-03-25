@@ -63,6 +63,7 @@ function getValueLabel(type: WorkContextType) {
       return "PR URL or branch";
     case "CODEX_SESSION":
     case "CLAUDE_SESSION":
+    case "COPILOT_SESSION":
     case "CURSOR_SESSION":
       return "Session URL or ID";
     case "MANUAL_UI":
@@ -80,8 +81,9 @@ function getValuePlaceholder(type: WorkContextType) {
       return "https://github.com/org/repo/pull/42";
     case "CODEX_SESSION":
     case "CLAUDE_SESSION":
+    case "COPILOT_SESSION":
     case "CURSOR_SESSION":
-      return "codex://session/abc123 or pasted session URL";
+      return "agent://session/abc123 or pasted session URL";
     case "MANUAL_UI":
       return "Windows browser, staging env, billing settings drawer";
     case "NOTE":

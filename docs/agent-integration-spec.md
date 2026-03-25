@@ -394,6 +394,7 @@ Recommended supported types in v1:
 
 - `CODEX_SESSION`
 - `CLAUDE_SESSION`
+- `COPILOT_SESSION`
 - `CURSOR_SESSION`
 - `PR`
 - `LINK`
@@ -532,7 +533,7 @@ For this feature specifically:
 
 The first pass is successful when:
 
-- Codex or Claude can create a generic Boroda ticket through a stable tool interface
+- Codex, Claude, or Copilot can create a generic Boroda ticket through a stable tool interface
 - agents can read ticket and project state before creating follow-up work
 - agents can update a ticket and attach work context after doing work
 - Boroda records visible provenance for agent-originated changes

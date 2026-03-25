@@ -145,6 +145,7 @@ test("mcp handler exposes the first-pass Boroda tools and reuses shared agent lo
         types: [
           "CODEX_SESSION",
           "CLAUDE_SESSION",
+          "COPILOT_SESSION",
           "CURSOR_SESSION",
           "PR",
           "AWS_CONSOLE",
@@ -233,14 +234,14 @@ test("mcp handler exposes the first-pass Boroda tools and reuses shared agent lo
       name: "boroda.attach_work_context",
       arguments: {
         ticketId: createdTicket.id,
-        type: "CODEX_SESSION",
+        type: "COPILOT_SESSION",
         label: "Session",
-        value: "codex://session/mcp-test"
+        value: "copilot://session/mcp-test"
       }
     }
   });
 
-  assert.equal((attachContextResponse?.result?.structuredContent as { type: string }).type, "CODEX_SESSION");
+  assert.equal((attachContextResponse?.result?.structuredContent as { type: string }).type, "COPILOT_SESSION");
 
   const appendActivityResponse = await handleMcpRequest(app, {
     jsonrpc: "2.0",

@@ -8,6 +8,7 @@ export type ActivityTransport = "http" | "mcp";
 export type WorkContextType =
   | "CODEX_SESSION"
   | "CLAUDE_SESSION"
+  | "COPILOT_SESSION"
   | "CURSOR_SESSION"
   | "PR"
   | "AWS_CONSOLE"

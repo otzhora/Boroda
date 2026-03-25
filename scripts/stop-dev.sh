@@ -16,8 +16,8 @@ collect_descendants() {
 
   for child_pid in $children; do
     [ -n "$child_pid" ] || continue
-    collect_descendants "$child_pid"
     printf '%s\n' "$child_pid"
+    collect_descendants "$child_pid"
   done
 }
 
@@ -44,9 +44,8 @@ if ! is_running "$ROOT_PID"; then
   exit 0
 fi
 
-PIDS_TO_STOP=$(collect_descendants "$ROOT_PID")
-PIDS_TO_STOP="${PIDS_TO_STOP}
-$ROOT_PID"
+PIDS_TO_STOP="${ROOT_PID}
+$(collect_descendants "$ROOT_PID")"
 
 printf '%s\n' "Stopping Boroda detached dev stack rooted at PID $ROOT_PID."
 

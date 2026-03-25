@@ -100,6 +100,7 @@ describe("WorkContextEditor", () => {
     expect(screen.getByLabelText("Note")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Codex session" })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Claude session" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Copilot session" })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Cursor session" })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Manual UI" })).not.toBeInTheDocument();
   });
@@ -122,6 +123,7 @@ describe("WorkContextEditor", () => {
 
     expect(screen.queryByRole("option", { name: "Codex session" })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Claude session" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Copilot session" })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Cursor session" })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Manual UI" })).not.toBeInTheDocument();
   });
@@ -147,8 +149,31 @@ describe("WorkContextEditor", () => {
     expect(within(existingContextForm!).getByLabelText("Type")).toHaveValue("CODEX_SESSION");
     expect(within(existingContextForm!).getByRole("option", { name: "Codex session" })).toBeInTheDocument();
     expect(within(existingContextForm!).queryByRole("option", { name: "Claude session" })).not.toBeInTheDocument();
+    expect(within(existingContextForm!).queryByRole("option", { name: "Copilot session" })).not.toBeInTheDocument();
     expect(within(existingContextForm!).queryByRole("option", { name: "Cursor session" })).not.toBeInTheDocument();
     expect(within(existingContextForm!).queryByRole("option", { name: "Manual UI" })).not.toBeInTheDocument();
+  });
+
+  it("still renders Copilot session contexts as legacy hidden types during edit", async () => {
+    const user = userEvent.setup();
+
+    renderEditor([
+      createWorkContext({
+        id: 5,
+        type: "COPILOT_SESSION",
+        label: "Copilot task",
+        value: "copilot://session/task-123",
+        createdAt: "",
+        updatedAt: ""
+      })
+    ]);
+
+    await user.click(screen.getByText("Copilot task"));
+    const existingContextForm = screen.getByRole("button", { name: "Save changes" }).closest("form");
+    expect(existingContextForm).not.toBeNull();
+
+    expect(within(existingContextForm!).getByLabelText("Type")).toHaveValue("COPILOT_SESSION");
+    expect(within(existingContextForm!).getByRole("option", { name: "Copilot session" })).toBeInTheDocument();
   });
 
   it("updates existing contexts and can switch to manual UI references", async () => {

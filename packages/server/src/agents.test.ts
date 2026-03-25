@@ -145,6 +145,7 @@ test("agent metadata route exposes valid enums, statuses, and defaults", async (
       types: [
         "CODEX_SESSION",
         "CLAUDE_SESSION",
+        "COPILOT_SESSION",
         "CURSOR_SESSION",
         "PR",
         "AWS_CONSOLE",
@@ -222,17 +223,17 @@ test("agent write routes delegate to shared services and record provenance", asy
     method: "POST",
     url: `/api/agents/tickets/${createdTicket.id}/contexts`,
     payload: {
-      type: "CODEX_SESSION",
+      type: "COPILOT_SESSION",
       label: "Session",
-      value: "codex://session/step-3",
+      value: "copilot://session/step-3",
       actor: {
-        agentKind: "codex"
+        agentKind: "copilot"
       }
     }
   });
 
   assert.equal(contextResponse.statusCode, 200);
-  assert.equal(contextResponse.json().type, "CODEX_SESSION");
+  assert.equal(contextResponse.json().type, "COPILOT_SESSION");
 
   const activityResponse = await app.inject({
     method: "POST",

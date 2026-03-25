@@ -69,6 +69,7 @@ const workContextSchema = z.object({
   type: z.enum([
     "CODEX_SESSION",
     "CLAUDE_SESSION",
+    "COPILOT_SESSION",
     "CURSOR_SESSION",
     "PR",
     "AWS_CONSOLE",

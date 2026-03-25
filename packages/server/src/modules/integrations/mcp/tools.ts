@@ -67,7 +67,7 @@ const workContextSchema = objectSchema(
   {
     type: {
       type: "string",
-      enum: ["CODEX_SESSION", "CLAUDE_SESSION", "CURSOR_SESSION", "PR", "AWS_CONSOLE", "TERRAFORM_RUN", "MANUAL_UI", "LINK", "NOTE"]
+      enum: ["CODEX_SESSION", "CLAUDE_SESSION", "COPILOT_SESSION", "CURSOR_SESSION", "PR", "AWS_CONSOLE", "TERRAFORM_RUN", "MANUAL_UI", "LINK", "NOTE"]
     },
     label: { type: "string" },
     value: { type: "string" },
