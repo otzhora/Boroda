@@ -14,9 +14,19 @@ interface JiraSearchResponse {
     key?: string;
     fields?: {
       summary?: string;
+      description?: JiraAdfNode | string | null;
+      status?: {
+        name?: string | null;
+      } | null;
     };
   }>;
   total?: number;
+}
+
+interface JiraAdfNode {
+  type?: string;
+  text?: string;
+  content?: JiraAdfNode[];
 }
 
 const JIRA_SETTINGS_SINGLETON_ID = 1;
@@ -30,6 +40,49 @@ function sanitizeBaseUrl(value: string) {
 
 function normalizeIssueKey(value: string) {
   return value.trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function collectJiraAdfText(node: JiraAdfNode | null | undefined): string {
+  if (!node) {
+    return "";
+  }
+
+  if (typeof node.text === "string") {
+    return node.text;
+  }
+
+  if (!Array.isArray(node.content) || node.content.length === 0) {
+    return "";
+  }
+
+  const children = node.content.map((child) => collectJiraAdfText(child)).filter((value) => value.length > 0);
+
+  if (children.length === 0) {
+    return "";
+  }
+
+  switch (node.type) {
+    case "paragraph":
+    case "heading":
+    case "blockquote":
+    case "listItem":
+      return `${children.join("")}\n\n`;
+    case "hardBreak":
+      return "\n";
+    case "bulletList":
+    case "orderedList":
+    case "doc":
+    default:
+      return children.join("");
+  }
+}
+
+function toJiraDescriptionText(value: JiraAdfNode | string | null | undefined) {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  return collectJiraAdfText(value).replace(/\n{3,}/g, "\n\n").trim();
 }
 
 async function getStoredJiraSettings(app: FastifyInstance) {
@@ -165,7 +218,7 @@ async function runJiraSearch(
       const settings = await getRequiredJiraSettings(app);
       const pageSize = Math.max(1, input.pageSize ?? JIRA_SEARCH_PAGE_SIZE);
       const limit = input.maxResults ?? Number.POSITIVE_INFINITY;
-      const issues: Array<{ key: string; summary: string }> = [];
+      const issues: Array<{ key: string; summary: string; description: string; status: string }> = [];
       let total = 0;
       let fetchedPages = 0;
       let startAt = 0;
@@ -175,7 +228,7 @@ async function runJiraSearch(
         const maxResults = Math.min(pageSize, remaining || pageSize);
         const searchParams = new URLSearchParams({
           jql: input.jql,
-          fields: "summary",
+          fields: "summary,description,status",
           startAt: String(startAt),
           maxResults: String(maxResults)
         });
@@ -249,10 +302,12 @@ async function runJiraSearch(
 
             return {
               key: issue.key,
-              summary: issue.fields.summary
+              summary: issue.fields.summary,
+              description: toJiraDescriptionText(issue.fields.description),
+              status: issue.fields.status?.name?.trim() ?? ""
             };
           })
-          .filter((issue): issue is { key: string; summary: string } => issue !== null);
+          .filter((issue): issue is { key: string; summary: string; description: string; status: string } => issue !== null);
 
         issues.push(...normalizedIssues);
         total = typeof payload.total === "number" ? payload.total : issues.length;
@@ -339,14 +394,21 @@ export async function listAssignedJiraIssuesWithLinks(app: FastifyInstance) {
   const issues = assignedIssues.issues.map((issue) => ({
     key: issue.key,
     summary: issue.summary,
+    description: issue.description,
+    status: issue.status,
     borodaTickets: borodaTicketsByIssueKey.get(normalizeIssueKey(issue.key)) ?? []
   }));
+
+  const statuses = [...new Set(issues.map((issue) => issue.status.trim()).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right)
+  );
 
   return {
     issues,
     total: assignedIssues.total,
     linked: issues.filter((issue) => issue.borodaTickets.length > 0).length,
-    unlinked: issues.filter((issue) => issue.borodaTickets.length === 0).length
+    unlinked: issues.filter((issue) => issue.borodaTickets.length === 0).length,
+    statuses
   };
 }
 

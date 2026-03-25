@@ -306,10 +306,16 @@ describe("TicketDrawer", () => {
 
     await user.click(screen.getByRole("button", { name: "Edit ticket workspaces" }));
 
-    expect(screen.getByRole("dialog", { name: "Code setup" })).toBeInTheDocument();
+    const workspaceDialog = screen.getByRole("dialog", { name: "Code setup" });
+    expect(workspaceDialog).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Expand linked projects" }));
     expect(screen.getByRole("button", { name: "Collapse linked projects" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Payments Backend")).toBeInTheDocument();
+    expect(within(workspaceDialog).getByRole("link", { name: "BRD-321" })).toHaveAttribute(
+      "href",
+      "https://jira.example.test/browse/BRD-321"
+    );
+    expect(within(workspaceDialog).getByText("Follow-up issue")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Collapse Jira issues" }));
     expect(screen.queryByRole("button", { name: "Refresh linked issues" })).not.toBeInTheDocument();
@@ -319,6 +325,46 @@ describe("TicketDrawer", () => {
     expect(screen.queryByText("Core payment services")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Expand Jira issues" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByRole("button", { name: "Edit ticket workspaces" })).toBeInTheDocument();
+  });
+
+  it("shows linked Jira issues in the workspace drawer without extra editing state", async () => {
+    const user = userEvent.setup();
+
+    renderTicketDrawer({
+      ticket: createTicket({
+        ...ticket,
+        jiraIssues: [
+          {
+            id: 9,
+            ticketId: ticket.id,
+            key: "BRD-321",
+            summary: "Follow-up issue",
+            createdAt: "2026-02-28T12:00:00.000Z"
+          },
+          {
+            id: 10,
+            ticketId: ticket.id,
+            key: "BRD-654",
+            summary: "Backend cleanup",
+            createdAt: "2026-02-28T12:00:00.000Z"
+          }
+        ]
+      })
+    });
+
+    await user.click(screen.getByRole("button", { name: "Edit ticket workspaces" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Code setup" });
+    expect(within(dialog).getByText("Linked Jira issues")).toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: "BRD-321" })).toHaveAttribute(
+      "href",
+      "https://jira.example.test/browse/BRD-321"
+    );
+    expect(within(dialog).getByRole("link", { name: "BRD-654" })).toHaveAttribute(
+      "href",
+      "https://jira.example.test/browse/BRD-654"
+    );
+    expect(within(dialog).getByText("Backend cleanup")).toBeInTheDocument();
   });
 
   it("leaves edit mode after a successful save", async () => {

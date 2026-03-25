@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useAppHeader } from "../app/router";
 import { PageCommandBar } from "../components/ui/page-command-bar";
 import { PageSearchInput } from "../components/ui/page-search-input";
 import { useBoardColumnsQuery } from "../features/board/queries";
@@ -9,11 +8,13 @@ import {
   useJiraLinkableTicketsQuery,
   useJiraSettingsQuery
 } from "../features/jira/queries";
+import { JiraFilterDropdown } from "../features/jira/jira-page-helpers";
 import {
   buildJiraPageItems,
   JIRA_PAGE_SIZE,
   JiraIssueSort,
   normalizeIssueSearch,
+  parseIssueStatusFilters,
   parseIssuePage,
   parseIssueSort,
   sortIssues,
@@ -58,6 +59,8 @@ const paginationButtonClassName =
   "inline-flex h-10 min-w-10 items-center justify-center rounded-[10px] border border-white/8 bg-white/[0.04] px-3 text-sm font-medium text-ink-100 transition-colors hover:border-white/14 hover:bg-white/[0.07] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50 disabled:text-ink-300 disabled:hover:border-white/8 disabled:hover:bg-white/[0.04]";
 const activePaginationButtonClassName =
   "border-white/16 bg-canvas-950 text-ink-50";
+const filterButtonClassName =
+  "inline-flex min-h-10 items-center justify-center rounded-[10px] border border-white/10 bg-canvas-950 px-3.5 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-white/16 hover:bg-canvas-900";
 
 function createLinkedQuickTicketForm(issue: { key: string; summary: string }): QuickTicketFormState {
   return {
@@ -66,12 +69,12 @@ function createLinkedQuickTicketForm(issue: { key: string; summary: string }): Q
   };
 }
 
-function toQuickCreatePayload(issue: { key: string; summary: string }, form: QuickTicketFormState) {
+function toQuickCreatePayload(issue: { key: string; summary: string; description: string }, form: QuickTicketFormState) {
   const summary = issue.summary.trim();
 
   return {
     title: form.title.trim(),
-    description: "",
+    description: issue.description.trim(),
     branch: null,
     workspaces: [],
     jiraIssues: [
@@ -90,19 +93,19 @@ function toQuickCreatePayload(issue: { key: string; summary: string }, form: Qui
 }
 
 export function JiraPage() {
-  const { hasHost } = useAppHeader();
   const [searchParams, setSearchParams] = useSearchParams();
   const settingsQuery = useJiraSettingsQuery();
   const issuesQuery = useAssignedJiraIssueLinksQuery();
   const boardColumnsQuery = useBoardColumnsQuery();
   const projectsQuery = useProjectsQuery();
   const [issueSearchInput, setIssueSearchInput] = useState(() => normalizeIssueSearch(searchParams.get("q")));
-  const [issueToCreateFrom, setIssueToCreateFrom] = useState<{ key: string; summary: string } | null>(null);
-  const [issueToLinkToExisting, setIssueToLinkToExisting] = useState<{ key: string; summary: string } | null>(null);
+  const [issueToCreateFrom, setIssueToCreateFrom] = useState<{ key: string; summary: string; description: string } | null>(null);
+  const [issueToLinkToExisting, setIssueToLinkToExisting] = useState<{ key: string; summary: string; description: string } | null>(null);
   const [quickCreateForm, setQuickCreateForm] = useState<QuickTicketFormState>(createEmptyQuickTicketForm());
   const [expandedIssueKeys, setExpandedIssueKeys] = useState<string[]>([]);
   const [ticketSearch, setTicketSearch] = useState("");
   const [debouncedTicketSearch, setDebouncedTicketSearch] = useState("");
+  const [filterHotkeySignal, setFilterHotkeySignal] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const quickCreateTitleRef = useRef<HTMLInputElement>(null);
   const linkExistingSearchRef = useRef<HTMLInputElement>(null);
@@ -127,19 +130,23 @@ export function JiraPage() {
   const issueSort = parseIssueSort(searchParams.get("sort"));
   const payload = issuesQuery.data;
   const issueSearch = normalizeIssueSearch(searchParams.get("q"));
+  const issueStatusFilters = parseIssueStatusFilters(searchParams);
   const requestedPage = parseIssuePage(searchParams.get("page"));
   const sortedIssues = sortIssues(payload?.issues ?? [], issueSort);
   const issues = sortedIssues.filter((issue) => {
     if (!issueSearchInput.trim()) {
-      return true;
+      return issueStatusFilters.length === 0 || issueStatusFilters.includes(issue.status);
     }
 
     const searchValue = issueSearchInput.trim().toLowerCase();
-    return (
+    const matchesSearch =
       issue.key.toLowerCase().includes(searchValue) ||
-      issue.summary.toLowerCase().includes(searchValue)
-    );
+      issue.summary.toLowerCase().includes(searchValue) ||
+      issue.status.toLowerCase().includes(searchValue);
+
+    return matchesSearch && (issueStatusFilters.length === 0 || issueStatusFilters.includes(issue.status));
   });
+  const availableStatuses = payload?.statuses ?? [];
   const projects = projectsQuery.data ?? [];
   const linkableTicketsQuery = useJiraLinkableTicketsQuery(issueToLinkToExisting?.key ?? null, debouncedTicketSearch);
   const linkableTickets = linkableTicketsQuery.data ?? [];
@@ -199,8 +206,23 @@ export function JiraPage() {
   }, [ticketSearch]);
 
   usePageSearchHotkeys({
-    searchInputRef
+    searchInputRef,
+    onOpenFilters: () => {
+      setFilterHotkeySignal((current) => current + 1);
+    }
   });
+
+  const updateFilters = (updater: (nextSearchParams: URLSearchParams) => void) => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    updater(nextSearchParams);
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
+  const clearJiraFilters = () => {
+    updateFilters((nextSearchParams) => {
+      nextSearchParams.delete("jiraStatus");
+    });
+  };
 
   const searchControl = (
     <PageSearchInput
@@ -225,12 +247,34 @@ export function JiraPage() {
     />
   );
 
-  const openQuickCreate = (issue: { key: string; summary: string }) => {
+  const renderFilterControls = () => (
+    <div className="flex shrink-0 items-center">
+      <JiraFilterDropdown
+        filters={{ jiraStatus: issueStatusFilters }}
+        statuses={availableStatuses}
+        inputClassName={inputClassName}
+        primaryButtonClassName={createButtonClassName}
+        filterButtonClassName={filterButtonClassName}
+        onUpdateFilters={updateFilters}
+        onClearFilters={clearJiraFilters}
+        hotkeySignal={filterHotkeySignal}
+      />
+    </div>
+  );
+
+  const renderHeaderActions = () => (
+    <div className="flex min-w-0 items-center justify-center gap-2">
+      {searchControl}
+      {renderFilterControls()}
+    </div>
+  );
+
+  const openQuickCreate = (issue: { key: string; summary: string; description: string }) => {
     setIssueToCreateFrom(issue);
     setQuickCreateForm(createLinkedQuickTicketForm(issue));
   };
 
-  const openLinkExisting = (issue: { key: string; summary: string }) => {
+  const openLinkExisting = (issue: { key: string; summary: string; description: string }) => {
     setIssueToLinkToExisting(issue);
     setTicketSearch("");
   };
@@ -257,11 +301,17 @@ export function JiraPage() {
   return (
     <section className="mx-auto flex w-full min-w-0 max-w-6xl flex-col gap-3">
       <PageCommandBar
-        actions={searchControl}
+        actions={renderHeaderActions()}
         rightActions={
           <Link to="/settings" className={headerActionButtonClassName}>
             Settings
           </Link>
+        }
+        fallback={
+          <section className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[10px] border border-white/8 bg-canvas-925 px-4 py-4">
+            {searchControl}
+            {renderFilterControls()}
+          </section>
         }
       />
 
@@ -279,7 +329,6 @@ export function JiraPage() {
               </>
             ) : null}
           </div>
-          {!hasHost ? searchControl : null}
           <label className="min-w-[12rem]">
             <span className="sr-only">Sort Jira issues</span>
             <select
@@ -457,6 +506,11 @@ export function JiraPage() {
                         <p className="m-0 min-w-0 truncate text-[0.95rem] leading-6 text-ink-100">{issue.summary}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                        {issue.status ? (
+                          <span className={`${issueChipClassName} border-white/10 bg-white/[0.04] text-ink-100`}>
+                            {issue.status}
+                          </span>
+                        ) : null}
                         {issue.borodaTickets.length === 0 ? (
                           <span className={`${issueChipClassName} border-amber-300/24 bg-amber-300/10 text-amber-100`}>
                             Needs Boroda

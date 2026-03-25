@@ -11,6 +11,8 @@ export interface JiraSettings {
 export interface AssignedJiraIssue {
   key: string;
   summary: string;
+  description: string;
+  status: string;
 }
 
 export interface AssignedJiraIssueBorodaTicket {
@@ -36,6 +38,7 @@ export interface AssignedJiraIssuesWithLinksResponse {
   total: number;
   linked: number;
   unlinked: number;
+  statuses: string[];
 }
 
 export interface UpdateJiraSettingsPayload {

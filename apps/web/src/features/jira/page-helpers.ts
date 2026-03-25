@@ -23,6 +23,11 @@ export function normalizeIssueSearch(value: string | null) {
   return value?.trim() ?? "";
 }
 
+export function parseIssueStatusFilters(searchParams: URLSearchParams) {
+  const statuses = searchParams.getAll("jiraStatus").map((value) => value.trim()).filter(Boolean);
+  return statuses.length ? statuses : [];
+}
+
 export function parseIssuePage(value: string | null) {
   const page = Number(value);
   return Number.isInteger(page) && page > 0 ? page : 1;

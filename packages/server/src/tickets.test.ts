@@ -973,13 +973,37 @@ test("assigned Jira issues include linked Boroda tickets", async () => {
             {
               key: "PAY-128",
               fields: {
-                summary: "Backend refactor"
+                summary: "Backend refactor",
+                description: {
+                  type: "doc",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "Backend refactor details" }]
+                    }
+                  ]
+                },
+                status: {
+                  name: "In Progress"
+                }
               }
             },
             {
               key: "OPS-42",
               fields: {
-                summary: "Ops cleanup"
+                summary: "Ops cleanup",
+                description: {
+                  type: "doc",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "Ops cleanup details" }]
+                    }
+                  ]
+                },
+                status: {
+                  name: "To Do"
+                }
               }
             }
           ],
@@ -1038,12 +1062,17 @@ test("assigned Jira issues include linked Boroda tickets", async () => {
     assert.equal(payload.total, 2);
     assert.equal(payload.linked, 1);
     assert.equal(payload.unlinked, 1);
+    assert.deepEqual(payload.statuses, ["In Progress", "To Do"]);
 
     const payIssue = payload.issues.find((issue: { key: string }) => issue.key === "PAY-128");
     const opsIssue = payload.issues.find((issue: { key: string }) => issue.key === "OPS-42");
 
     assert.ok(payIssue);
     assert.ok(opsIssue);
+    assert.equal(payIssue.status, "In Progress");
+    assert.equal(payIssue.description, "Backend refactor details");
+    assert.equal(opsIssue.status, "To Do");
+    assert.equal(opsIssue.description, "Ops cleanup details");
     assert.equal(payIssue.borodaTickets.length, 2);
     assert.deepEqual(
       payIssue.borodaTickets.map((ticket: { title: string; status: string }) => ({

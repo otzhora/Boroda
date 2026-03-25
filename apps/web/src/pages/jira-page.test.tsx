@@ -77,10 +77,13 @@ describe("JiraPage", () => {
         total: 2,
         linked: 1,
         unlinked: 1,
+        statuses: ["In Progress", "To Do"],
         issues: [
           {
             key: "PAY-128",
             summary: "Backend refactor",
+            description: "Jira backend refactor description",
+            status: "In Progress",
             borodaTickets: [
               {
                 id: 12,
@@ -95,6 +98,8 @@ describe("JiraPage", () => {
           {
             key: "OPS-42",
             summary: "Ops cleanup",
+            description: "Jira ops cleanup description",
+            status: "To Do",
             borodaTickets: []
           }
         ]
@@ -162,9 +167,12 @@ describe("JiraPage", () => {
         total: JIRA_PAGE_SIZE + 1,
         linked: 0,
         unlinked: JIRA_PAGE_SIZE + 1,
+        statuses: ["To Do"],
         issues: Array.from({ length: JIRA_PAGE_SIZE + 1 }, (_, index) => ({
           key: `OPS-${String(index + 1).padStart(3, "0")}`,
           summary: `Issue ${index + 1}`,
+          description: `Description ${index + 1}`,
+          status: "To Do",
           borodaTickets: []
         }))
       },
@@ -195,20 +203,27 @@ describe("JiraPage", () => {
         total: JIRA_PAGE_SIZE + 2,
         linked: 0,
         unlinked: JIRA_PAGE_SIZE + 2,
+        statuses: ["To Do"],
         issues: [
           ...Array.from({ length: JIRA_PAGE_SIZE }, (_, index) => ({
             key: `PAY-${String(index + 1).padStart(3, "0")}`,
             summary: `Payments ${index + 1}`,
+            description: `Payments description ${index + 1}`,
+            status: "To Do",
             borodaTickets: []
           })),
           {
             key: "OPS-777",
             summary: "Ops match",
+            description: "Ops match description",
+            status: "To Do",
             borodaTickets: []
           },
           {
             key: "OPS-888",
             summary: "Ops backup",
+            description: "Ops backup description",
+            status: "To Do",
             borodaTickets: []
           }
         ]
@@ -242,6 +257,99 @@ describe("JiraPage", () => {
     expect(screen.getByText("1 of 2 issues")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Jira issue OPS-42" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open Jira issue PAY-128" })).not.toBeInTheDocument();
+  });
+
+  it("filters Jira issues by Jira status", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<JiraPage />);
+    await user.click(screen.getByRole("button", { name: "Filter" }));
+    await user.type(screen.getByLabelText("Jira status filter"), "to do");
+    await user.click(screen.getByRole("checkbox", { name: "To Do" }));
+
+    expect(screen.getByText("1 issues")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Jira issue OPS-42" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Jira issue PAY-128" })).not.toBeInTheDocument();
+  });
+
+  it("supports filtering by multiple Jira statuses at the same time", async () => {
+    const user = userEvent.setup();
+    mocks.useAssignedJiraIssueLinksQuery.mockReturnValue({
+      data: {
+        total: 3,
+        linked: 1,
+        unlinked: 2,
+        statuses: ["Blocked", "In Progress", "To Do"],
+        issues: [
+          {
+            key: "PAY-128",
+            summary: "Backend refactor",
+            description: "Jira backend refactor description",
+            status: "In Progress",
+            borodaTickets: [
+              {
+                id: 12,
+                key: "BRD-12",
+                title: "Refactor backend service",
+                status: "IN_PROGRESS",
+                priority: "HIGH",
+                updatedAt: "2026-03-06T10:00:00.000Z"
+              }
+            ]
+          },
+          {
+            key: "OPS-42",
+            summary: "Ops cleanup",
+            description: "Jira ops cleanup description",
+            status: "To Do",
+            borodaTickets: []
+          },
+          {
+            key: "OPS-43",
+            summary: "Infra incident",
+            description: "Jira blocked issue description",
+            status: "Blocked",
+            borodaTickets: []
+          }
+        ]
+      },
+      isLoading: false,
+      isFetching: false,
+      error: null,
+      refetch: vi.fn()
+    });
+
+    renderWithProviders(<JiraPage />);
+    await user.click(screen.getByRole("button", { name: "Filter" }));
+    await user.click(screen.getByRole("checkbox", { name: "To Do" }));
+    await user.click(screen.getByRole("checkbox", { name: "Blocked" }));
+
+    expect(screen.getByText("2 issues")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Jira issue OPS-42" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Jira issue OPS-43" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Jira issue PAY-128" })).not.toBeInTheDocument();
+  });
+
+  it("creates a Boroda ticket with the Jira description copied over", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<JiraPage />);
+    await user.click(screen.getByRole("button", { name: /show links for ops-42/i }));
+    await user.click(screen.getByRole("button", { name: "Create new Boroda" }));
+    await user.click(screen.getByRole("button", { name: "Create new Boroda ticket" }));
+
+    expect(mocks.createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Ops cleanup",
+        description: "Jira ops cleanup description",
+        jiraIssues: [
+          {
+            key: "OPS-42",
+            summary: "Ops cleanup"
+          }
+        ]
+      })
+    );
   });
 
   it("shows a filtered empty state when search has no matches", async () => {
@@ -341,7 +449,7 @@ describe("JiraPage", () => {
 
     expect(mocks.createMutate).toHaveBeenCalledWith({
       title: "Operational cleanup follow-up",
-      description: "",
+      description: "Jira ops cleanup description",
       branch: null,
       workspaces: [],
       jiraIssues: [{ key: "OPS-42", summary: "Ops cleanup" }],

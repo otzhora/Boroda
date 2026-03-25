@@ -5,15 +5,17 @@ import {
   sortProjectFolders,
   sortTicketProjectLinkFormState
 } from "../../features/tickets/project-links";
-import type { Project } from "../../lib/types";
+import type { Project, Ticket } from "../../lib/types";
 import { ModalDialog } from "../ui/modal-dialog";
 import { inputClassName, labelClassName } from "./ticket-form";
 
 interface TicketWorkspaceDrawerProps {
   open: boolean;
+  ticket?: Ticket;
   form: TicketFormState;
   projects: Project[];
   isSaving: boolean;
+  jiraBaseUrl: string;
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
   onSave: () => void;
   onClose: () => void;
@@ -120,9 +122,11 @@ function getWorkspaceSnapshot(form: TicketFormState) {
 
 export function TicketWorkspaceDrawer({
   open,
+  ticket,
   form,
   projects,
   isSaving,
+  jiraBaseUrl,
   onChange,
   onSave,
   onClose
@@ -204,6 +208,45 @@ export function TicketWorkspaceDrawer({
       initialFocusRef={folderRows.length ? undefined : addProjectSelectRef}
     >
       <div className="grid min-h-0 gap-0">
+        <section className="grid gap-3 border-b border-white/8 px-5 py-4 sm:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="m-0 text-base font-semibold text-ink-50">Linked Jira issues</h3>
+            <span className="text-sm text-ink-300">
+              {ticket?.jiraIssues.length ?? 0} issue{ticket?.jiraIssues.length === 1 ? "" : "s"}
+            </span>
+          </div>
+
+          {ticket?.jiraIssues.length ? (
+            <div className="overflow-hidden rounded-lg border border-white/8">
+              {ticket.jiraIssues.map((issue) => {
+                const href = jiraBaseUrl ? `${jiraBaseUrl}/browse/${issue.key}` : null;
+
+                return (
+                  <div key={issue.id} className="border-b border-white/8 px-3 py-3 last:border-b-0">
+                    {href ? (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-semibold text-ink-50 no-underline hover:text-white"
+                      >
+                        {issue.key}
+                      </a>
+                    ) : (
+                      <span className="text-sm font-semibold text-ink-50">{issue.key}</span>
+                    )}
+                    <p className="m-0 mt-1 min-w-0 break-words text-sm text-ink-200">
+                      {issue.summary || "No Jira summary cached."}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="m-0 text-sm text-ink-300">No Jira issues linked.</p>
+          )}
+        </section>
+
         <section className="grid gap-4 px-5 py-5 sm:px-6">
           <div className="flex items-center justify-between gap-3">
             <h3 className="m-0 text-base font-semibold text-ink-50">Workspaces</h3>

@@ -177,10 +177,12 @@ export function TicketDrawer(props: TicketDrawerProps) {
       )}
 
       <TicketDrawerDialogs
+        ticket={ticket}
         form={form}
         projects={projects}
         isSaving={isSaving}
         isWorkspaceDrawerOpen={viewState.isWorkspaceDrawerOpen}
+        jiraBaseUrl={jiraBaseUrl}
         openIn={openIn}
         onChange={onChange}
         onSave={onSave}

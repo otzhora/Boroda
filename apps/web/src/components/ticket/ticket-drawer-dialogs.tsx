@@ -1,14 +1,17 @@
 import type { Project } from "../../lib/types";
+import type { Ticket } from "../../lib/types";
 import type { TicketFormState } from "../../features/tickets/form";
 import { TicketDrawerFolderPickerDialog, TicketDrawerWorkspacePickerDialog } from "./ticket-drawer-open-section";
 import { TicketWorkspaceDrawer } from "./ticket-workspace-drawer";
 import type { useTicketDrawerOpenIn } from "./use-ticket-drawer-open-in";
 
 interface TicketDrawerDialogsProps {
+  ticket?: Ticket;
   form: TicketFormState;
   projects: Project[];
   isSaving: boolean;
   isWorkspaceDrawerOpen: boolean;
+  jiraBaseUrl: string;
   openIn: ReturnType<typeof useTicketDrawerOpenIn>;
   onChange: (updater: (current: TicketFormState) => TicketFormState) => void;
   onSave: () => void;
@@ -22,9 +25,11 @@ export function TicketDrawerDialogs(props: TicketDrawerDialogsProps) {
     <>
       <TicketWorkspaceDrawer
         open={props.isWorkspaceDrawerOpen}
+        ticket={props.ticket}
         form={props.form}
         projects={props.projects}
         isSaving={props.isSaving}
+        jiraBaseUrl={props.jiraBaseUrl}
         onChange={props.onChange}
         onSave={props.onSave}
         onClose={() => {
